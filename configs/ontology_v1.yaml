@@ -1,0 +1,153 @@
+# Risk Ontology v1
+# Defines the risk dimensions, indicators, and scoring weights
+# for strategic failure early warning analysis.
+
+version: "v1"
+description: "Risk ontology for corporate strategy failure analysis"
+
+dimensions:
+  market_timing:
+    label: "Market Timing Risk"
+    description: >
+      Company's assumed demand ramp timeline does not match actual market
+      adoption pace.
+    weight: 0.15
+    indicators:
+      - "EV adoption rate vs company forecast gap"
+      - "Demand curve slope deviation from plan"
+      - "Inventory buildup / order backlog trends"
+      - "Consumer sentiment shift indicators"
+      - "Market penetration rate by segment"
+
+  regional_mismatch:
+    label: "Regional Mismatch Risk"
+    description: >
+      Company's strategic focus regions do not align with where real growth
+      or competitive pressure is concentrated.
+    weight: 0.12
+    indicators:
+      - "Revenue/investment concentration vs growth geography"
+      - "Market share trajectory by region"
+      - "Regional regulatory environment alignment"
+      - "Local competitor density and capability"
+      - "Supply chain proximity to demand centers"
+
+  product_portfolio:
+    label: "Product Portfolio Risk"
+    description: >
+      Product lineup timing, breadth, pricing, and specifications are misaligned
+      with competitive landscape and consumer expectations.
+    weight: 0.12
+    indicators:
+      - "Model count vs competitors in target segments"
+      - "Price band coverage gaps"
+      - "Launch timeline delays vs original plan"
+      - "Range/charging speed vs market expectations"
+      - "Feature parity with segment leaders"
+
+  technology_capability:
+    label: "Technology & Software Capability Risk"
+    description: >
+      Insufficient capability in SDV, ADAS, E/E architecture, and data-driven
+      features that are becoming competitive prerequisites.
+    weight: 0.10
+    indicators:
+      - "SDV platform maturity vs competitors"
+      - "ADAS capability level and deployment"
+      - "E/E architecture generation"
+      - "OTA update capability and frequency"
+      - "Software engineering talent and partnerships"
+
+  capital_allocation:
+    label: "Capital Allocation Risk"
+    description: >
+      Investment scale and return assumptions are overly optimistic given
+      market and competitive realities.
+    weight: 0.15
+    indicators:
+      - "Total EV investment as % of revenue"
+      - "Breakeven volume assumptions vs realistic demand"
+      - "Capex flexibility and reversibility"
+      - "Investment concentration risk"
+      - "ROI timeline assumptions"
+
+  execution:
+    label: "Organizational Execution Risk"
+    description: >
+      JV complexity, supply chain readiness, platform development, and
+      production transition create execution bottlenecks.
+    weight: 0.08
+    indicators:
+      - "Number and complexity of JV/partnerships"
+      - "Supply chain readiness (battery, components)"
+      - "Platform development timeline adherence"
+      - "Manufacturing transition complexity"
+      - "Organizational restructuring scope"
+
+  narrative_consistency:
+    label: "Narrative Consistency Risk"
+    description: >
+      Rapid shifts in public strategic messaging indicate internal uncertainty
+      or strategy instability.
+    weight: 0.08
+    indicators:
+      - "Target revision frequency"
+      - "Strategic messaging pivot count"
+      - "Tone shift in earnings calls"
+      - "Contradiction between different communications"
+      - "Gap between stated strategy and resource allocation"
+
+  policy_dependency:
+    label: "Policy Dependency Risk"
+    description: >
+      Strategy viability depends heavily on subsidies, regulations, or trade
+      policies that may change.
+    weight: 0.10
+    indicators:
+      - "Subsidy dependency in unit economics"
+      - "Regulatory assumption changes since plan"
+      - "Tariff and trade policy exposure"
+      - "Emission regulation compliance timeline"
+      - "Government EV mandate stability"
+
+  competitive_pressure:
+    label: "Competitive Pressure Risk"
+    description: >
+      Competitors have built cost, speed, software, or brand advantages
+      that create difficult-to-close gaps.
+    weight: 0.10
+    indicators:
+      - "Cost gap vs segment leaders ($/kWh, $/vehicle)"
+      - "Time-to-market delta for new models"
+      - "Feature and software parity gap"
+      - "Brand perception in EV segment"
+      - "Manufacturing scale advantage of competitors"
+
+# Severity scoring rules
+severity_rules:
+  critical:
+    description: "Multiple strong evidence points; clear causal mechanism; high confidence"
+    min_confidence: 0.8
+    min_supporting_evidence: 4
+  high:
+    description: "Strong evidence; plausible causal mechanism; moderate-high confidence"
+    min_confidence: 0.6
+    min_supporting_evidence: 3
+  medium:
+    description: "Some evidence; possible causal mechanism; moderate confidence"
+    min_confidence: 0.4
+    min_supporting_evidence: 2
+  low:
+    description: "Limited evidence; speculative mechanism; low confidence"
+    min_confidence: 0.2
+    min_supporting_evidence: 1
+
+# Overall risk level aggregation
+aggregation:
+  method: "weighted_average"
+  critical_threshold: 0.8
+  high_threshold: 0.6
+  medium_threshold: 0.4
+  low_threshold: 0.0
+  # If any single dimension is "critical", overall cannot be below "high"
+  escalation_rule: "any_critical_raises_floor_to_high"

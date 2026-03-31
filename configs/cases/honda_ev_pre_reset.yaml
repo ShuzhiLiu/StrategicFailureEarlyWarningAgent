@@ -1,0 +1,125 @@
+# Honda EV Strategy Pre-Reset Analysis
+# Cutoff: 2025-05-19 (day before Honda's May 2025 business briefing)
+# Ground truth: May 2025 target revision + March 2026 writedown
+
+case_id: "honda_ev_pre_reset_2025"
+company: "Honda Motor Co., Ltd."
+ticker: "7267.T"
+strategy_theme: "EV electrification strategy"
+description: >
+  Analyze whether Honda's EV strategy showed signs of significant strategic
+  mismatch sufficient to trigger major adjustments or financial losses within
+  6-18 months, using only evidence available before the cutoff date.
+
+cutoff_date: "2025-05-19"
+
+regions:
+  - "north_america"
+  - "china"
+  - "global"
+  - "japan"
+
+peers:
+  - company: "Toyota Motor Corporation"
+    ticker: "7203.T"
+    relevance: "Traditional OEM peer, contrasting HEV-first strategy"
+  - company: "BYD Company Limited"
+    ticker: "1211.HK"
+    relevance: "China EV leader, competitive pressure benchmark"
+  - company: "Tesla, Inc."
+    ticker: "TSLA"
+    relevance: "EV market leader, software/platform benchmark"
+  - company: "Hyundai Motor Company"
+    ticker: "005380.KS"
+    relevance: "Fast-follower EV strategy, similar positioning"
+  - company: "Volkswagen AG"
+    ticker: "VOW3.DE"
+    relevance: "European EV transition peer, similar scale challenges"
+  - company: "General Motors Company"
+    ticker: "GM"
+    relevance: "North America peer, Ultium platform comparison"
+  - company: "Ford Motor Company"
+    ticker: "F"
+    relevance: "North America peer, EV losses transparency"
+
+# Evidence universe constraints
+allowed_source_types:
+  - "company_filing"
+  - "company_presentation"
+  - "industry_report"
+  - "government_policy"
+  - "peer_filing"
+  - "news_article"
+
+# Key search topics for retrieval
+search_topics:
+  - "Honda EV strategy 2030 target"
+  - "Honda 0 Series launch timeline"
+  - "Honda North America EV production"
+  - "Honda electric vehicle investment"
+  - "Honda HEV hybrid strategy transition"
+  - "Honda Nissan merger alliance"
+  - "EV adoption rate North America slowdown"
+  - "China EV market competition BYD"
+  - "US EV tax credit subsidy policy"
+  - "Global EV sales forecast 2024 2025"
+  - "Toyota BYD Tesla EV strategy"
+  - "Ford GM EV losses writedown"
+  - "Honda Canada EV plant"
+  - "Honda battery supply chain"
+  - "Software defined vehicle ADAS competition"
+
+# Ground truth events (post-cutoff, for backtesting only)
+ground_truth_events:
+  - event_id: "gt_001"
+    event_date: "2025-05-20"
+    description: >
+      Honda revises 2030 EV/FCEV sales ratio target from ~30% to ~20%.
+      Cuts EV and software investment from 10 trillion to 7 trillion yen.
+      Emphasizes HEV as primary transition vehicle.
+    event_type: "target_revision"
+    source_url: "https://global.honda/en/newsroom/news/2025/c250520eng.html"
+    key_figures:
+      - metric: "2030 EV sales ratio"
+        old_value: "~30%"
+        new_value: "~20%"
+      - metric: "EV/software investment"
+        old_value: "10 trillion yen"
+        new_value: "7 trillion yen"
+
+  - event_id: "gt_002"
+    event_date: "2026-03-12"
+    description: >
+      Honda cancels multiple North American EV models (0 SUV, 0 Saloon,
+      Acura RSX). Records 820 billion to 1.12 trillion yen operating expense
+      for EV strategy reassessment. Total losses including equity method
+      investment losses up to 2.5 trillion yen.
+    event_type: "project_cancellation"
+    source_url: "https://global.honda/en/investors/library/filings/auto_20260312580604/pdfFile.pdf"
+    key_figures:
+      - metric: "Operating expense"
+        value: "820B - 1.12T yen"
+      - metric: "Total loss (incl equity method)"
+        value: "up to 2.5T yen"
+
+  - event_id: "gt_003"
+    event_date: "2026-03-25"
+    description: >
+      Sony Honda Mobility (Afeela) project effectively cancelled or
+      significantly restructured.
+    event_type: "project_cancellation"
+
+# Risk analysis configuration
+ontology_version: "v1"
+max_risk_factors: 15
+min_evidence_per_factor: 2
+
+# Thinking mode overrides (see configs/models.yaml for defaults)
+# By default: adversarial + synthesis use thinking mode, rest use non-thinking
+# Override per-role if needed:
+thinking_mode_overrides: {}
+
+# Cost guardrails
+cost_limits:
+  max_total_usd: 15.0
+  max_calls_per_agent: 25
