@@ -2,17 +2,11 @@
 # Cutoff: 2025-05-19 (day before Honda's May 2025 business briefing)
 # Ground truth: May 2025 target revision + March 2026 writedown
 
-case_id: "honda_ev_pre_reset_2025"
 company: "Honda Motor Co., Ltd."
-ticker: "7267.T"
 strategy_theme: "EV electrification strategy"
-description: >
-  Analyze whether Honda's EV strategy showed signs of significant strategic
-  mismatch sufficient to trigger major adjustments or financial losses within
-  6-18 months, using only evidence available before the cutoff date.
-
 cutoff_date: "2025-05-19"
 
+# Optional — LLM generates these if omitted
 regions:
   - "north_america"
   - "china"
@@ -20,42 +14,13 @@ regions:
   - "japan"
 
 peers:
-  - company: "Toyota Motor Corporation"
-    ticker: "7203.T"
-    relevance: "Traditional OEM peer, contrasting HEV-first strategy"
-  - company: "BYD Company Limited"
-    ticker: "1211.HK"
-    relevance: "China EV leader, competitive pressure benchmark"
-  - company: "Tesla, Inc."
-    ticker: "TSLA"
-    relevance: "EV market leader, software/platform benchmark"
-  - company: "Hyundai Motor Company"
-    ticker: "005380.KS"
-    relevance: "Fast-follower EV strategy, similar positioning"
-  - company: "Volkswagen AG"
-    ticker: "VOW3.DE"
-    relevance: "European EV transition peer, similar scale challenges"
-  - company: "General Motors Company"
-    ticker: "GM"
-    relevance: "North America peer, Ultium platform comparison"
-  - company: "Ford Motor Company"
-    ticker: "F"
-    relevance: "North America peer, EV losses transparency"
-
-# Evidence universe constraints
-allowed_source_types:
-  - "company_filing"
-  - "company_presentation"
-  - "industry_report"
-  - "government_policy"
-  - "peer_filing"
-  - "news_article"
-
-# Key search topics for retrieval
-search_topics:
-  - "Honda EV strategy"
-  - "Honda electric vehicle sales"
-  - "Honda electrification investment"
+  - "Toyota Motor Corporation"
+  - "BYD Company Limited"
+  - "Tesla, Inc."
+  - "Hyundai Motor Company"
+  - "Volkswagen AG"
+  - "General Motors Company"
+  - "Ford Motor Company"
 
 # Ground truth events (post-cutoff, for backtesting only)
 ground_truth_events:
@@ -96,18 +61,3 @@ ground_truth_events:
       Sony Honda Mobility (Afeela) project effectively cancelled or
       significantly restructured.
     event_type: "project_cancellation"
-
-# Risk analysis configuration
-ontology_version: "v1"
-max_risk_factors: 15
-min_evidence_per_factor: 2
-
-# Thinking mode overrides (see configs/models.yaml for defaults)
-# By default: adversarial + synthesis use thinking mode, rest use non-thinking
-# Override per-role if needed:
-thinking_mode_overrides: {}
-
-# Cost guardrails
-cost_limits:
-  max_total_usd: 15.0
-  max_calls_per_agent: 25

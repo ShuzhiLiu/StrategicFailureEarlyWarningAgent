@@ -221,8 +221,8 @@ def retrieval_node(state: PipelineState) -> dict:
     # Generate seed queries autonomously from case context
     peers = state.get("peers", [])
     peer_names = ", ".join(
-        p.get("company", p) if isinstance(p, dict) else str(p)
-        for p in peers[:5]
+        p.get("company", str(p)) if isinstance(p, dict) else str(p)
+        for p in peers[:7]
     )
     seed_queries = _llm_generate_queries(
         system_msg=SEED_QUERY_SYSTEM.format(

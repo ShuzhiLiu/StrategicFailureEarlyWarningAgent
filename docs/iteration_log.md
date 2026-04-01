@@ -566,9 +566,75 @@ For the demo, pre-cached runs provide reliable results. The prompt improvements 
 
 ---
 
+## Iteration 15: Minimal Input Mode — From YAML Config to 3-Field Input
+
+**Goal**: Make the system usable with just `company + strategy_theme + cutoff_date`. The LLM generates regions, peers, and case_id automatically. This is the Planner's first decision — scoping the analysis.
+
+**What we built**:
+- `src/sfewa/prompts/init_case.py` — Case expansion prompt: LLM generates regions and peers from minimal input
+- `src/sfewa/agents/init_case.py` — Rewrote to call LLM when regions/peers not provided. Falls back to `["global"]` and `[]` if LLM fails.
+- `src/sfewa/schemas/config.py` — Simplified CaseConfig: only `company`, `strategy_theme`, `cutoff_date` required. Removed unused fields: `ticker`, `description`, `allowed_source_types`, `ontology_version`, `max_risk_factors`, `min_evidence_per_factor`, `thinking_mode_overrides`, `cost_limits`, `PeerConfig`. Peers are now simple strings, not structured objects.
+- `src/sfewa/schemas/state.py` — Removed `search_topics` from state (LLM generates seed queries). Changed `peers` type to `list` (accepts both strings and dicts).
+- `src/sfewa/main.py` — Two input modes:
+  - `--case configs/cases/honda_ev_pre_reset.yaml` (YAML config, backward compatible)
+  - `--company "Honda Motor Co., Ltd." --theme "EV electrification strategy" --cutoff 2025-05-19` (minimal input)
+  - Auto-generates `case_id` from company name + cutoff date
+  - Shows "(LLM will generate)" and "(skipped — no ground truth)" for missing fields
+- Simplified all 3 YAML configs: removed unused fields, peers as simple strings
+- Backward compatible: old-style peer dicts (`{company, ticker, relevance}`) normalized to strings in main.py
+
+**Key design choice**: This is the Planner expanding minimal input into a full analysis plan — the same pattern as Claude Code's Planner agent expanding user prompts into detailed specs. The LLM decides which regions and competitors matter for this specific company and strategy.
+
+**Honda minimal input test result**:
+```
+Command: python -m sfewa.main --company "Honda Motor Co., Ltd." --theme "EV electrification strategy" --cutoff "2025-05-19"
+
+LLM-generated context:
+  Regions: north_america, china, europe, japan, southeast_asia
+  Peers: Toyota, Tesla, GM, VW, BYD, Nissan, Hyundai
+  Case ID: honda_motor_co_20250519
+
+Pipeline result:
+  Risk level: MEDIUM (0.78)  — within expected variability (HIGH ~80%, MEDIUM ~20%)
+  Evidence: 44 items
+  Risk factors: 9 (3 HIGH + 6 MEDIUM)
+  Challenges: 9 (1 strong + 6 moderate + 2 weak)
+  Iterations: 3 (quality gate looped twice)
+  Backtest: skipped (no ground truth provided)
+  Pipeline time: 18m 36s
+```
+
+**Comparison with YAML config run**:
+
+| Metric | Minimal Input | YAML Config (demo) |
+|---|---|---|
+| Evidence | 44 | 29 |
+| Risk factors | 9/9 | 9/9 |
+| Challenges | 1S/6M/2W | 0S/7M/2W |
+| Risk level | MEDIUM (0.78) | HIGH (0.68) |
+| Pipeline time | 18m 36s | ~13m |
+| Regions | LLM: 5 (added europe, SE asia) | Config: 4 |
+| Peers | LLM: 7 (added Nissan) | Config: 7 |
+
+The MEDIUM result this run is due to 1 strong adversarial challenge on capital_allocation ("ignores consolidated operating profit growth") — within expected run-to-run variability. The LLM-generated regions and peers were accurate and the pipeline structure was identical.
+
+**What works**:
+- LLM generates high-quality regions and peers from minimal context
+- Auto-generated case_id is clean and unique
+- Backtest gracefully skips when no ground truth is provided
+- Backward compatible with existing YAML configs
+- All 51 unit tests pass
+
+**Known issues**:
+1. LLM case expansion adds ~5-10 seconds to init_case (one extra LLM call)
+2. LLM-generated peers may differ between runs (non-deterministic) — this is acceptable since the retrieval agent generates its own queries anyway
+3. Without ground truth events, backtest is skipped — user gets risk assessment but no validation
+
+---
+
 ## Next Steps
 
 Priority order:
-1. **Demo script preparation**: Prepare talking points around cross-company differentiation
-2. **Run stability**: Honda HIGH ~50%, Toyota MEDIUM ~40%, BYD LOW ~30% — honest discussion point for demo
-3. **Consider EDINET for Toyota/BYD**: Adding primary source filings would improve evidence quality and stability (Honda benefits from EDINET)
+1. **Demo script preparation**: Prepare talking points around cross-company differentiation and minimal input mode
+2. **Run stability**: Honda HIGH ~80%, Toyota MEDIUM ~40%, BYD LOW ~30% — honest discussion point for demo
+3. **Consider EDINET for Toyota/BYD**: Adding primary source filings would improve evidence quality and stability

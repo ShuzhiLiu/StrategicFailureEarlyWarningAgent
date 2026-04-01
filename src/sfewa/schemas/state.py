@@ -21,8 +21,7 @@ class PipelineState(TypedDict):
     strategy_theme: str
     cutoff_date: str  # ISO format YYYY-MM-DD
     regions: list[str]
-    peers: list[dict]
-    search_topics: list[str]
+    peers: list  # list[str] or list[dict] — both supported
     ground_truth_events: list[dict]
 
     # ── Accumulating fields ──
