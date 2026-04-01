@@ -10,10 +10,12 @@ import json
 import re
 
 from sfewa import reporting
+from sfewa.context import build_pipeline_context
 from sfewa.llm import get_llm_for_role
 from sfewa.prompts.analysis import (
     ANALYST_SYSTEM,
     ANALYST_USER,
+    build_evidence_summary,
     format_evidence_for_analyst,
 )
 from sfewa.schemas.state import PipelineState
@@ -64,6 +66,7 @@ def run_analyst(
     llm_role: str,
     dimensions_description: str,
     factor_prefix: str,
+    scope_boundary: str = "",
 ) -> dict:
     """Shared analyst implementation.
 
@@ -74,6 +77,7 @@ def run_analyst(
         llm_role: Key for get_llm_for_role (e.g., "industry_analyst").
         dimensions_description: Text describing assigned risk dimensions.
         factor_prefix: Prefix for factor IDs (e.g., "IND" → "IND001").
+        scope_boundary: Instructions about what NOT to analyze (other analysts' scope).
     """
     evidence = state.get("evidence", [])
     company = state["company"]
@@ -89,19 +93,28 @@ def run_analyst(
         reporting.exit_node(node_name, {"risk_factors": 0})
         return {"risk_factors": []}
 
-    # Format prompt
+    # Format prompt with pipeline context injection
     evidence_text = format_evidence_for_analyst(evidence)
+    pipeline_context = build_pipeline_context(state)
     system_msg = ANALYST_SYSTEM.format(
         analyst_role=role_name,
         company=company,
         strategy_theme=theme,
         dimensions_description=dimensions_description,
+        scope_boundary=scope_boundary,
     )
+    if pipeline_context:
+        system_msg += f"\n\n{pipeline_context}"
+    # Count assigned dimensions from the description (each starts with "- ")
+    dimension_count = dimensions_description.count("\n- ") + (1 if dimensions_description.startswith("- ") else 0)
+    evidence_summary = build_evidence_summary(evidence)
     user_msg = ANALYST_USER.format(
         company=company,
         strategy_theme=theme,
+        evidence_summary=evidence_summary,
         evidence_text=evidence_text,
         factor_prefix=factor_prefix,
+        dimension_count=dimension_count,
     )
 
     # Call LLM

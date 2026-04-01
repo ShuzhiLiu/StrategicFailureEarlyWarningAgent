@@ -1,0 +1,224 @@
+[
+  {
+    "factor_id": "IND001",
+    "dimension": "market_timing",
+    "title": "Market Demand Shift Favoring Hybrids Over Pure BEVs",
+    "description": "Industry data indicates that hybrid vehicle adoption is outpacing pure electric vehicle growth in key markets like North America, with hybrids capturing higher market share and growth rates. This trend suggests the EV market transition may be slower or more segmented than a rapid BEV-only shift, validating Toyota's hybrid-first strategy rather than indicating a strategic failure.",
+    "severity": "low",
+    "confidence": 0.85,
+    "supporting_evidence": [
+      "E012",
+      "E013"
+    ],
+    "contradicting_evidence": [
+      "E017"
+    ],
+    "causal_chain": [
+      "Evidence E012 shows hybrid sales in the U.S. grew 65% YoY, significantly outpacing pure EV growth of 46%.",
+      "Evidence E013 confirms hybrids outsold pure EVs in Q3 2024 in the U.S., holding 10.6% market share versus 8.9% for EVs.",
+      "This market data indicates consumer preference is currently leaning toward hybrids, suggesting the full BEV transition is slower than some aggressive industry projections.",
+      "Since Toyota's stated strategy prioritizes hybrids as a bridge to electrification, this market reality supports their strategic alignment rather than representing a timing risk.",
+      "The risk is low because the market is moving in a direction that aligns with Toyota's chosen path, mitigating the threat of being 'left behind' by a hypothetical faster BEV-only shift."
+    ],
+    "unresolved_gaps": [
+      "Long-term (5-10 year) consumer sentiment data regarding the eventual shift from hybrids to pure BEVs.",
+      "Regional variations in market timing outside of North America (e.g., Europe or China specific adoption curves)."
+    ]
+  },
+  {
+    "factor_id": "IND002",
+    "dimension": "policy_dependency",
+    "title": "Tariff Exposure Impacting Profitability and Cost Competitiveness",
+    "description": "Toyota faces direct financial headwinds from changing trade policies, specifically tariffs that are projected to cause a significant decline in full-year profits. This indicates a high dependency on stable trade conditions to maintain the cost competitiveness of its vehicles, including its electrified lineup, in key export markets.",
+    "severity": "high",
+    "confidence": 0.75,
+    "supporting_evidence": [
+      "E014"
+    ],
+    "contradicting_evidence": [],
+    "causal_chain": [
+      "Evidence E014 explicitly states Toyota sees a 21% full-year profit decline in fiscal 2025 directly attributed to tariffs.",
+      "This demonstrates a concrete, material financial impact from external policy shifts on the company's core operations.",
+      "While Toyota is investing in local production (E016) to mitigate this, the immediate 21% profit hit indicates the current strategy is vulnerable to trade policy volatility.",
+      "The severity is 'high' because this is not a speculative future risk but an active, quantified erosion of profitability affecting existing revenue streams."
+    ],
+    "unresolved_gaps": [
+      "Specific breakdown of how much of the tariff impact is attributed to EV components versus ICE vehicles.",
+      "Details on the effectiveness of the $1 billion U.S. investment (E016) in offsetting these tariff costs in the medium term."
+    ]
+  },
+  {
+    "factor_id": "COM001",
+    "dimension": "capital_allocation",
+    "title": "Limited Near-Term Solid-State Battery Production Capacity",
+    "description": "Toyota's commitment to solid-state batteries as a future differentiator is constrained by a production plan supporting only ~10,000 vehicles by 2030. This suggests capital allocation for next-gen battery manufacturing is currently insufficient to support a mass-market BEV transition, relying instead on the existing hybrid portfolio for revenue.",
+    "severity": "medium",
+    "confidence": 0.75,
+    "supporting_evidence": [
+      "E009"
+    ],
+    "contradicting_evidence": [],
+    "causal_chain": [
+      "Toyota has publicly committed to mass-producing solid-state batteries starting in 2030 (E008).",
+      "However, the specific capacity plan for 2030 supports only 'just over 10,000 vehicles' (E009).",
+      "This production volume is negligible relative to Toyota's global annual sales volume (millions of units), indicating that capital allocation for this specific technology is currently limited to a pilot/niche scale rather than a core revenue driver.",
+      "This creates a dependency on current battery technology and hybrids to sustain the business until 2030+, creating a potential gap if market demand for BEVs accelerates before then."
+    ],
+    "unresolved_gaps": [
+      "Total cumulative capital expenditure planned for battery R&D and manufacturing beyond the 2030 milestone.",
+      "Whether the 10,000 vehicle figure is a conservative initial target or a hard cap for the decade."
+    ]
+  },
+  {
+    "factor_id": "COM002",
+    "dimension": "narrative_consistency",
+    "title": "Strategic Messaging vs. Market Reality in Hybrid-First Approach",
+    "description": "Toyota's narrative of a 'hybrid-first' strategy is consistent with market data showing hybrid growth outpacing pure EVs, yet the company faces criticism for low BEV penetration. The narrative remains internally consistent (focusing on hybrids), but external pressure regarding 'lagging' in BEVs creates a tension between their stated path and industry expectations.",
+    "severity": "low",
+    "confidence": 0.85,
+    "supporting_evidence": [
+      "E013"
+    ],
+    "contradicting_evidence": [
+      "E012",
+      "E013"
+    ],
+    "causal_chain": [
+      "External analysis notes Toyota is 'still focused on hybrids' with 'low BEV penetration' (E013).",
+      "However, market data confirms hybrid sales grew 65% vs EV growth of 46% in the US (E012), and hybrids outsold EVs in Q3 2024 (E013).",
+      "This indicates Toyota's narrative (betting on hybrids) is consistent with actual market demand trends, rather than being a failure of strategy.",
+      "The risk is low because the company's public statements align with its operational results and the current market reality, even if it diverges from a 'BEV-only' industry ideal."
+    ],
+    "unresolved_gaps": [
+      "Specific internal target revisions for BEV sales volumes over the next 5 years compared to 2023 targets."
+    ]
+  },
+  {
+    "factor_id": "COM003",
+    "dimension": "execution",
+    "title": "Product Launch Delays and Residual Value Challenges",
+    "description": "Execution risks are evident in the delayed launch of the bZ4X in key markets and poor projected resale values compared to hybrids. While sales are recovering, the initial rollout issues and value retention problems indicate challenges in delivering a compelling BEV product experience.",
+    "severity": "medium",
+    "confidence": 0.8,
+    "supporting_evidence": [
+      "E007",
+      "E009"
+    ],
+    "contradicting_evidence": [
+      "E014",
+      "E017"
+    ],
+    "causal_chain": [
+      "The bZ4X faced further delays in the Australian market, pushing launch to February 2024 (E007).",
+      "The bZ4X is projected to lose 46.5% of its value over five years, significantly worse than Toyota hybrids (E009).",
+      "These execution failures (delays, poor product perception/value) threaten the brand's reputation in the BEV segment.",
+      "However, Q1 2025 sales data shows a 195.7% year-over-year increase (E014, E017), suggesting the company is correcting course and recovering market share despite earlier hurdles."
+    ],
+    "unresolved_gaps": [
+      "Root cause analysis of the Australian delay (supply chain vs. engineering).",
+      "Specific steps taken to improve bZ4X residual value projections."
+    ]
+  },
+  {
+    "factor_id": "COM004",
+    "dimension": "product_portfolio",
+    "title": "Limited BEV Model Depth Relative to Hybrid Dominance",
+    "description": "Toyota's product portfolio remains heavily skewed toward hybrids, with the bZ4X being the primary BEV offering. While this aligns with their strategy, the lack of a diversified BEV lineup creates vulnerability if consumer preference shifts rapidly toward pure EVs in specific segments.",
+    "severity": "low",
+    "confidence": 0.7,
+    "supporting_evidence": [
+      "E013"
+    ],
+    "contradicting_evidence": [
+      "E012",
+      "E017"
+    ],
+    "causal_chain": [
+      "Evidence indicates Toyota has 'low BEV penetration' and is 'still focused on hybrids' (E013).",
+      "The portfolio relies heavily on the bZ4X platform (shared with Subaru Solterra) for BEV sales.",
+      "However, this portfolio structure is validated by market performance where hybrids outsold EVs (E012) and bZ4X sales are growing rapidly (E017).",
+      "The risk is low because the portfolio matches the company's stated 'multi-pathway' strategy and current market demand, rather than representing a failure to meet an arbitrary BEV target."
+    ],
+    "unresolved_gaps": [
+      "Specific timeline for the launch of the next generation of BEV models beyond the bZ4X.",
+      "Details on the 'diverse customer needs' mentioned in the Kentucky/Indiana investment (E016) regarding BEV vs Hybrid mix."
+    ]
+  },
+  {
+    "factor_id": "PEER001",
+    "dimension": "competitive_pressure",
+    "title": "Loss of EV Market Leadership in Home Market to BYD",
+    "description": "Toyota has lost its position as the top EV seller in Japan, its home market, to Chinese competitor BYD. While Toyota's hybrid strategy is performing well globally, its specific BEV market share is being eroded by competitors with more aggressive electrification strategies, indicating a vulnerability in the pure EV segment.",
+    "severity": "medium",
+    "confidence": 0.75,
+    "supporting_evidence": [
+      "E012",
+      "E013"
+    ],
+    "contradicting_evidence": [
+      "E012",
+      "E013"
+    ],
+    "causal_chain": [
+      "Evidence E012 shows BYD outsold Toyota in Japan in 2024 (2,223 vs 2,038 units), marking a loss of market leadership in Toyota's domestic market.",
+      "Evidence E013 confirms Toyota's strategy remains focused on hybrids with low BEV penetration, creating a structural gap against competitors prioritizing BEVs.",
+      "However, Evidence E012 and E013 also show that the hybrid market is growing faster than the pure EV market in the US (65% vs 46%), suggesting Toyota's core strength aligns with current consumer demand.",
+      "The risk is 'medium' because while Toyota is losing the specific EV race to BYD in Japan, its overall business is not failing; the risk is limited to a specific segment (BEV) where the company has deliberately chosen a slower pace, making it a competitive disadvantage rather than an existential threat.",
+      "The net assessment balances the concrete loss of market share against the strong performance of the company's chosen hybrid-first strategy."
+    ],
+    "unresolved_gaps": [
+      "Lack of data on Toyota's total vehicle sales vs BYD to contextualize the EV loss within total market share.",
+      "No specific data on cost structures or production scale comparisons between Toyota and BYD beyond unit sales."
+    ]
+  },
+  {
+    "factor_id": "PEER002",
+    "dimension": "technology_capability",
+    "title": "Limited Scale of Next-Generation Solid-State Battery Production",
+    "description": "Toyota's planned mass production of all-solid-state batteries is projected to support only a negligible volume (approx. 10,000 vehicles) by 2030. This severely limits the company's ability to leverage this technology as a competitive differentiator against rivals who may scale battery production more aggressively.",
+    "severity": "high",
+    "confidence": 0.85,
+    "supporting_evidence": [
+      "E009",
+      "E008"
+    ],
+    "contradicting_evidence": [],
+    "causal_chain": [
+      "Evidence E009 explicitly states that solid-state battery mass production starting in 2030 will support 'just over 10,000 vehicles'.",
+      "Evidence E008 confirms the target launch window is 2027-28, indicating a long timeline for deployment.",
+      "A production capacity of 10,000 units is statistically insignificant for a global automaker, preventing this technology from impacting market share or cost structures at scale.",
+      "This represents a concrete execution risk: the company has committed to a technological breakthrough that, based on current projections, will not be available in quantities sufficient to compete with mass-market BEV offerings from competitors.",
+      "Unlike a strategic choice (like hybrid-first), this is a capability gap in a specific technology pillar that the company has publicly championed as a future solution."
+    ],
+    "unresolved_gaps": [
+      "No data on competitor solid-state battery production targets for 2030 to compare scale.",
+      "Unclear if the 10,000 figure is a conservative initial ramp or a hard ceiling."
+    ]
+  },
+  {
+    "factor_id": "PEER003",
+    "dimension": "regional_mismatch",
+    "title": "Product Launch Delays in Key Growth Markets",
+    "description": "Toyota is experiencing significant delays in launching its BEV models (bZ4X) in specific markets like Australia, lagging behind the rapid growth of the global EV market. This suggests a potential misalignment between product readiness and regional market opportunities.",
+    "severity": "low",
+    "confidence": 0.65,
+    "supporting_evidence": [
+      "E007"
+    ],
+    "contradicting_evidence": [
+      "E017",
+      "E014"
+    ],
+    "causal_chain": [
+      "Evidence E007 highlights a delay in the bZ4X launch in Australia until February 2024, indicating supply chain or production bottlenecks in specific regions.",
+      "However, Evidence E017 and E014 show that once launched, the bZ4X is experiencing massive sales growth (195.7% YoY in Q1 2025), suggesting the product is competitive once available.",
+      "The risk is mitigated by the fact that Toyota's regional investment (e.g., $1B in US plants, E016) and sales performance in North America are strong.",
+      "The delay appears to be a tactical execution issue rather than a strategic failure to invest in the right regions, as the company is capturing demand once products arrive.",
+      "Severity is 'low' because the delay is isolated to specific markets and the company is successfully adapting with strong sales growth post-launch."
+    ],
+    "unresolved_gaps": [
+      "No data on competitor launch timelines in Australia to determine if Toyota is lagging specifically or if the whole market is delayed.",
+      "Lack of specific investment figures for Australian manufacturing vs other regions."
+    ]
+  }
+]

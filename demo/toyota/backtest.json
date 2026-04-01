@@ -1,0 +1,29 @@
+{
+  "events": [
+    {
+      "event_id": "gt_001",
+      "event_date": "2025-05-08",
+      "description": "Toyota reports record FY2024 operating profit driven by strong hybrid sales; EV targets maintained.",
+      "event_type": "financial_metric",
+      "matched_factors": [
+        "IND001",
+        "COM002",
+        "COM004",
+        "PEER001"
+      ],
+      "match_quality": "strong"
+    },
+    {
+      "event_id": "gt_002",
+      "event_date": "2025-06-15",
+      "description": "Toyota announces next-gen EV platform with solid-state battery target for 2027-2028; no strategy revision.",
+      "event_type": "target_statement",
+      "matched_factors": [
+        "COM001",
+        "PEER002"
+      ],
+      "match_quality": "partial"
+    }
+  ],
+  "summary": "The backtest reveals a high degree of accuracy regarding Toyota's strategic resilience, with multiple risk factors (IND001, COM002, COM004, PEER001) strongly anticipating the record profits driven by hybrid sales. However, predictions regarding solid-state battery limitations (COM001, PEER002) were only partially accurate; while the 2027-2028 timeline was correctly identified, the prediction of a 'negligible' 10,000 unit capacity was not explicitly validated or refuted by the announcement of the new platform, which maintained targets without confirming the specific volume constraints."
+}

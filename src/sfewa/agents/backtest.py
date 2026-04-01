@@ -81,8 +81,14 @@ def backtest_node(state: PipelineState) -> dict:
     2. Score match quality (strong/partial/weak/miss)
     3. Generate backtest summary
     """
-    risk_factors = state.get("risk_factors", [])
+    raw_risk_factors = state.get("risk_factors", [])
     gt_events = state.get("ground_truth_events", [])
+
+    # Deduplicate: keep latest factor per dimension
+    seen_dims: dict[str, dict] = {}
+    for rf in raw_risk_factors:
+        seen_dims[rf.get("dimension", "unknown")] = rf
+    risk_factors = list(seen_dims.values())
 
     reporting.enter_node("backtest", {
         "risk_factors": len(risk_factors),

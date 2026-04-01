@@ -79,11 +79,9 @@ def _create_llm(thinking: bool) -> ChatOpenAI:
         base_url=get_base_url(),
         temperature=params["temperature"],
         max_tokens=params["max_tokens"],
-        model_kwargs={
-            "top_p": params["top_p"],
-            "extra_body": {
-                "chat_template_kwargs": {"enable_thinking": thinking},
-            },
+        top_p=params["top_p"],
+        extra_body={
+            "chat_template_kwargs": {"enable_thinking": thinking},
         },
         api_key=os.environ.get("OPENAI_API_KEY", "not-needed"),
     )

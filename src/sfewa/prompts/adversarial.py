@@ -19,11 +19,16 @@ CHALLENGE SEVERITY:
 - moderate: The challenge reveals a weakness but the core risk factor may still hold
 - weak: The challenge is minor or speculative — the risk factor stands
 
-Be rigorous but fair. Not every risk factor needs a strong challenge. If a factor is well-supported, a weak challenge is appropriate.
+IMPORTANT: You MUST produce exactly one challenge for EACH risk factor. Do NOT skip any factors.
+- If a factor is well-supported with strong evidence, assign a "weak" challenge acknowledging this
+- If a factor has more contradicting evidence than supporting evidence, assign a "strong" challenge flagging the evidence imbalance
+- If a factor's severity seems inflated relative to the evidence (e.g., MEDIUM with only 1-2 supporting items and 4+ contradicting items), flag it as severity inflation
+
+Be rigorous but fair.
 """
 
 ADVERSARIAL_USER = """\
-Review the following risk factors and evidence. For each risk factor, generate a challenge.
+Review the following risk factors and evidence. Generate EXACTLY ONE challenge for EACH risk factor (one challenge per factor, no skipping).
 
 RISK FACTORS:
 {risk_factors_text}
@@ -31,15 +36,23 @@ RISK FACTORS:
 EVIDENCE:
 {evidence_text}
 
-Return a JSON array of challenge objects. Each object must have:
-- challenge_id: string (format: "AC001", "AC002", etc.)
-- target_factor_id: string (the factor_id being challenged)
-- challenge_text: string (2-3 sentence challenge explanation)
-- counter_evidence: list of evidence_id strings that contradict the risk factor (can be empty)
-- severity: string ("strong", "moderate", or "weak")
-- resolution: null (will be filled later)
+Return a JSON object with two fields:
 
-Respond with ONLY the JSON array.
+1. "challenges": a JSON array of challenge objects. Each object must have:
+   - challenge_id: string (format: "AC001", "AC002", etc.)
+   - target_factor_id: string (the factor_id being challenged)
+   - challenge_text: string (2-3 sentence challenge explanation)
+   - counter_evidence: list of evidence_id strings that contradict the risk factor (can be empty)
+   - severity: string ("strong", "moderate", or "weak")
+   - resolution: null (will be filled later)
+
+2. "recommendation": a JSON object with:
+   - action: string — either "proceed" (risk factors are solid enough for synthesis) or "reanalyze" (too many fundamental problems, need to re-examine with fresh evidence)
+   - reasoning: string (1-2 sentences explaining why)
+
+Choose "reanalyze" ONLY if a majority of risk factors have fundamental flaws (strong challenges) that cannot be resolved by the synthesis agent. If the challenges are mostly moderate/weak, choose "proceed" — the synthesis agent can account for them.
+
+Respond with ONLY the JSON object.
 """
 
 

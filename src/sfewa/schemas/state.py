@@ -43,3 +43,9 @@ class PipelineState(TypedDict):
     iteration_count: int
     adversarial_pass_count: int
     error: str | None
+
+    # ── Agentic routing ──
+    # LLM-driven decisions stored here so routing functions can read them
+    evidence_sufficient: bool | None  # quality gate decision
+    follow_up_queries: list[str]  # targeted queries from quality gate → retrieval
+    adversarial_recommendation: str | None  # "proceed" or "reanalyze"

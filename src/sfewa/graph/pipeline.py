@@ -2,13 +2,17 @@
 
 This module wires all agent nodes into the pipeline graph.
 
-Architecture patterns adopted:
+KEY DESIGN: LLM-driven routing makes this an AGENTIC system, not just a pipeline.
+- Evidence quality gate: LLM decides if evidence is sufficient or needs more retrieval
+- Adversarial reviewer: LLM recommends proceed vs reanalyze
+- Dead-loop protection: iteration counters as safety bounds only
+
+Architecture patterns:
 - Fan-out parallel analysts via Send API (LangGraph)
-- Adversarial review with loop-back (inspired by TradingAgents-CN bull/bear debate)
+- LLM-driven quality gate for evidence sufficiency (agentic routing)
+- Adversarial review with LLM-recommended loop-back
 - Separated evaluation — adversarial reviewer never self-evaluates
-  (Anthropic harness design: "separating generation from evaluation")
-- Dead-loop protection via iteration counters (TradingAgents-CN)
-- File-based artifact handoffs for audit trail (Anthropic harness design)
+- Dead-loop protection via iteration counters (safety bounds)
 """
 
 from __future__ import annotations
@@ -23,9 +27,10 @@ from sfewa.agents.evidence_extraction import evidence_extraction_node
 from sfewa.agents.industry_analyst import industry_analyst_node
 from sfewa.agents.init_case import init_case_node
 from sfewa.agents.peer_analyst import peer_analyst_node
+from sfewa.agents.quality_gate import quality_gate_node
 from sfewa.agents.retrieval import retrieval_node
 from sfewa.agents.risk_synthesis import risk_synthesis_node
-from sfewa.graph.routing import after_adversarial_review, should_continue_extraction
+from sfewa.graph.routing import after_adversarial_review, route_after_quality_gate
 from sfewa.schemas.state import PipelineState
 
 
@@ -33,10 +38,12 @@ def build_pipeline() -> StateGraph:
     """Build the full analysis pipeline graph.
 
     Flow:
-      init_case -> retrieval -> evidence_extraction (with tool-call loop guard)
-        -> [industry | company | peer] analysts (parallel fan-out)
-        -> adversarial_review (with loop-back if too many strong challenges)
-        -> risk_synthesis -> backtest -> END
+      init_case -> retrieval -> evidence_extraction -> quality_gate
+        --(LLM decides: sufficient)--> [industry | company | peer] analysts (parallel)
+        --(LLM decides: insufficient)--> retrieval (follow-up loop)
+        -> adversarial_review
+        --(LLM recommends: proceed)--> risk_synthesis -> backtest -> END
+        --(LLM recommends: reanalyze)--> evidence_extraction (loop)
     """
     workflow = StateGraph(PipelineState)
 
@@ -44,6 +51,7 @@ def build_pipeline() -> StateGraph:
     workflow.add_node("init_case", init_case_node)
     workflow.add_node("retrieval", retrieval_node)
     workflow.add_node("evidence_extraction", evidence_extraction_node)
+    workflow.add_node("quality_gate", quality_gate_node)
     workflow.add_node("industry_analyst", industry_analyst_node)
     workflow.add_node("company_analyst", company_analyst_node)
     workflow.add_node("peer_analyst", peer_analyst_node)
@@ -55,13 +63,13 @@ def build_pipeline() -> StateGraph:
     workflow.add_edge(START, "init_case")
     workflow.add_edge("init_case", "retrieval")
     workflow.add_edge("retrieval", "evidence_extraction")
+    workflow.add_edge("evidence_extraction", "quality_gate")
 
-    # ── Dead-loop guard on extraction + fan-out to analysts ──
-    # Send API requires returning Send objects from a conditional edge function.
-    def route_after_extraction(state: PipelineState) -> list[Send] | str:
-        route = should_continue_extraction(state)
-        if route == "error":
-            return END
+    # ── LLM-driven quality gate: sufficient → fan-out, insufficient → retrieval ──
+    def route_after_gate(state: PipelineState) -> list[Send] | str:
+        route = route_after_quality_gate(state)
+        if route == "retrieval":
+            return "retrieval"
         # Fan-out to 3 parallel analysts
         return [
             Send("industry_analyst", state),
@@ -70,9 +78,9 @@ def build_pipeline() -> StateGraph:
         ]
 
     workflow.add_conditional_edges(
-        "evidence_extraction",
-        route_after_extraction,
-        ["industry_analyst", "company_analyst", "peer_analyst"],
+        "quality_gate",
+        route_after_gate,
+        ["industry_analyst", "company_analyst", "peer_analyst", "retrieval"],
     )
 
     # ── All analysts converge -> adversarial review ──
@@ -80,8 +88,7 @@ def build_pipeline() -> StateGraph:
     workflow.add_edge("company_analyst", "adversarial_review")
     workflow.add_edge("peer_analyst", "adversarial_review")
 
-    # ── Adversarial review -> synthesis or loop back ──
-    # Inspired by TradingAgents-CN's debate loop with max rounds
+    # ── LLM-driven adversarial routing ──
     workflow.add_conditional_edges(
         "adversarial_review",
         after_adversarial_review,

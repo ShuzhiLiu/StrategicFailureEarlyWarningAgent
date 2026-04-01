@@ -5,10 +5,11 @@ from __future__ import annotations
 EXTRACTION_SYSTEM = """\
 You are an evidence extraction agent for strategic risk analysis.
 
-Your task: Extract structured evidence claims from search result snippets about {company}'s {strategy_theme}.
+Your task: Extract structured evidence claims from the provided documents about {company}'s {strategy_theme}.
+Documents include official regulatory filings (EDINET), company disclosures, and web search results.
 
 CRITICAL RULES:
-1. TEMPORAL CUTOFF: The analysis cutoff date is {cutoff_date}. You MUST determine when each article was published from the snippet text (look for dates like "May 20, 2025", "Mar 12, 2026", "3 weeks ago", etc.). If a document was published AFTER {cutoff_date}, mark it with published_at AFTER the cutoff — we will filter it out. If you cannot determine the date, estimate conservatively.
+1. TEMPORAL CUTOFF: The analysis cutoff date is {cutoff_date}. For documents with a "Published" date shown, use that exact date. For web search snippets, determine publication date from the text (look for dates like "May 20, 2025", "Mar 12, 2026", "3 weeks ago", etc.). If a document was published AFTER {cutoff_date}, mark it with published_at AFTER the cutoff — we will filter it out. If you cannot determine the date, estimate conservatively.
 2. Extract ONLY claims that are explicitly stated or directly supported by the snippet text. Do not infer claims beyond what the text says.
 3. For span_text, use the closest exact quote from the snippet that supports the claim.
 4. Each claim should be a single, specific, factual assertion — not a summary paragraph.
@@ -25,9 +26,11 @@ CLAIM TYPES (pick the most specific one):
 - financial_metric: Revenue, profit, sales volumes, writedowns
 
 STANCE (relative to {company}'s EV strategy risk):
-- supports_risk: This claim suggests the strategy faces problems
-- contradicts_risk: This claim suggests the strategy is sound
-- neutral: Factual claim that could go either way
+- supports_risk: This claim suggests the strategy faces problems. Includes: declining sales, competitor advantages, execution delays, market headwinds, risk disclosures by the company itself, overly ambitious targets with unclear execution path, large capital commitments with uncertain returns.
+- contradicts_risk: This claim suggests the strategy is on track and sound. Includes: strong sales growth, successful launches, healthy financials that support the investment, partnerships on schedule.
+- neutral: Factual claim that could go either way, or purely descriptive statements about plans without clear risk signal.
+
+NOTE: A company's OWN risk disclosure (e.g., "we face challenges in...") should be classified as supports_risk — the company itself is acknowledging the problem. Similarly, very ambitious targets (e.g., "100% EV by 2040") should be neutral or supports_risk if there is no evidence the company can achieve them, not contradicts_risk just because the company stated them confidently.
 
 SOURCE TYPE:
 - company_filing: Official SEC/regulatory filings
@@ -74,12 +77,24 @@ Respond with ONLY the JSON array, no other text.
 
 
 def format_documents(docs: list[dict]) -> str:
-    """Format retrieved docs into a numbered text block for the prompt."""
+    """Format retrieved docs into a numbered text block for the prompt.
+
+    EDINET docs include published_at and source_type metadata.
+    Web search docs have only title/URL/snippet.
+    """
     parts = []
     for i, doc in enumerate(docs, 1):
-        parts.append(
-            f"[{i}] Title: {doc.get('title', 'N/A')}\n"
-            f"    URL: {doc.get('link', 'N/A')}\n"
-            f"    Snippet: {doc.get('snippet', 'N/A')}"
-        )
+        lines = [f"[{i}] Title: {doc.get('title', 'N/A')}"]
+        lines.append(f"    URL: {doc.get('link', 'N/A')}")
+
+        # Show known metadata (EDINET docs have these)
+        if doc.get("published_at"):
+            lines.append(f"    Published: {doc['published_at']}")
+        if doc.get("source_type"):
+            lines.append(f"    Source type: {doc['source_type']}")
+        if doc.get("credibility_tier"):
+            lines.append(f"    Credibility: {doc['credibility_tier']}")
+
+        lines.append(f"    Content: {doc.get('snippet', 'N/A')}")
+        parts.append("\n".join(lines))
     return "\n\n".join(parts)

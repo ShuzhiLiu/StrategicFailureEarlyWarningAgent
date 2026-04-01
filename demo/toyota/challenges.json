@@ -1,0 +1,92 @@
+[
+  {
+    "challenge_id": "AC001",
+    "target_factor_id": "IND001",
+    "challenge_text": "This risk factor conflates an industry-wide trend with a specific Toyota risk. While hybrid growth supports Toyota's strategy, framing general market segmentation as a company-specific 'market timing' risk introduces Industry-vs-company confusion. Evidence E017 shows global EV sales surging, suggesting the hybrid preference may be temporary.",
+    "counter_evidence": [
+      "E017"
+    ],
+    "severity": "moderate",
+    "resolution": null
+  },
+  {
+    "challenge_id": "AC002",
+    "target_factor_id": "IND002",
+    "challenge_text": "The severity is inflated to 'HIGH' because the causal chain ignores the explicit mitigation strategy cited in Evidence E016 ($1 billion US investment). While the tariff impact is real, the risk assessment fails to weigh the active capital allocation designed to offset these costs.",
+    "counter_evidence": [
+      "E016"
+    ],
+    "severity": "moderate",
+    "resolution": null
+  },
+  {
+    "challenge_id": "AC003",
+    "target_factor_id": "COM001",
+    "challenge_text": "The interpretation of the 10,000 vehicle figure as a hard capacity limit is a Selection Bias error. Evidence suggests this is an initial ramp-up for 2030 mass production, not a decade-long ceiling, which contradicts the claim of 'insufficient' capital allocation.",
+    "counter_evidence": [
+      "E008"
+    ],
+    "severity": "moderate",
+    "resolution": null
+  },
+  {
+    "challenge_id": "AC004",
+    "target_factor_id": "COM002",
+    "challenge_text": "The evidence provided (E012, E013) directly contradicts the premise of a 'tension' between narrative and reality by confirming market alignment. Labeling a validated strategy as a 'risk' constitutes a definition error given the data proves consistency.",
+    "counter_evidence": [
+      "E012",
+      "E013"
+    ],
+    "severity": "strong",
+    "resolution": null
+  },
+  {
+    "challenge_id": "AC005",
+    "target_factor_id": "COM003",
+    "challenge_text": "Severity is inflated by focusing on past delays (E007) while ignoring strong recent recovery data. Evidence E014 and E017 show 195.7% YoY sales growth, indicating execution issues are resolving, which was not factored into the Medium severity rating.",
+    "counter_evidence": [
+      "E014",
+      "E017"
+    ],
+    "severity": "moderate",
+    "resolution": null
+  },
+  {
+    "challenge_id": "AC006",
+    "target_factor_id": "COM004",
+    "challenge_text": "This factor is well-supported as Low severity by the market data. The portfolio aligns with the hybrid dominance confirmed in E012 and E013, and the risk is appropriately rated given the company's multi-pathway strategy matches current demand.",
+    "counter_evidence": [],
+    "severity": "weak",
+    "resolution": null
+  },
+  {
+    "challenge_id": "AC007",
+    "target_factor_id": "PEER001",
+    "challenge_text": "Focus on the Japan EV loss (2,223 vs 2,038 units) suffers from Selection Bias by isolating a tiny volume segment. This ignores Toyota's massive total market dominance in hybrids, making the 'loss of leadership' less material than the Medium severity implies.",
+    "counter_evidence": [
+      "E012"
+    ],
+    "severity": "moderate",
+    "resolution": null
+  },
+  {
+    "challenge_id": "AC008",
+    "target_factor_id": "PEER002",
+    "challenge_text": "This factor is largely redundant with COM001 (Solid-State Capacity) using the same evidence (E009). Additionally, Evidence E017 indicates ongoing investment in battery infrastructure, contradicting the claim of static limited capability.",
+    "counter_evidence": [
+      "E017"
+    ],
+    "severity": "moderate",
+    "resolution": null
+  },
+  {
+    "challenge_id": "AC009",
+    "target_factor_id": "PEER003",
+    "challenge_text": "Using a 2024 launch delay (E007) as a current risk indicator introduces Temporal Bias. Evidence E017 demonstrates strong sales performance in 2025 post-launch, mitigating the relevance of the past delay to current strategic risk.",
+    "counter_evidence": [
+      "E017"
+    ],
+    "severity": "weak",
+    "resolution": null
+  }
+]

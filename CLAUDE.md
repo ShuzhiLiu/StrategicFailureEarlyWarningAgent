@@ -1,18 +1,25 @@
 # Strategic Failure Early Warning Agent
 
 ## Project Overview
-A time-bounded multi-agent system for strategic failure early warning on public companies.
-Uses LangGraph for orchestration, Claude/OpenAI for reasoning, and evidence-driven analysis with temporal integrity.
+A time-bounded multi-agent system (Planner-Generator-Evaluator) for strategic failure early warning on public companies. Uses LangGraph for orchestration, Qwen3.5-27B on local vLLM for reasoning, and evidence-driven analysis with temporal integrity.
 
-**First case study**: Honda EV strategy backtesting (cutoff: 2025-05-19)
+**Case studies** (all cutoff 2025-05-19):
+- **Honda** → HIGH risk (ground truth: May 2025 target revision + March 2026 writedown)
+- **Toyota** → MEDIUM risk (control: weak BEV execution but strong hybrid position)
+- **BYD** → LOW risk (control: world's largest NEV maker, strategy succeeding)
+
+**Demo**: AI Tinkerers HK at AWS, April 29, 2026. Pre-cached runs in `demo/`.
+
+**Status**: Phase A (pipeline flow) and Phase B (prompt quality) complete. All 10 nodes produce valid structured output. Cross-company discrimination achieved through evidence-driven reasoning, not config tuning.
 
 ## Tech Stack
 - **Agent framework**: LangGraph 2.x + LangChain
+- **LLM**: Qwen3.5-27B-GPTQ-Int4 on local vLLM (OpenAI-compatible API, no cloud dependency)
+- **Modes**: Thinking mode for adversarial + synthesis; non-thinking mode for extraction + analysis
 - **Package manager**: uv
-- **Testing**: pytest
+- **Testing**: pytest (51 tests)
 - **Linting**: ruff
 - **Type checking**: pyright
-
 
 ## Code Style
 - Use Python type hints everywhere (TypedDict for state, Pydantic for data models)
@@ -24,54 +31,110 @@ Uses LangGraph for orchestration, Claude/OpenAI for reasoning, and evidence-driv
 - Config files in YAML under `configs/`
 
 ## Architecture Rules
+
+### Pipeline (10 nodes, 2 LLM-driven routing decisions)
+```
+init_case → retrieval (3-pass) → evidence_extraction → quality_gate
+  ──(LLM: sufficient)──→ [industry|company|peer]_analyst (parallel fan-out)
+  ──(LLM: insufficient)──→ retrieval (follow-up loop)
+→ adversarial_review
+  ──(LLM: proceed)──→ risk_synthesis → backtest → END
+  ──(LLM: reanalyze)──→ evidence_extraction (rare)
+```
+
+### Core invariants
 - Every evidence object must have a `published_at` timestamp and pass cutoff validation
 - Never use data published after the case's `cutoff_date`
 - Agent outputs must be structured (TypedDict/Pydantic), not free-form prose
 - All high-level conclusions must reference `evidence_id` list
 - State flows through LangGraph StateGraph; no global mutable state
-- Use `Annotated[list, operator.add]` for accumulating state fields
+- Use `Annotated[list, operator.add]` for accumulating state fields (evidence, risk_factors, challenges, backtest_events)
 
-## Development Iteration Rules
+### Temporal integrity (enforced at 3 levels)
+1. **Retrieval**: `published_at > cutoff_date` → hard reject
+2. **Extraction**: temporal filter on evidence items
+3. **Prompts**: "Do NOT use knowledge about events after {cutoff_date}" in all retrieval prompt templates
 
-### Build order: follow the pipeline
-Implement nodes in pipeline topological order. Each node can only be properly tested when its upstream nodes produce real output.
+### LLM-driven routing (not hardcoded thresholds)
+- **Quality gate**: LLM evaluates evidence sufficiency (count, stance balance, source diversity, dimension coverage). Routes to retrieval or fan-out.
+- **Adversarial review**: LLM recommends "proceed" or "reanalyze". Dead-loop counters (`MAX_ITERATIONS=3`, `MAX_ADVERSARIAL_PASSES=2`) are safety bounds only.
 
-```
-init_case → retrieval → evidence_extraction → [industry|company|peer]_analyst → adversarial_review → risk_synthesis → backtest
-```
+### Independent evaluator (Anthropic's key insight)
+- Adversarial reviewer is structurally separated from analysts
+- Uses thinking mode for deep reasoning (analysts use non-thinking mode)
+- Sees ALL evidence, not just what analysts cited
+- Only STRONG challenges trigger severity downgrades in synthesis
 
-### Per-node development cycle
-For each node, complete these steps before moving to the next:
-1. **Implement** the node (LLM call + structured output + reporting calls)
-2. **Unit test** with fixture input (no LLM dependency)
-3. **Integration test** run pipeline from START to current node with real LLM
-4. **Validate** compare reporting output against `docs/golden_run_honda.md` — check for structural divergence (wrong routing, missing dimensions, unexpected counts), not exact value match
-5. **Commit** the working node
+### Pipeline context injection
+- Downstream nodes receive a summary of upstream pipeline history via `build_pipeline_context()`
+- Enables synthesis to adjust confidence based on evidence quality, adversarial to factor in retrieval coverage
 
-### End-to-end first, polish second
-- **Phase A (flow)**: Get all 9 nodes producing valid structured output in one full pipeline run. Prompt quality can be mediocre — the goal is pipeline connectivity and schema compliance.
-- **Phase B (quality)**: Once the pipeline flows end-to-end, go back and iterate on individual prompts, evidence quality, and risk factor depth.
-- Do NOT spend time tuning prompts until Phase A is complete.
+### Risk factor deduplication
+- `risk_factors` uses `operator.add` (accumulates across passes)
+- On adversarial loop-back, analysts produce duplicates
+- Adversarial, synthesis, backtest, and artifacts all deduplicate by dimension (latest per dimension wins)
+
+## Development Rules
+
+### Principle: Improve through design, not through rules
+When the system produces wrong results, fix the **architecture and agent design** — not the prompt wording. The hierarchy of interventions:
+
+1. **Structural fix** (best) — Add a new node, change routing logic, restructure information flow. Example: adding the quality gate node fixed evidence insufficiency across all companies at once.
+2. **Reasoning framework** — Give agents better decision frameworks that generalize. Example: the impact assessment framework (existing business threat vs expansion barrier) helps analysts reason about ANY company, not just Honda.
+3. **Prompt tuning** (last resort) — Adjust specific prompt language. Only when the structural design is correct but the LLM needs clearer instructions to follow it.
+
+Never add company-specific rules, hardcoded thresholds, or conditional logic targeting specific outcomes. Same pipeline, same prompts, same model must produce different results for different companies through evidence-driven reasoning.
+
+### Dynamic routing over static pipelines
+Every control flow decision should be LLM-driven, not hardcoded:
+- **Wrong**: `if len(evidence) < 10: loop_back()`
+- **Right**: LLM evaluates evidence sufficiency considering count, stance balance, source diversity, and dimension coverage — then decides
+
+When routing produces wrong behavior, improve what information the routing LLM receives (pipeline context injection), not the routing threshold. Iteration counters are safety bounds only.
+
+### Separated evaluation over self-assessment
+When agent output quality is poor, add or strengthen an independent evaluator — don't ask the same agent to "try harder":
+- Analysts assess risk → adversarial reviewer challenges independently
+- Quality gate evaluates evidence → separate from the extraction agent that produced it
+- If a new quality problem emerges, consider whether a new evaluation node is the right fix
+
+### Cross-company discrimination as design validation
+Run all three cases after significant changes. Expected: Honda → HIGH, Toyota → MEDIUM, BYD → LOW.
+
+If companies cluster at the same risk level, the problem is **architectural**, not prompt-level:
+- All HIGH → evaluator too weak (not generating strong challenges for weak factors)
+- All MEDIUM → analysts lack a reasoning framework to distinguish severity levels
+- All LOW → evidence gathering insufficient (quality gate not looping enough)
+
+The fix is always a design improvement that generalizes, never a rule that targets one company.
+
+### Evidence-driven, not knowledge-driven
+The system's conclusions must emerge from retrieved evidence, not LLM world knowledge:
+- Retrieval generates its own search queries from case context (no hand-tuned topics)
+- Quality gate decides when evidence is sufficient (no fixed count thresholds)
+- Analysts weigh supporting vs contradicting evidence (not prior beliefs)
+- Adversarial reviewer checks for evidence imbalance (not outcome expectations)
+
+When results seem "too correct," suspect temporal leakage — the LLM may be using post-cutoff knowledge rather than reasoning from evidence.
 
 ### LLM structured output strategy
 Qwen3.5 may break Pydantic schemas. Each LLM-calling node should:
-1. Request structured output via `with_structured_output()` or explicit JSON schema in prompt
-2. On parse failure, retry once with the validation error appended to the prompt
-3. On second failure, log the error via `reporting.log_action()`, set `state["error"]`, and return partial results rather than crashing the pipeline
+1. Request structured output via explicit JSON schema in prompt
+2. On parse failure, retry once with the validation error appended
+3. On second failure, log the error, set `state["error"]`, and return partial results rather than crashing
 
-### Debugging against golden run
-- `docs/golden_run_honda.md` is a **reference**, not a spec — actual output will differ in counts and content
-- **Structural checks**: Did retrieval produce documents? Did extraction produce evidence with all required fields? Did analysts cover the expected dimensions? Did adversarial review generate challenges? Did routing decisions match expected conditions?
-- **Temporal integrity is the hardest bug**: If results look too good, check whether post-cutoff information leaked through LLM world knowledge or improperly filtered documents
-- **Runtime reporting** (`sfewa.reporting`) prints structured progress from every node — compare this output against the golden run to spot where behavior diverges
+### Debugging
+- `docs/cross_company_results.md` is a **reference**, not a spec — actual output will differ
+- **Structural checks**: Did quality gate route correctly? Did analysts cover expected dimensions? Did adversarial generate meaningful (not rubber-stamp) challenges? Did routing decisions reflect evidence state?
+- **Temporal integrity is the hardest bug**: If results look too good, check for post-cutoff information leakage
+- **Runtime reporting** (`sfewa.reporting`) prints structured progress from every node — compare against cross-company results to spot divergence
 
 ## Git Workflow
 - Branch naming: `feature/*`, `fix/*`, `docs/*`
 - Commit messages: imperative mood, concise
 - Keep PRs focused on one concern
-- Commit after each node passes integration test — do not batch multiple nodes
 
-@docs/implementation_plan.md
-@docs/golden_run_honda.md
+@docs/architecture.md
+@docs/cross_company_results.md
 @docs/iteration_log.md
 @.env

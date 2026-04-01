@@ -1,0 +1,97 @@
+[
+  {
+    "challenge_id": "AC001",
+    "target_factor_id": "IND001",
+    "challenge_text": "The factor attributes the 42% profit drop primarily to tariffs, yet Evidence E024 explicitly cites both 'U.S. tariffs and a changing EV market' as causes, suggesting the attribution is conflated. Additionally, Evidence E008 outlines a specific mitigation strategy (LG JV) for 2025 that reduces long-term tariff exposure, which is underweighted in the severity assessment.",
+    "counter_evidence": [
+      "E008",
+      "E024"
+    ],
+    "severity": "moderate",
+    "resolution": null
+  },
+  {
+    "challenge_id": "AC002",
+    "target_factor_id": "IND002",
+    "challenge_text": "Evidence E032 discusses limited growth for 'global auto sales' generally, not specifically the EV segment which may be growing faster than the industry average. Using general automotive growth data to challenge an EV-specific capacity target creates an industry-vs-company confusion regarding market dynamics.",
+    "counter_evidence": [
+      "E032",
+      "E036"
+    ],
+    "severity": "moderate",
+    "resolution": null
+  },
+  {
+    "challenge_id": "AC003",
+    "target_factor_id": "COM001",
+    "challenge_text": "The factor claims 'severe' erosion based on EV segment losses (E037), but Evidence E012 shows consolidated operating income increased 77% in FY2023. This suggests the overall company remains financially robust despite segment losses, potentially inflating the severity of the capital allocation risk.",
+    "counter_evidence": [
+      "E012",
+      "E037"
+    ],
+    "severity": "moderate",
+    "resolution": null
+  },
+  {
+    "challenge_id": "AC004",
+    "target_factor_id": "COM002",
+    "challenge_text": "Evidence E019 is a standard corporate risk disclosure applicable to any company with JVs, rather than a specific indicator of Honda's unique execution failure. This treats a generic industry risk as a specific company-level threat without distinct evidence of impending failure.",
+    "counter_evidence": [
+      "E019"
+    ],
+    "severity": "weak",
+    "resolution": null
+  },
+  {
+    "challenge_id": "AC005",
+    "target_factor_id": "COM003",
+    "challenge_text": "The factor emphasizes a 'valley of death' due to the 2026 North American launch, ignoring Evidence E009 and E010 which confirm aggressive EV launches in China starting 2025. This regional omission presents an incomplete picture of the product portfolio strategy.",
+    "counter_evidence": [
+      "E009",
+      "E010"
+    ],
+    "severity": "moderate",
+    "resolution": null
+  },
+  {
+    "challenge_id": "AC006",
+    "target_factor_id": "COM004",
+    "challenge_text": "Framing the Nissan partnership as a narrative inconsistency ignores Evidence E018, which confirms continued in-house development of solid-state batteries. This represents strategic adaptation rather than a contradiction, and the risk severity appears inflated for a standard business pivot.",
+    "counter_evidence": [
+      "E018",
+      "E011"
+    ],
+    "severity": "weak",
+    "resolution": null
+  },
+  {
+    "challenge_id": "AC007",
+    "target_factor_id": "PEER001",
+    "challenge_text": "The factor claims competitors are profitable or scaled, yet the evidence set contains no comparative data for Tesla, BYD, or GM. This selection bias relies on an assumption of competitor success rather than provided evidence, making the competitive gap claim unverified.",
+    "counter_evidence": [],
+    "severity": "moderate",
+    "resolution": null
+  },
+  {
+    "challenge_id": "AC008",
+    "target_factor_id": "PEER002",
+    "challenge_text": "The risk frames the 2026 North American launch as a delay without accounting for Honda's strategic prioritization of China (E009, E010) where EV demand is higher. This treats a regional strategic choice as a market timing failure, ignoring the validity of a phased regional rollout.",
+    "counter_evidence": [
+      "E009",
+      "E010"
+    ],
+    "severity": "moderate",
+    "resolution": null
+  },
+  {
+    "challenge_id": "AC009",
+    "target_factor_id": "PEER003",
+    "challenge_text": "Evidence E027 confirms a 'newly developed dedicated EV architecture' is in-house, contradicting the claim of full dependency for core technology. The risk conflates battery production dependency (LG) with architecture/software capability, overstating the technology risk.",
+    "counter_evidence": [
+      "E027",
+      "E018"
+    ],
+    "severity": "moderate",
+    "resolution": null
+  }
+]

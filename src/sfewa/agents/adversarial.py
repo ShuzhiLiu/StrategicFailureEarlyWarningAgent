@@ -10,6 +10,7 @@ import json
 import re
 
 from sfewa import reporting
+from sfewa.context import build_pipeline_context
 from sfewa.llm import get_llm_for_role
 from sfewa.prompts.adversarial import (
     ADVERSARIAL_SYSTEM,
@@ -28,11 +29,17 @@ def adversarial_review_node(state: PipelineState) -> dict:
     2. Check for selection bias, industry-vs-company confusion, temporal bias
     3. Rate each challenge as strong/moderate/weak
     """
-    risk_factors = state.get("risk_factors", [])
+    raw_risk_factors = state.get("risk_factors", [])
     evidence = state.get("evidence", [])
     company = state["company"]
     theme = state["strategy_theme"]
     pass_count = state.get("adversarial_pass_count", 0) + 1
+
+    # Deduplicate: keep latest factor per dimension (handles multi-pass accumulation)
+    seen_dims: dict[str, dict] = {}
+    for rf in raw_risk_factors:
+        seen_dims[rf.get("dimension", "unknown")] = rf
+    risk_factors = list(seen_dims.values())
 
     reporting.enter_node("adversarial_review", {
         "risk_factors": len(risk_factors),
@@ -49,14 +56,17 @@ def adversarial_review_node(state: PipelineState) -> dict:
             "current_stage": "adversarial_review",
         }
 
-    # Format prompt
+    # Format prompt with pipeline context injection
     rf_text = format_risk_factors_for_review(risk_factors)
     evidence_text = format_evidence_for_analyst(evidence)
+    pipeline_context = build_pipeline_context(state)
 
     system_msg = ADVERSARIAL_SYSTEM.format(
         company=company,
         strategy_theme=theme,
     )
+    if pipeline_context:
+        system_msg += f"\n\n{pipeline_context}"
     user_msg = ADVERSARIAL_USER.format(
         risk_factors_text=rf_text,
         evidence_text=evidence_text,
@@ -67,6 +77,7 @@ def adversarial_review_node(state: PipelineState) -> dict:
     reporting.log_action("Calling LLM (thinking mode) for adversarial review")
 
     challenges: list[dict] = []
+    adversarial_recommendation = "proceed"  # default: proceed to synthesis
     try:
         response = llm.invoke([
             {"role": "system", "content": system_msg},
@@ -77,24 +88,43 @@ def adversarial_review_node(state: PipelineState) -> dict:
         # Strip <think> blocks
         raw_text = re.sub(r"<think>[\s\S]*?</think>", "", raw_text).strip()
 
-        # Parse JSON
+        # Parse JSON — now expects an object with "challenges" and "recommendation"
         match = re.search(r"```(?:json)?\s*([\s\S]*?)```", raw_text)
         if match:
             raw_text = match.group(1).strip()
-        start = raw_text.find("[")
-        end = raw_text.rfind("]")
-        if start != -1 and end != -1:
-            raw_text = raw_text[start : end + 1]
 
-        parsed = json.loads(raw_text)
-        if isinstance(parsed, list):
-            challenges = parsed
+        # Try parsing as object first (new format)
+        start_obj = raw_text.find("{")
+        end_obj = raw_text.rfind("}")
+        start_arr = raw_text.find("[")
+
+        if start_obj != -1 and end_obj != -1 and (start_arr == -1 or start_obj < start_arr):
+            # Object format — new output with recommendation
+            parsed = json.loads(raw_text[start_obj : end_obj + 1])
+            if isinstance(parsed.get("challenges"), list):
+                challenges = parsed["challenges"]
+            rec = parsed.get("recommendation", {})
+            if isinstance(rec, dict):
+                adversarial_recommendation = rec.get("action", "proceed")
+                rec_reasoning = rec.get("reasoning", "")
+                reporting.log_action("Adversarial recommendation", {
+                    "action": adversarial_recommendation.upper(),
+                    "reasoning": rec_reasoning[:120],
+                })
+        elif start_arr != -1:
+            # Fallback: array format (old output)
+            end_arr = raw_text.rfind("]")
+            if end_arr != -1:
+                parsed = json.loads(raw_text[start_arr : end_arr + 1])
+                if isinstance(parsed, list):
+                    challenges = parsed
 
     except Exception as e:
         reporting.log_action("LLM call failed", {"error": str(e)[:200]})
         return {
             "adversarial_challenges": [],
             "adversarial_pass_count": pass_count,
+            "adversarial_recommendation": "proceed",
             "current_stage": "adversarial_review",
         }
 
@@ -125,21 +155,27 @@ def adversarial_review_node(state: PipelineState) -> dict:
             c["challenge_text"][:80],
         )
 
-    # Report routing decision
+    # Report routing decision — now LLM-driven
     strong_count = severity_counts["strong"]
-    total_factors = len(risk_factors)
-    ratio = strong_count / total_factors if total_factors > 0 else 0
+
+    # Validate recommendation: override to "proceed" if max passes reached
+    if pass_count >= 2 and adversarial_recommendation == "reanalyze":
+        adversarial_recommendation = "proceed"
+        reporting.log_action("Max adversarial passes — overriding to proceed")
+
+    next_node = "risk_synthesis" if adversarial_recommendation == "proceed" else "evidence_extraction (reanalyze)"
 
     reporting.exit_node("adversarial_review", {
         "challenges": len(valid_challenges),
         "strong": strong_count,
         "moderate": severity_counts["moderate"],
         "weak": severity_counts["weak"],
-    }, next_node="risk_synthesis" if ratio <= 0.5 or pass_count >= 2 else "loop back",
-       reason=f"strong/total = {strong_count}/{total_factors} = {ratio:.1%}")
+        "llm_recommendation": adversarial_recommendation,
+    }, next_node=next_node)
 
     return {
         "adversarial_challenges": valid_challenges,
         "adversarial_pass_count": pass_count,
+        "adversarial_recommendation": adversarial_recommendation,
         "current_stage": "adversarial_review",
     }

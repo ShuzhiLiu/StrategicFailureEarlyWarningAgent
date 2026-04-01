@@ -36,6 +36,10 @@ def init_case_node(state: PipelineState) -> dict:
         "risk_memo": None,
         "backtest_summary": None,
         "error": None,
+        # Agentic routing fields
+        "evidence_sufficient": None,
+        "follow_up_queries": [],
+        "adversarial_recommendation": None,
     }
 
     reporting.exit_node("init_case", next_node="retrieval")

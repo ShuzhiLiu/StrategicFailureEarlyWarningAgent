@@ -6,7 +6,7 @@ Analyzes EV market adoption, policy environment, and macro trends.
 from __future__ import annotations
 
 from sfewa.agents._analyst_base import run_analyst
-from sfewa.prompts.analysis import INDUSTRY_DIMENSIONS
+from sfewa.prompts.analysis import INDUSTRY_DIMENSIONS, INDUSTRY_SCOPE
 from sfewa.schemas.state import PipelineState
 
 
@@ -22,5 +22,6 @@ def industry_analyst_node(state: PipelineState) -> dict:
         role_name="Industry & Market Analyst",
         llm_role="industry_analyst",
         dimensions_description=INDUSTRY_DIMENSIONS,
+        scope_boundary=INDUSTRY_SCOPE,
         factor_prefix="IND",
     )

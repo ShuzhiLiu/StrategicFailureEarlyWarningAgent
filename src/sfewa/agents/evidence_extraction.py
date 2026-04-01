@@ -2,6 +2,11 @@
 
 Extracts structured EvidenceItem objects from retrieved documents using LLM.
 Applies temporal filtering to reject post-cutoff evidence.
+
+Agentic behavior: processes documents in batches by source type to maximize
+extraction quality. EDINET filings (company disclosures) are processed
+separately from web search results (external signals) so the LLM gives
+each source type appropriate attention.
 """
 
 from __future__ import annotations
@@ -22,13 +27,11 @@ from sfewa.tools.temporal_filter import is_before_cutoff
 
 def _parse_evidence_json(text: str) -> list[dict]:
     """Extract JSON array from LLM response, handling markdown fences."""
-    # Strip markdown code fences if present
     text = text.strip()
     match = re.search(r"```(?:json)?\s*([\s\S]*?)```", text)
     if match:
         text = match.group(1).strip()
 
-    # Try to find a JSON array
     start = text.find("[")
     end = text.rfind("]")
     if start != -1 and end != -1:
@@ -48,7 +51,6 @@ def _validate_evidence_item(item: dict) -> dict | None:
         if field not in item or not item[field]:
             return None
 
-    # Ensure relevance_score is a float in range
     try:
         score = float(item.get("relevance_score", 0.5))
         item["relevance_score"] = max(0.0, min(1.0, score))
@@ -58,14 +60,104 @@ def _validate_evidence_item(item: dict) -> dict | None:
     return item
 
 
+def _extract_batch(
+    docs: list[dict],
+    batch_label: str,
+    company: str,
+    theme: str,
+    cutoff: str,
+    start_id: int,
+    llm,
+) -> list[dict]:
+    """Run extraction on a single batch of documents.
+
+    Returns validated evidence items (before temporal filtering).
+    """
+    if not docs:
+        return []
+
+    documents_text = format_documents(docs)
+    system_msg = EXTRACTION_SYSTEM.format(
+        company=company,
+        strategy_theme=theme,
+        cutoff_date=cutoff,
+    )
+    user_msg = EXTRACTION_USER.format(
+        doc_count=len(docs),
+        company=company,
+        strategy_theme=theme,
+        cutoff_date=cutoff,
+        documents_text=documents_text,
+    )
+    # Tell the LLM to start IDs from the correct offset
+    if start_id > 1:
+        user_msg += f"\n\nStart evidence_id numbering from E{start_id:03d}."
+
+    reporting.log_action(f"Extracting from batch: {batch_label}", {
+        "docs": len(docs),
+    })
+
+    retry_count = 0
+    max_retries = 1
+    last_error = None
+    evidence_items: list[dict] = []
+
+    while retry_count <= max_retries:
+        try:
+            messages = [
+                {"role": "system", "content": system_msg},
+                {"role": "user", "content": user_msg},
+            ]
+            if last_error and retry_count > 0:
+                messages.append({
+                    "role": "user",
+                    "content": f"Previous error: {last_error}. Return ONLY a valid JSON array.",
+                })
+
+            response = llm.invoke(messages)
+            raw_text = response.content
+            raw_text = re.sub(r"<think>[\s\S]*?</think>", "", raw_text).strip()
+
+            parsed = _parse_evidence_json(raw_text)
+            if not isinstance(parsed, list):
+                raise ValueError(f"Expected list, got {type(parsed).__name__}")
+
+            evidence_items = parsed
+            break
+
+        except Exception as e:
+            last_error = str(e)[:200]
+            retry_count += 1
+            reporting.log_action(f"Parse error in {batch_label} (attempt {retry_count})", {
+                "error": last_error,
+            })
+
+    # Validate
+    valid: list[dict] = []
+    for item in evidence_items:
+        cleaned = _validate_evidence_item(item)
+        if cleaned:
+            valid.append(cleaned)
+
+    reporting.log_action(f"Batch '{batch_label}' extraction", {
+        "raw": len(evidence_items),
+        "valid": len(valid),
+    })
+
+    return valid
+
+
 def evidence_extraction_node(state: PipelineState) -> dict:
     """Extract structured evidence from retrieved documents.
 
-    1. Send retrieved docs to LLM with extraction prompt
-    2. Parse structured JSON response
-    3. Validate each item against schema
+    Agentic batched extraction:
+    1. Split documents by source type (EDINET filings vs web search)
+    2. Extract from each batch separately for focused attention
+    3. Merge, deduplicate, validate
     4. Apply temporal filter (reject post-cutoff items)
-    5. Report results
+
+    Processing EDINET and web docs separately ensures the LLM gives
+    full attention to each source type rather than skimming 100+ docs.
     """
     docs = state.get("retrieved_docs", [])
     cutoff = state["cutoff_date"]
@@ -88,93 +180,54 @@ def evidence_extraction_node(state: PipelineState) -> dict:
             "iteration_count": iteration,
         }
 
-    # Format prompt
-    documents_text = format_documents(docs)
-    system_msg = EXTRACTION_SYSTEM.format(
-        company=company,
-        strategy_theme=theme,
-        cutoff_date=cutoff,
-    )
-    user_msg = EXTRACTION_USER.format(
-        doc_count=len(docs),
-        company=company,
-        strategy_theme=theme,
-        cutoff_date=cutoff,
-        documents_text=documents_text,
-    )
+    # ── Split documents by source type ──
+    edinet_docs = [d for d in docs if d.get("source") == "edinet"]
+    web_docs = [d for d in docs if d.get("source") != "edinet"]
 
-    # Call LLM
-    llm = get_llm_for_role("extraction")
-    reporting.log_action("Calling LLM for evidence extraction")
-
-    evidence_items: list[dict] = []
-    retry_count = 0
-    max_retries = 1
-    last_error = None
-
-    while retry_count <= max_retries:
-        try:
-            messages = [
-                {"role": "system", "content": system_msg},
-                {"role": "user", "content": user_msg},
-            ]
-            if last_error and retry_count > 0:
-                messages.append({
-                    "role": "user",
-                    "content": f"Your previous response had an error: {last_error}. "
-                               "Please return ONLY a valid JSON array.",
-                })
-
-            response = llm.invoke(messages)
-            raw_text = response.content
-
-            # Strip <think>...</think> block if present (Qwen3.5 thinking mode)
-            raw_text = re.sub(r"<think>[\s\S]*?</think>", "", raw_text).strip()
-
-            parsed = _parse_evidence_json(raw_text)
-            if not isinstance(parsed, list):
-                raise ValueError(f"Expected list, got {type(parsed).__name__}")
-
-            evidence_items = parsed
-            break
-
-        except Exception as e:
-            last_error = str(e)[:200]
-            retry_count += 1
-            reporting.log_action(f"LLM parse error (attempt {retry_count})", {
-                "error": last_error,
-            })
-
-    if not evidence_items:
-        reporting.log_action("Failed to extract evidence after retries")
-        reporting.exit_node("evidence_extraction", {"evidence": 0}, next_node="analysts")
-        return {
-            "evidence": [],
-            "current_stage": "evidence_extraction",
-            "iteration_count": iteration,
-            "error": f"Evidence extraction failed: {last_error}",
-        }
-
-    # Validate and filter
-    valid_items: list[dict] = []
-    invalid_count = 0
-    for item in evidence_items:
-        cleaned = _validate_evidence_item(item)
-        if cleaned:
-            valid_items.append(cleaned)
-        else:
-            invalid_count += 1
-
-    reporting.log_action("Validation", {
-        "raw_items": len(evidence_items),
-        "valid": len(valid_items),
-        "invalid": invalid_count,
+    reporting.log_action("Batched extraction strategy", {
+        "edinet_batch": len(edinet_docs),
+        "web_batch": len(web_docs),
     })
 
-    # Temporal filter
+    llm = get_llm_for_role("extraction")
+
+    # ── Batch 1: EDINET filings (company disclosures) ──
+    edinet_evidence = _extract_batch(
+        edinet_docs,
+        batch_label="EDINET filings",
+        company=company,
+        theme=theme,
+        cutoff=cutoff,
+        start_id=1,
+        llm=llm,
+    )
+
+    # ── Batch 2: Web search results (external signals) ──
+    web_evidence = _extract_batch(
+        web_docs,
+        batch_label="Web search results",
+        company=company,
+        theme=theme,
+        cutoff=cutoff,
+        start_id=len(edinet_evidence) + 1,
+        llm=llm,
+    )
+
+    # ── Merge batches ──
+    all_evidence = edinet_evidence + web_evidence
+
+    # Re-number evidence IDs starting from existing evidence count
+    # This prevents ID collisions when quality gate loops back
+    existing_count = len(state.get("evidence", []))
+    for i, item in enumerate(all_evidence, existing_count + 1):
+        item["evidence_id"] = f"E{i:03d}"
+
+    reporting.log_action("Merged evidence", {"total": len(all_evidence)})
+
+    # ── Temporal filter ──
     accepted: list[dict] = []
     rejected: list[dict] = []
-    for item in valid_items:
+    for item in all_evidence:
         pub_date = item.get("published_at", "")
         if is_before_cutoff(pub_date, cutoff):
             accepted.append(item)
@@ -198,7 +251,6 @@ def evidence_extraction_node(state: PipelineState) -> dict:
     })
     reporting.log_action("Stance distribution", stance_counts)
 
-    # Log a few sample items
     for item in accepted[:3]:
         reporting.log_item(
             f"{item['evidence_id']} [{item['claim_type']}] {item['claim_text'][:70]}...",
@@ -207,6 +259,16 @@ def evidence_extraction_node(state: PipelineState) -> dict:
 
     reporting.exit_node("evidence_extraction", {
         "evidence_items": len(accepted),
+        "from_edinet": sum(
+            1 for e in accepted
+            if "edinet" in e.get("source_url", "").lower()
+            or "EDINET" in e.get("source_title", "")
+        ),
+        "from_web": sum(
+            1 for e in accepted
+            if "edinet" not in e.get("source_url", "").lower()
+            and "EDINET" not in e.get("source_title", "")
+        ),
     }, next_node="fan-out [industry, company, peer]")
 
     return {

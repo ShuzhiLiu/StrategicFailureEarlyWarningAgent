@@ -184,6 +184,9 @@ cython_debug/
 # Claude Code local settings
 .claude/settings.local.json
 
+# Pipeline run outputs (generated artifacts)
+outputs/
+
 # Visual Studio Code
 #  Visual Studio Code specific template is maintained in a separate VisualStudioCode.gitignore 
 #  that can be found at https://github.com/github/gitignore/blob/main/Global/VisualStudioCode.gitignore

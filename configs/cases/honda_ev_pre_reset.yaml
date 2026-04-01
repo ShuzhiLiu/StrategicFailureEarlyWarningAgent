@@ -53,21 +53,9 @@ allowed_source_types:
 
 # Key search topics for retrieval
 search_topics:
-  - "Honda EV strategy 2030 target"
-  - "Honda 0 Series launch timeline"
-  - "Honda North America EV production"
-  - "Honda electric vehicle investment"
-  - "Honda HEV hybrid strategy transition"
-  - "Honda Nissan merger alliance"
-  - "EV adoption rate North America slowdown"
-  - "China EV market competition BYD"
-  - "US EV tax credit subsidy policy"
-  - "Global EV sales forecast 2024 2025"
-  - "Toyota BYD Tesla EV strategy"
-  - "Ford GM EV losses writedown"
-  - "Honda Canada EV plant"
-  - "Honda battery supply chain"
-  - "Software defined vehicle ADAS competition"
+  - "Honda EV strategy"
+  - "Honda electric vehicle sales"
+  - "Honda electrification investment"
 
 # Ground truth events (post-cutoff, for backtesting only)
 ground_truth_events:

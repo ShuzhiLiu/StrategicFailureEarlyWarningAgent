@@ -25,6 +25,7 @@ NODE_ORDER = [
     "init_case",
     "retrieval",
     "evidence_extraction",
+    "quality_gate",
     "industry_analyst",
     "company_analyst",
     "peer_analyst",

@@ -1,0 +1,77 @@
+# Toyota EV Strategy Analysis (control case — expected LOW/MEDIUM risk)
+# Cutoff: 2025-05-19 (same as Honda for comparability)
+# Toyota's hybrid-first strategy has been validated; no major EV writedowns
+
+case_id: "toyota_ev_strategy_2025"
+company: "Toyota Motor Corporation"
+ticker: "7203.T"
+strategy_theme: "EV electrification strategy"
+description: >
+  Control case: Analyze Toyota's EV strategy for risk signals using the same
+  cutoff as Honda. Toyota's hybrid-first approach has been largely validated —
+  this case should produce LOW or MEDIUM risk to demonstrate the system is
+  not biased toward flagging everything as high-risk.
+
+cutoff_date: "2025-05-19"
+
+regions:
+  - "north_america"
+  - "china"
+  - "global"
+  - "japan"
+
+peers:
+  - company: "Honda Motor Co., Ltd."
+    ticker: "7267.T"
+    relevance: "Japanese OEM peer, aggressive EV pivot comparison"
+  - company: "BYD Company Limited"
+    ticker: "1211.HK"
+    relevance: "China EV leader, competitive pressure benchmark"
+  - company: "Tesla, Inc."
+    ticker: "TSLA"
+    relevance: "EV market leader, technology benchmark"
+  - company: "Hyundai Motor Company"
+    ticker: "005380.KS"
+    relevance: "Fast-follower EV strategy"
+  - company: "Volkswagen AG"
+    ticker: "VOW3.DE"
+    relevance: "European EV transition peer"
+  - company: "General Motors Company"
+    ticker: "GM"
+    relevance: "North America peer"
+
+allowed_source_types:
+  - "company_filing"
+  - "company_presentation"
+  - "industry_report"
+  - "government_policy"
+  - "peer_filing"
+  - "news_article"
+
+search_topics:
+  - "Toyota EV strategy"
+  - "Toyota electric vehicle sales"
+  - "Toyota hybrid strategy"
+
+# Ground truth: Toyota had no major EV strategy failure in this period
+ground_truth_events:
+  - event_id: "gt_001"
+    event_date: "2025-05-08"
+    description: >
+      Toyota reports record FY2024 operating profit of 5.35 trillion yen.
+      Hybrid sales continue to grow strongly. EV targets maintained.
+    event_type: "financial_metric"
+  - event_id: "gt_002"
+    event_date: "2025-06-15"
+    description: >
+      Toyota announces next-gen EV platform with solid-state battery
+      target for 2027-2028. No major strategy revision or writedown.
+    event_type: "target_statement"
+
+ontology_version: "v1"
+max_risk_factors: 15
+min_evidence_per_factor: 2
+thinking_mode_overrides: {}
+cost_limits:
+  max_total_usd: 15.0
+  max_calls_per_agent: 25

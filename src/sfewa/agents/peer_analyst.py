@@ -6,7 +6,7 @@ Analyzes competitor positioning and relative strategic gaps.
 from __future__ import annotations
 
 from sfewa.agents._analyst_base import run_analyst
-from sfewa.prompts.analysis import PEER_DIMENSIONS
+from sfewa.prompts.analysis import PEER_DIMENSIONS, PEER_SCOPE
 from sfewa.schemas.state import PipelineState
 
 
@@ -22,5 +22,6 @@ def peer_analyst_node(state: PipelineState) -> dict:
         role_name="Peer Benchmark Analyst",
         llm_role="peer_analyst",
         dimensions_description=PEER_DIMENSIONS,
+        scope_boundary=PEER_SCOPE,
         factor_prefix="PEER",
     )

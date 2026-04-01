@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import time
 from pathlib import Path
 
 import typer
@@ -15,6 +16,7 @@ load_dotenv()
 from sfewa import reporting
 from sfewa.graph.pipeline import compile_pipeline
 from sfewa.schemas.config import CaseConfig
+from sfewa.tools.artifacts import save_run_artifacts
 
 app = typer.Typer(help="Strategic Failure Early Warning Agent")
 console = Console()
@@ -56,7 +58,9 @@ def run(
         "ground_truth_events": [e.model_dump() for e in config.ground_truth_events],
     }
 
+    t0 = time.time()
     result = graph.invoke(initial_state)
+    elapsed = time.time() - t0
 
     # ── Final summary via reporter ──
     reporting.print_risk_summary_table(
@@ -76,6 +80,14 @@ def run(
     if result.get("risk_memo"):
         console.print()
         console.print(Panel(result["risk_memo"], title="Risk Memo"))
+
+    # ── Save artifacts for audit trail ──
+    run_dir = save_run_artifacts(result)
+    console.print()
+    minutes = int(elapsed // 60)
+    seconds = int(elapsed % 60)
+    console.print(f"  Artifacts saved to: [bold]{run_dir}[/bold]")
+    console.print(f"  Total pipeline time: [bold]{minutes}m {seconds}s[/bold]")
 
 
 if __name__ == "__main__":

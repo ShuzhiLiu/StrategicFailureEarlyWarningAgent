@@ -6,7 +6,7 @@ Analyzes Honda's EV strategy, targets, investments, and narrative shifts.
 from __future__ import annotations
 
 from sfewa.agents._analyst_base import run_analyst
-from sfewa.prompts.analysis import COMPANY_DIMENSIONS
+from sfewa.prompts.analysis import COMPANY_DIMENSIONS, COMPANY_SCOPE
 from sfewa.schemas.state import PipelineState
 
 
@@ -22,5 +22,6 @@ def company_analyst_node(state: PipelineState) -> dict:
         role_name="Company Strategy Analyst",
         llm_role="company_analyst",
         dimensions_description=COMPANY_DIMENSIONS,
+        scope_boundary=COMPANY_SCOPE,
         factor_prefix="COM",
     )

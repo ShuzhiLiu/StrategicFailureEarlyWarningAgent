@@ -1,0 +1,78 @@
+# BYD EV Strategy Analysis (control case — expected LOW risk)
+# Cutoff: 2025-05-19 (same as Honda for comparability)
+# BYD is the world's largest NEV maker; strategy is succeeding
+
+case_id: "byd_ev_strategy_2025"
+company: "BYD Company Limited"
+ticker: "1211.HK"
+strategy_theme: "EV electrification strategy"
+description: >
+  Control case: Analyze BYD's EV strategy for risk signals using the same
+  cutoff as Honda. BYD is the world's largest NEV maker with dominant
+  market position in China and expanding globally. This case should
+  produce LOW risk to demonstrate the system is not biased toward
+  flagging everything as high-risk.
+
+cutoff_date: "2025-05-19"
+
+regions:
+  - "china"
+  - "global"
+  - "southeast_asia"
+  - "europe"
+
+peers:
+  - company: "Tesla, Inc."
+    ticker: "TSLA"
+    relevance: "Global EV leader, main competitor"
+  - company: "Toyota Motor Corporation"
+    ticker: "7203.T"
+    relevance: "Traditional OEM, hybrid competition"
+  - company: "Volkswagen AG"
+    ticker: "VOW3.DE"
+    relevance: "European market competitor"
+  - company: "Honda Motor Co., Ltd."
+    ticker: "7267.T"
+    relevance: "Japanese OEM competitor in China"
+  - company: "Hyundai Motor Company"
+    ticker: "005380.KS"
+    relevance: "Global EV competitor"
+  - company: "NIO Inc."
+    ticker: "NIO"
+    relevance: "Chinese EV competitor, premium segment"
+
+allowed_source_types:
+  - "company_filing"
+  - "company_presentation"
+  - "industry_report"
+  - "government_policy"
+  - "peer_filing"
+  - "news_article"
+
+search_topics:
+  - "BYD EV strategy"
+  - "BYD electric vehicle sales"
+  - "BYD international expansion"
+
+# Ground truth: BYD continued strong growth
+ground_truth_events:
+  - event_id: "gt_001"
+    event_date: "2025-03-27"
+    description: >
+      BYD reports record FY2024 revenue of 777 billion yuan, net profit
+      40.3 billion yuan (+34% YoY). NEV sales 4.27 million units.
+    event_type: "financial_metric"
+  - event_id: "gt_002"
+    event_date: "2025-06-01"
+    description: >
+      BYD continues international expansion with new factories in
+      Thailand, Brazil, Hungary. No major strategy revision or setback.
+    event_type: "target_statement"
+
+ontology_version: "v1"
+max_risk_factors: 15
+min_evidence_per_factor: 2
+thinking_mode_overrides: {}
+cost_limits:
+  max_total_usd: 15.0
+  max_calls_per_agent: 25
