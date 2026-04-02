@@ -40,6 +40,7 @@ from sfewa.prompts.retrieval import (
     SEED_QUERY_USER,
 )
 from sfewa.schemas.state import PipelineState
+from sfewa.tools.chat_log import log_llm_call, log_tool_call
 from sfewa.tools.corpus_loader import load_edinet_corpus
 
 
@@ -58,6 +59,7 @@ def _create_search_tool(max_results: int = 5) -> DuckDuckGoSearchResults:
 def _run_web_searches(
     queries: list[str],
     search_tool: DuckDuckGoSearchResults,
+    search_label: str = "",
 ) -> tuple[list[dict], int]:
     """Run a batch of search queries. Returns (results, failure_count)."""
     all_results: list[dict] = []
@@ -66,6 +68,12 @@ def _run_web_searches(
         try:
             results = search_tool.invoke(query)
             if isinstance(results, list):
+                log_tool_call(
+                    "retrieval", "duckduckgo_search",
+                    {"query": query},
+                    results,
+                    label=search_label,
+                )
                 all_results.extend(results)
         except Exception:
             failures += 1
@@ -97,15 +105,18 @@ def _llm_generate_queries(
     system_msg: str,
     user_msg: str,
     max_queries: int = 10,
+    label: str = "",
 ) -> list[str]:
     """Call LLM and parse a JSON array of search query strings."""
     llm = get_llm_for_role("retrieval")
 
     try:
-        response = llm.invoke([
+        messages = [
             {"role": "system", "content": system_msg},
             {"role": "user", "content": user_msg},
-        ])
+        ]
+        response = llm.invoke(messages)
+        log_llm_call("retrieval", messages, response, label=label)
         raw = response.content
         raw = re.sub(r"<think>[\s\S]*?</think>", "", raw).strip()
 
@@ -191,7 +202,7 @@ def retrieval_node(state: PipelineState) -> dict:
         for q in follow_up_queries:
             reporting.log_item(q, style="dim")
 
-        raw_results, failures = _run_web_searches(follow_up_queries, search_tool)
+        raw_results, failures = _run_web_searches(follow_up_queries, search_tool, "follow_up")
         unique_results = _deduplicate(raw_results, seen_links)
         follow_up_docs = [_to_doc(r, source="duckduckgo_follow_up") for r in unique_results]
 
@@ -239,6 +250,7 @@ def retrieval_node(state: PipelineState) -> dict:
             peers=peer_names,
         ),
         max_queries=15,
+        label="seed_queries",
     )
 
     # Fallback: use config topics if LLM fails, or add them as supplements
@@ -251,7 +263,7 @@ def retrieval_node(state: PipelineState) -> dict:
     for q in search_topics:
         reporting.log_item(q, style="dim")
 
-    raw_results, failures = _run_web_searches(search_topics, search_tool)
+    raw_results, failures = _run_web_searches(search_topics, search_tool, "seed")
     unique_results = _deduplicate(raw_results, seen_links)
 
     reporting.log_action("Pass 1 results", {
@@ -280,6 +292,7 @@ def retrieval_node(state: PipelineState) -> dict:
             doc_count=len(pass1_docs),
             doc_summaries=_summarize_docs(pass1_docs),
         ),
+        label="gap_analysis",
     )
 
     gap_web_docs: list[dict] = []
@@ -288,7 +301,7 @@ def retrieval_node(state: PipelineState) -> dict:
         for q in gap_queries:
             reporting.log_item(q, style="dim")
 
-        raw_gap, gap_failures = _run_web_searches(gap_queries, search_tool)
+        raw_gap, gap_failures = _run_web_searches(gap_queries, search_tool, "gap_fill")
         unique_gap = _deduplicate(raw_gap, seen_links)
 
         reporting.log_action("Pass 2 results", {
@@ -317,6 +330,7 @@ def retrieval_node(state: PipelineState) -> dict:
             cutoff_date=cutoff,
             company_claims=company_claims,
         ),
+        label="counternarrative",
     )
 
     counter_web_docs: list[dict] = []
@@ -328,7 +342,7 @@ def retrieval_node(state: PipelineState) -> dict:
             reporting.log_item(q, style="dim")
 
         raw_counter, counter_failures = _run_web_searches(
-            counter_queries, search_tool,
+            counter_queries, search_tool, "counternarrative",
         )
         unique_counter = _deduplicate(raw_counter, seen_links)
 

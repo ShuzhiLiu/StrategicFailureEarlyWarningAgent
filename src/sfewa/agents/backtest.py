@@ -11,6 +11,7 @@ import re
 
 from sfewa import reporting
 from sfewa.llm import get_llm_for_role
+from sfewa.tools.chat_log import log_llm_call
 from sfewa.prompts.adversarial import format_risk_factors_for_review
 from sfewa.schemas.state import PipelineState
 
@@ -116,13 +117,15 @@ def backtest_node(state: PipelineState) -> dict:
     backtest_summary = "Backtest failed."
 
     try:
-        response = llm.invoke([
+        messages = [
             {"role": "system", "content": BACKTEST_SYSTEM},
             {"role": "user", "content": BACKTEST_USER.format(
                 risk_factors_text=rf_text,
                 ground_truth_text=gt_text,
             )},
-        ])
+        ]
+        response = llm.invoke(messages)
+        log_llm_call("backtest", messages, response, label="backtest")
         raw_text = response.content
         raw_text = re.sub(r"<think>[\s\S]*?</think>", "", raw_text).strip()
 

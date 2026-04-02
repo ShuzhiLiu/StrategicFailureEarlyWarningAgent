@@ -12,6 +12,7 @@ import re
 from sfewa import reporting
 from sfewa.context import build_pipeline_context
 from sfewa.llm import get_llm_for_role
+from sfewa.tools.chat_log import log_llm_call
 from sfewa.prompts.adversarial import (
     ADVERSARIAL_SYSTEM,
     ADVERSARIAL_USER,
@@ -79,10 +80,12 @@ def adversarial_review_node(state: PipelineState) -> dict:
     challenges: list[dict] = []
     adversarial_recommendation = "proceed"  # default: proceed to synthesis
     try:
-        response = llm.invoke([
+        messages = [
             {"role": "system", "content": system_msg},
             {"role": "user", "content": user_msg},
-        ])
+        ]
+        response = llm.invoke(messages)
+        log_llm_call("adversarial_review", messages, response, label="adversarial")
         raw_text = response.content
 
         # Strip <think> blocks

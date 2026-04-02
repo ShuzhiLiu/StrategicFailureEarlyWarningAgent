@@ -34,8 +34,8 @@ SCORING GUIDELINES:
   - 20-39: LOW — Company executing well on its chosen strategy. Risks are primarily about expansion barriers or external challenges (tariffs, trade restrictions) rather than threats to existing operations. Market leader whose core business is growing.
   - 0-19: MINIMAL — Dominant market position with no credible strategic threats. Extremely rare for any real company.
 
-  PATTERN ANALYSIS (adjusts the score UP or DOWN from the raw severity distribution):
-  - REINFORCING pattern: risks compound each other (capital strain → delays → wider competitive gap → more capital needed). Adds +10 to +15 to the base score.
+  PATTERN ANALYSIS (adjusts the score UP or DOWN from the base score):
+  - REINFORCING pattern: risks compound each other (capital strain → delays → wider competitive gap → more capital needed). Adds +5 to +10 to the base score.
   - MIXED pattern: some risks, some strengths. The company's CURRENT core business provides a buffer. No adjustment.
   - SCATTERED pattern: unrelated medium-level concerns. Subtracts -5 to -10 from the base score.
 
@@ -67,19 +67,18 @@ EVIDENCE STATISTICS:
 - Stance distribution: {stance_supports} supports_risk, {stance_contradicts} contradicts_risk, {stance_neutral} neutral
 - Source diversity: {source_summary}
 
-RISK FACTOR SEVERITY DISTRIBUTION:
-- Critical: {severity_critical}
-- High: {severity_high}
-- Medium: {severity_medium}
-- Low: {severity_low}
+PRE-COMPUTED BASE SCORE (from post-adversarial severity distribution):
+- Base score: {base_score}/100
+- Post-adversarial distribution: {post_adversarial_distribution}
 - Total factors: {total_factors}
 - High+ ratio: {high_plus_ratio}
+(STRONG adversarial challenges have already been applied as severity downgrades. The base score above reflects the post-adversarial distribution.)
 
-BEFORE determining the risk_score, you MUST perform these steps in order:
-Step 1: Apply adversarial downgrades. For each STRONG challenge, reduce the target factor's severity by one level. List the post-adversarial severity distribution.
-Step 2: Compute a base score from the post-adversarial severity distribution: CRITICAL=25pts, HIGH=15pts, MEDIUM=8pts, LOW=2pts. Sum all factors and normalize to 0-100 scale (divide by max possible = 25 * factor_count, multiply by 100).
-Step 3: Analyze the risk factor pattern: REINFORCING (+10 to +15), MIXED (+0), SCATTERED (-5 to -10). Adjust the base score.
-Step 4: Apply strategy-relative and executed-vs-announced mitigation adjustments. Clamp final score to 0-100.
+BEFORE determining the final risk_score, you MUST perform these steps in order:
+Step 1: Start with the pre-computed base score of {base_score}.
+Step 2: Analyze the risk factor pattern: REINFORCING (+5 to +10), MIXED (+0), SCATTERED (-5 to -10). Adjust the base score.
+Step 3: Apply strategy-relative and executed-vs-announced mitigation adjustments (±5 max). Clamp final score to 0-100.
+Step 4: Verify the final score makes sense against the calibration anchors (80-100=CRITICAL, 60-79=HIGH, 40-59=MEDIUM, 20-39=LOW, 0-19=MINIMAL).
 
 RISK FACTORS:
 {risk_factors_text}

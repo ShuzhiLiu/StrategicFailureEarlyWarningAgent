@@ -16,6 +16,7 @@ import re
 
 from sfewa import reporting
 from sfewa.llm import get_llm_for_role
+from sfewa.tools.chat_log import log_llm_call
 from sfewa.prompts.extraction import (
     EXTRACTION_SYSTEM,
     EXTRACTION_USER,
@@ -115,6 +116,7 @@ def _extract_batch(
                 })
 
             response = llm.invoke(messages)
+            log_llm_call("evidence_extraction", messages, response, label=batch_label)
             raw_text = response.content
             raw_text = re.sub(r"<think>[\s\S]*?</think>", "", raw_text).strip()
 

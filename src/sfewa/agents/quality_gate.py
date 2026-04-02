@@ -17,6 +17,7 @@ import re
 from sfewa import reporting
 from sfewa.llm import get_llm_for_role
 from sfewa.schemas.state import PipelineState
+from sfewa.tools.chat_log import log_llm_call
 
 QUALITY_GATE_SYSTEM = """\
 You are an Evidence Quality Gate for strategic risk analysis of {company}'s {strategy_theme}.
@@ -152,10 +153,12 @@ def quality_gate_node(state: PipelineState) -> dict:
     reporting.log_action("LLM evaluating evidence sufficiency")
 
     try:
-        response = llm.invoke([
+        messages = [
             {"role": "system", "content": system_msg},
             {"role": "user", "content": user_msg},
-        ])
+        ]
+        response = llm.invoke(messages)
+        log_llm_call("quality_gate", messages, response, label="quality_gate")
         raw = response.content
         raw = re.sub(r"<think>[\s\S]*?</think>", "", raw).strip()
 

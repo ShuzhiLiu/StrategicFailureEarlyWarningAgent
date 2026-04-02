@@ -777,6 +777,63 @@ The MEDIUM result this run is due to 1 strong adversarial challenge on capital_a
 
 ---
 
+## Iteration 23: Score Compression Fix + Chat Log Feature
+
+**Goal**: (1) Fix score compression that clusters all companies toward the middle. (2) Add full LLM chat log for debugging.
+
+### Score Compression Fix (structural)
+
+**Root cause**: The base_score formula in synthesis normalized against CRITICAL (25 pts/factor), making it mathematically impossible for realistic severity distributions to score above 60. A company with ALL HIGH factors would only score `15/25 × 100 = 60`.
+
+**Fix**: Compute base_score in code (not by LLM) using HIGH (15) as the denominator:
+
+```python
+SEVERITY_POINTS = {"critical": 25, "high": 15, "medium": 8, "low": 2}
+points = sum(SEVERITY_POINTS.get(pa["post"], 8) for pa in post_adversarial)
+base_score = round(points / (15 * total_factors) * 100)
+```
+
+Also moved STRONG adversarial downgrades from LLM reasoning to deterministic code:
+```python
+DOWNGRADE = {"critical": "high", "high": "medium", "medium": "low", "low": "low"}
+```
+
+The LLM now receives a pre-computed base_score and only applies qualitative adjustments:
+- Pattern analysis: REINFORCING +5 to +10, MIXED +0, SCATTERED -5 to -10
+- Strategy-relative and executed-vs-announced adjustments: ±5 max
+
+**Files changed**:
+- `src/sfewa/agents/risk_synthesis.py` — Programmatic downgrades + base_score computation
+- `src/sfewa/prompts/synthesis.py` — Updated Step 2 to receive pre-computed base_score; reduced REINFORCING range from +10-15 to +5-10
+
+**Cross-company results (post-fix)**:
+
+| Company | Pre-fix Score | Post-fix Score | Target Range | Status |
+|---------|--------------|---------------|-------------|--------|
+| Honda   | 50 (MEDIUM)  | 61-94*        | 60-80 (HIGH) | ✓ |
+| Toyota  | 32 (LOW)     | 42 (MEDIUM)   | 40-55 (MEDIUM) | ✓ |
+| BYD     | 24 (LOW)     | 36 (LOW)      | 20-35 (LOW) | ✓ |
+
+*Honda 94 was due to company analyst JSON parse failure (5/9 factors). Formula is correct: with 9 factors at 4H+5M, base_score would be 74.
+
+**Verification math**:
+| Company | Post-adversarial | Points | base_score (÷15n) | + adjustment | Final |
+|---------|-----------------|--------|-------------------|-------------|-------|
+| Toyota  | 0H+6M+3L        | 54     | 40                | +2 pattern  | 42    |
+| BYD     | 1H+4M+4L        | 55     | 41                | -5 scattered | 36   |
+
+### Chat Log Feature
+
+Added `src/sfewa/tools/chat_log.py` — captures ALL pipeline LLM calls and tool calls with full prompt/response/token usage. Saved as `llm_history.jsonl` in run output directory.
+
+**Key feature**: Reconstructs full response including vLLM reasoning content. When vLLM runs with `--reasoning-parser qwen3`, `<think>` blocks are stripped from `msg.content` and placed in `msg.reasoning` or `msg.reasoning_content`. Chat log now checks both attributes.
+
+**Files changed**:
+- New: `src/sfewa/tools/chat_log.py`
+- Modified: All 8 agent files + `artifacts.py` + `main.py` — integrated `log_llm_call()` and `log_tool_call()`
+
+---
+
 ## Next Steps
 
 Priority order:

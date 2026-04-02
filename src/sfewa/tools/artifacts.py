@@ -20,6 +20,8 @@ import json
 from datetime import datetime, timezone
 from pathlib import Path
 
+from sfewa.tools.chat_log import get_log
+
 
 def get_run_dir(run_id: str, base_dir: str = "outputs") -> Path:
     """Get or create the output directory for a pipeline run."""
@@ -138,5 +140,11 @@ def save_run_artifacts(state: dict) -> Path:
     save_artifact(run_id, "run_summary.json", summary)
 
     save_run_metadata(run_id, case_id)
+
+    # Save raw LLM chat history (JSONL: one JSON object per line)
+    chat_log = get_log()
+    if chat_log:
+        lines = [json.dumps(entry, ensure_ascii=False, default=str) for entry in chat_log]
+        save_artifact(run_id, "llm_history.jsonl", "\n".join(lines))
 
     return get_run_dir(run_id)

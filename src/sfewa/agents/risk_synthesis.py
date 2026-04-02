@@ -13,6 +13,7 @@ import re
 from sfewa import reporting
 from sfewa.context import build_pipeline_context
 from sfewa.llm import get_llm_for_role
+from sfewa.tools.chat_log import log_llm_call
 from sfewa.prompts.adversarial import format_risk_factors_for_review
 from sfewa.prompts.analysis import format_evidence_for_analyst
 from sfewa.prompts.synthesis import (
@@ -74,15 +75,54 @@ def risk_synthesis_node(state: PipelineState) -> dict:
         source_types[st] = source_types.get(st, 0) + 1
     source_summary = ", ".join(f"{k}: {v}" for k, v in sorted(source_types.items()))
 
-    # Compute severity distribution for calibration
-    severity_counts = {"critical": 0, "high": 0, "medium": 0, "low": 0}
+    # ── Apply STRONG adversarial downgrades programmatically ──
+    # Build a map of factor_id → severity for the downgrade step
+    DOWNGRADE = {"critical": "high", "high": "medium", "medium": "low", "low": "low"}
+    strong_targets: set[str] = set()
+    for c in challenges:
+        if c.get("severity", "").lower() == "strong":
+            strong_targets.add(c.get("target_factor_id", ""))
+
+    # Apply downgrades and track post-adversarial severity
+    post_adversarial: list[dict] = []
     for rf in risk_factors:
-        sev = rf.get("severity", "medium").lower()
-        if sev in severity_counts:
-            severity_counts[sev] += 1
+        fid = rf.get("factor_id", "")
+        orig_sev = rf.get("severity", "medium").lower()
+        if fid in strong_targets:
+            new_sev = DOWNGRADE.get(orig_sev, orig_sev)
+            post_adversarial.append({"factor_id": fid, "dimension": rf.get("dimension", "?"), "original": orig_sev, "post": new_sev})
+        else:
+            post_adversarial.append({"factor_id": fid, "dimension": rf.get("dimension", "?"), "original": orig_sev, "post": orig_sev})
+
+    # ── Compute base_score in code (not by LLM) ──
+    SEVERITY_POINTS = {"critical": 25, "high": 15, "medium": 8, "low": 2}
     total_factors = len(risk_factors)
-    high_plus = severity_counts["critical"] + severity_counts["high"]
+    points = sum(SEVERITY_POINTS.get(pa["post"], 8) for pa in post_adversarial)
+    # Normalize against HIGH (15) as realistic max — CRITICAL is rare
+    base_score = round(points / (15 * total_factors) * 100) if total_factors > 0 else 0
+    base_score = max(0, min(100, base_score))
+
+    # Compute post-adversarial severity distribution for display
+    post_sev_counts = {"critical": 0, "high": 0, "medium": 0, "low": 0}
+    for pa in post_adversarial:
+        if pa["post"] in post_sev_counts:
+            post_sev_counts[pa["post"]] += 1
+
+    post_adversarial_dist = (
+        f"{post_sev_counts['critical']} CRITICAL, {post_sev_counts['high']} HIGH, "
+        f"{post_sev_counts['medium']} MEDIUM, {post_sev_counts['low']} LOW"
+    )
+    high_plus = post_sev_counts["critical"] + post_sev_counts["high"]
     high_plus_ratio = f"{high_plus}/{total_factors} ({high_plus/total_factors*100:.0f}%)" if total_factors > 0 else "0/0"
+
+    # Log the computation for debugging
+    downgrades_applied = [pa for pa in post_adversarial if pa["original"] != pa["post"]]
+    reporting.log_action("Base score computed", {
+        "points": points,
+        "base_score": base_score,
+        "post_adversarial": post_adversarial_dist,
+        "downgrades": len(downgrades_applied),
+    })
 
     # Format prompt with pipeline context injection
     rf_text = format_risk_factors_for_review(risk_factors)
@@ -105,10 +145,8 @@ def risk_synthesis_node(state: PipelineState) -> dict:
         stance_contradicts=stance_contradicts,
         stance_neutral=stance_neutral,
         source_summary=source_summary or "no sources",
-        severity_critical=severity_counts["critical"],
-        severity_high=severity_counts["high"],
-        severity_medium=severity_counts["medium"],
-        severity_low=severity_counts["low"],
+        base_score=base_score,
+        post_adversarial_distribution=post_adversarial_dist,
         total_factors=total_factors,
         high_plus_ratio=high_plus_ratio,
     )
@@ -125,10 +163,12 @@ def risk_synthesis_node(state: PipelineState) -> dict:
     }
 
     try:
-        response = llm.invoke([
+        messages = [
             {"role": "system", "content": system_msg},
             {"role": "user", "content": user_msg},
-        ])
+        ]
+        response = llm.invoke(messages)
+        log_llm_call("risk_synthesis", messages, response, label="synthesis")
         raw_text = response.content
 
         # Strip <think> blocks

@@ -26,6 +26,7 @@ from sfewa import reporting
 from sfewa.graph.pipeline import compile_pipeline
 from sfewa.schemas.config import CaseConfig
 from sfewa.tools.artifacts import save_run_artifacts
+from sfewa.tools.chat_log import clear_log
 
 app = typer.Typer(
     help="Strategic Failure Early Warning Agent — "
@@ -108,6 +109,7 @@ def run(
         "ground_truth_events": gt_events,
     }
 
+    clear_log()  # Reset chat log before each run
     t0 = time.time()
     result = graph.invoke(initial_state)
     elapsed = time.time() - t0

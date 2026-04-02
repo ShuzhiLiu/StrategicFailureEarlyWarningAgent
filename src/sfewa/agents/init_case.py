@@ -14,6 +14,7 @@ from sfewa import reporting
 from sfewa.llm import get_llm_for_role
 from sfewa.prompts.init_case import CASE_EXPANSION_SYSTEM, CASE_EXPANSION_USER
 from sfewa.schemas.state import PipelineState
+from sfewa.tools.chat_log import log_llm_call
 
 
 def _generate_case_context(
@@ -23,14 +24,16 @@ def _generate_case_context(
     llm = get_llm_for_role("retrieval")  # non-thinking, fast
 
     try:
-        response = llm.invoke([
+        messages = [
             {"role": "system", "content": CASE_EXPANSION_SYSTEM},
             {"role": "user", "content": CASE_EXPANSION_USER.format(
                 company=company,
                 strategy_theme=strategy_theme,
                 cutoff_date=cutoff_date,
             )},
-        ])
+        ]
+        response = llm.invoke(messages)
+        log_llm_call("init_case", messages, response, label="case_expansion")
         raw = response.content
         raw = re.sub(r"<think>[\s\S]*?</think>", "", raw).strip()
 

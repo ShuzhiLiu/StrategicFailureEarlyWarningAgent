@@ -12,6 +12,7 @@ import re
 from sfewa import reporting
 from sfewa.context import build_pipeline_context
 from sfewa.llm import get_llm_for_role
+from sfewa.tools.chat_log import log_llm_call
 from sfewa.prompts.analysis import (
     ANALYST_SYSTEM,
     ANALYST_USER,
@@ -123,10 +124,12 @@ def run_analyst(
 
     risk_factors: list[dict] = []
     try:
-        response = llm.invoke([
+        messages = [
             {"role": "system", "content": system_msg},
             {"role": "user", "content": user_msg},
-        ])
+        ]
+        response = llm.invoke(messages)
+        log_llm_call(node_name, messages, response, label="risk_analysis")
         raw_text = response.content
         parsed = _parse_risk_factors_json(raw_text)
         if isinstance(parsed, list):
