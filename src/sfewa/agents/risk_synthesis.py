@@ -183,6 +183,8 @@ def risk_synthesis_node(state: PipelineState) -> dict:
         if start != -1 and end != -1:
             raw_text = raw_text[start : end + 1]
 
+        # Sanitize invalid JSON escapes (e.g. \* from markdown in memo)
+        raw_text = re.sub(r'\\(?!["\\/bfnrtu])', r'\\\\', raw_text)
         parsed = json.loads(raw_text)
 
         risk_score = parsed.get("risk_score", 50)
