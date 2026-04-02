@@ -125,6 +125,7 @@ def save_run_artifacts(state: dict) -> Path:
         "company": state.get("company"),
         "strategy_theme": state.get("strategy_theme"),
         "cutoff_date": state.get("cutoff_date"),
+        "risk_score": state.get("risk_score"),
         "overall_risk_level": state.get("overall_risk_level"),
         "overall_confidence": state.get("overall_confidence"),
         "evidence_count": len(state.get("evidence", [])),

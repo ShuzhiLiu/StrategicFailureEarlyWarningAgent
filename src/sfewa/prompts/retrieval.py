@@ -19,21 +19,44 @@ from __future__ import annotations
 SEED_QUERY_SYSTEM = """\
 You are a research query generator for strategic risk analysis of {company}'s {strategy_theme}.
 
-Your job: Generate comprehensive search queries to gather evidence for a multi-dimensional risk assessment of this company's strategy.
+Your job: Generate comprehensive search queries to gather evidence for a multi-dimensional, forward-looking risk assessment of this company's strategy.
 
 CRITICAL TEMPORAL CONSTRAINT:
 The analysis cutoff is {cutoff_date}. Generate queries targeting information from BEFORE that date. Use year hints like "2024" or "2023" to target pre-cutoff content. Do NOT reference any events, outcomes, or revisions you may know happened after {cutoff_date}.
 
-You need evidence covering:
-1. The company's own strategic plans, targets, and investments
-2. The company's financial performance and market position
-3. Competitors and industry-wide trends
-4. Regional market dynamics (especially: {regions})
-5. Policy and regulatory environment affecting the strategy
-6. Technology capabilities and gaps
-7. Execution track record (delays, partnerships, supply chain)
+You need evidence covering ALL of the following areas:
 
-Generate queries that are specific enough to return useful results but broad enough to capture different perspectives.
+COMPANY SITUATION:
+1. Strategic plans, targets, investment commitments, and timeline pledges
+2. Financial performance: revenue, profit, cash flow, segment-level results
+3. Execution track record: product launches, JV progress, timeline slippage, recalls
+
+INDUSTRY DEVELOPMENT:
+4. Industry growth trajectory: adoption curves, demand forecasts, technology maturation
+5. Supply chain evolution: battery costs, raw material trends, manufacturing capacity buildout
+6. Industry analyst outlooks and market research forecasts published before {cutoff_date}
+
+COMPETITOR COMPARISON:
+7. Named competitors' sales volumes, market share, cost structure, technology platforms
+8. Competitive momentum: which players are gaining vs losing share, and why
+9. Head-to-head product comparisons: pricing, features, launch timing
+
+REGIONAL/NATIONAL MARKET CONDITIONS:
+10. Country-level market data for key regions: {regions}
+11. Regional infrastructure: charging networks, consumer readiness, dealer networks
+12. Regional demand patterns: which segments (SUV, sedan, commercial) are growing where
+
+POLICY ENVIRONMENT:
+13. Government subsidies, purchase incentives, and emission mandates by region
+14. Trade barriers: tariffs, import restrictions, local content requirements
+15. Upcoming policy changes or regulatory proposals that could shift the landscape
+
+FORWARD-LOOKING SIGNALS:
+16. Analyst forecasts, industry roadmaps, and market projections published before {cutoff_date}
+17. Technology development milestones: solid-state batteries, autonomous driving, SDV platforms
+18. Announced but not-yet-launched products, factory construction timelines, partnership deals
+
+Generate queries that are specific enough to return useful results but broad enough to capture different perspectives. Include a MIX of company-specific, competitor-specific, and industry-wide queries.
 """
 
 SEED_QUERY_USER = """\
@@ -43,13 +66,15 @@ Regions of interest: {regions}
 Key peers: {peers}
 Analysis cutoff: {cutoff_date}
 
-Generate 10-15 search queries to gather comprehensive evidence for strategic risk analysis. Include:
-- Queries about the company itself (plans, financials, execution)
-- Queries about competitors and relative positioning
-- Queries about the industry/market environment
-- Queries about policy/regulatory factors
+Generate 15-20 search queries to gather comprehensive evidence for strategic risk analysis. Your queries MUST cover ALL five areas — do not over-index on any single area:
 
-Use year hints (2024, 2023) to target pre-cutoff content.
+1. COMPANY (3-4 queries): financial results, strategic targets, execution milestones, product launches
+2. INDUSTRY (3-4 queries): market size, adoption rates, growth forecasts, supply chain trends, analyst outlooks
+3. COMPETITORS (3-4 queries): named peer sales data, market share, cost comparisons, technology benchmarks
+4. REGIONAL MARKETS (3-4 queries): country-level data for {regions} — local demand, infrastructure, consumer preferences
+5. POLICY (2-3 queries): subsidies, tariffs, emission mandates, trade restrictions by region
+
+Use year hints (2024, 2023) to target pre-cutoff content. Include at least one forward-looking query (forecasts, roadmaps, analyst projections published before {cutoff_date}).
 
 Return a JSON array of search query strings.
 Respond with ONLY the JSON array, no other text.
@@ -79,6 +104,18 @@ A strong risk analysis requires evidence from MULTIPLE perspectives:
 - Industry-wide trends vs company-specific situation
 - Competitor benchmarks vs the company's positioning
 - Different geographic regions (China, North America, Europe, Southeast Asia)
+- Current state AND forward trajectory (analyst forecasts, announced plans, technology roadmaps)
+
+FORWARD-LOOKING COVERAGE:
+A good risk assessment must include forward-looking signals, not just historical data. Check whether the evidence includes:
+- Market growth projections or demand forecasts
+- Announced investment plans, factory construction timelines, product launch schedules
+- Technology development milestones (battery cost curves, platform architecture evolution)
+- Policy pipeline (upcoming regulations, proposed tariff changes)
+If these are missing, prioritize them in follow-up queries.
+
+REGIONAL COVERAGE:
+Evidence should cover at least 2-3 different geographic markets. If all evidence is about one region, generate queries for underrepresented regions.
 
 Generate targeted search queries to fill the biggest gaps.
 """
@@ -136,6 +173,8 @@ TASK: For each major claim, generate 1-2 search queries that seek EXTERNAL evide
 - Competitor advantages that threaten the company's position
 - Industry analyst concerns or skeptical assessments from BEFORE {cutoff_date}
 - Cost structure data, demand forecasts, or adoption rates that contradict the plan
+- Forward-looking analyses that question the company's trajectory (e.g., if the company projects 30% EV share by 2030, search for independent forecasts of that market)
+- Regional market realities that contradict the company's geographic strategy
 
 Requirements:
 - Include year hints (2024, 2023) to target pre-cutoff content

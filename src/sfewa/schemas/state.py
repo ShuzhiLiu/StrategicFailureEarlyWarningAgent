@@ -32,6 +32,7 @@ class PipelineState(TypedDict):
 
     # ── Overwriting fields ──
     retrieved_docs: list[dict]
+    risk_score: int | None  # 0-100 continuous risk score
     overall_risk_level: Literal["critical", "high", "medium", "low"] | None
     overall_confidence: float | None
     risk_memo: str | None

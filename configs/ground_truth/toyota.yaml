@@ -1,0 +1,13 @@
+ground_truth_events:
+  - event_id: "gt_001"
+    event_date: "2025-05-08"
+    description: >
+      Toyota reports record FY2024 operating profit of 5.35 trillion yen.
+      Hybrid sales continue to grow strongly. EV targets maintained.
+    event_type: "financial_metric"
+  - event_id: "gt_002"
+    event_date: "2025-06-15"
+    description: >
+      Toyota announces next-gen EV platform with solid-state battery
+      target for 2027-2028. No major strategy revision or writedown.
+    event_type: "target_statement"

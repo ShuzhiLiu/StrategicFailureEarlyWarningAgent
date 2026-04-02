@@ -225,11 +225,15 @@ def print_final_result(
     factor_count: int,
     challenge_count: int,
     backtest_summary: str | None,
+    risk_score: int | None = None,
 ) -> None:
     """Print the final pipeline result summary."""
     _console.print()
     _console.rule("[bold green]Pipeline Complete[/bold green]", style="green")
 
+    if risk_score is not None:
+        color = _SEVERITY_COLORS.get(risk_level or "medium", "white")
+        _console.print(f"  Risk Score:  [{color}]{risk_score}/100[/{color}]")
     if risk_level:
         color = _SEVERITY_COLORS.get(risk_level, "white")
         _console.print(f"  Risk Level:  [{color}]{risk_level.upper()}[/{color}]")

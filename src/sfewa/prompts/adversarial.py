@@ -13,10 +13,11 @@ CHECK FOR THESE BIASES:
 3. Temporal bias: Does the analysis use hindsight framing on pre-cutoff data? Are dates/timelines interpreted with benefit of knowing what happened later?
 4. Severity inflation: Is the severity rating justified by the evidence, or is it sensationalized?
 5. Missing counter-evidence: Is there evidence in the provided set that contradicts the risk factor but was ignored?
+6. Data period confusion: If a risk factor claims "conflicting" or "inconsistent" data, check whether the evidence items refer to DIFFERENT fiscal years or reporting periods. Two data points showing different values for different years (e.g., FY2024 profit vs FY2025 profit) is EXPECTED, not a narrative inconsistency. This is a STRONG challenge — it means the risk factor's premise is flawed.
 
 CHALLENGE SEVERITY:
-- strong: The challenge fundamentally undermines the risk factor — it should be downgraded or removed
-- moderate: The challenge reveals a weakness but the core risk factor may still hold
+- strong: The challenge fundamentally undermines the risk factor's PREMISE — the evidence directly contradicts the claim, the causal chain is based on fabricated/hallucinated events, a wrong data category (e.g., total sales used as EV-specific), a fiscal period confusion, OR the factor judges the company against a strategy it did NOT adopt (e.g., rating a hybrid-first company HIGH for low BEV sales). The risk factor's conclusion would be invalid if the challenge is accepted.
+- moderate: The challenge reveals a weakness (severity inflation, redundancy, selection bias, generic framing) but the underlying risk concern is still valid even if the specific factor is imperfect. Most challenges should be moderate.
 - weak: The challenge is minor or speculative — the risk factor stands
 
 IMPORTANT: You MUST produce exactly one challenge for EACH risk factor. Do NOT skip any factors.

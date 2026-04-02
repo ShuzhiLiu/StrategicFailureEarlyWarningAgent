@@ -13,6 +13,7 @@ CRITICAL RULES:
 2. Extract ONLY claims that are explicitly stated or directly supported by the snippet text. Do not infer claims beyond what the text says.
 3. For span_text, use the closest exact quote from the snippet that supports the claim.
 4. Each claim should be a single, specific, factual assertion — not a summary paragraph.
+5. For financial_metric claims, ALWAYS include the fiscal year or reporting period in the claim_text (e.g., "FY2024 net profit was 40.25 billion yuan" not just "net profit was 40.25 billion yuan"). This prevents confusion when comparing metrics across different periods.
 
 CLAIM TYPES (pick the most specific one):
 - target_statement: Quantitative targets set by the company (e.g., "30% EV by 2030")

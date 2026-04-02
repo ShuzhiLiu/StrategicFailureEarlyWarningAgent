@@ -57,6 +57,7 @@ def risk_synthesis_node(state: PipelineState) -> dict:
         reporting.log_action("No risk factors to synthesize")
         reporting.exit_node("risk_synthesis", next_node="backtest")
         return {
+            "risk_score": 0,
             "overall_risk_level": "low",
             "overall_confidence": 0.0,
             "risk_memo": "No risk factors identified.",
@@ -144,21 +145,30 @@ def risk_synthesis_node(state: PipelineState) -> dict:
 
         parsed = json.loads(raw_text)
 
-        risk_level = parsed.get("overall_risk_level", "medium")
+        risk_score = parsed.get("risk_score", 50)
         confidence = parsed.get("overall_confidence", 0.5)
         memo = parsed.get("risk_memo", "")
 
-        # Validate
-        valid_levels = {"critical", "high", "medium", "low"}
-        if risk_level not in valid_levels:
-            risk_level = "medium"
+        # Validate and derive categorical label from score
+        risk_score = max(0, min(100, int(risk_score)))
         confidence = max(0.0, min(1.0, float(confidence)))
 
+        if risk_score >= 80:
+            risk_level = "critical"
+        elif risk_score >= 60:
+            risk_level = "high"
+        elif risk_score >= 40:
+            risk_level = "medium"
+        else:
+            risk_level = "low"
+
+        result["risk_score"] = risk_score
         result["overall_risk_level"] = risk_level
         result["overall_confidence"] = confidence
         result["risk_memo"] = memo
 
         reporting.log_action("Synthesis complete", {
+            "risk_score": f"{risk_score}/100",
             "risk_level": risk_level.upper(),
             "confidence": f"{confidence:.2f}",
             "memo_length": f"{len(memo)} chars",
@@ -166,6 +176,7 @@ def risk_synthesis_node(state: PipelineState) -> dict:
 
     except Exception as e:
         reporting.log_action("LLM call failed", {"error": str(e)[:200]})
+        result["risk_score"] = 50
         result["overall_risk_level"] = "medium"
         result["overall_confidence"] = 0.3
         result["risk_memo"] = f"Synthesis failed: {str(e)[:100]}"

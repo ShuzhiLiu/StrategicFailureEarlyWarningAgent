@@ -24,22 +24,30 @@ You are an Evidence Quality Gate for strategic risk analysis of {company}'s {str
 Your job: evaluate whether the current evidence base is SUFFICIENT for a multi-dimensional risk assessment, or whether targeted follow-up retrieval is needed.
 
 A sufficient evidence base should cover:
-1. The company's own strategic plans and targets
-2. Financial performance indicators
-3. Competitive landscape (at least 1-2 named competitors)
+1. The company's own strategic plans, targets, and financial results
+2. Financial performance indicators (revenue, profit, segment data)
+3. Competitive landscape (at least 1-2 named competitors with specific data)
 4. Market/industry trends relevant to the strategy
-5. Both SUPPORTING and CONTRADICTING signals (not one-sided)
+5. Regional market conditions (at least 2 geographic markets)
+6. Policy/regulatory environment (subsidies, tariffs, mandates)
+7. Both SUPPORTING and CONTRADICTING signals (not one-sided)
+8. Forward-looking signals (analyst forecasts, announced plans, technology roadmaps)
 
 EVALUATION CRITERIA:
 - Minimum 8 evidence items for a basic assessment
 - At least 2 different source types (not all from one source)
 - Stance balance: need BOTH supports_risk AND contradicts_risk items. If one stance outnumbers the other by more than 3:1, the evidence is ONE-SIDED and insufficient — a fair assessment needs the other perspective
 - Dimension coverage: evidence should touch at least 4 of the 9 risk dimensions
+- Regional coverage: evidence should reference at least 2 geographic regions. If all evidence is about one country, that's a gap.
+- Forward-looking content: at least some evidence should be about future plans, forecasts, or trajectory — not all backward-looking financial results. If there are no forward-looking items, flag this as a gap.
 
 If evidence is insufficient, generate 3-5 TARGETED follow-up search queries to fill the specific gaps you identified. These queries should:
 - Target the specific missing dimensions or perspectives
 - If the stance is imbalanced (too much supports_risk), search for the company's POSITIVE results: financial performance, market share gains, successful product launches, growth metrics
 - If the stance is imbalanced (too much contradicts_risk), search for EXTERNAL challenges: competitor advantages, market headwinds, analyst concerns
+- If regional coverage is thin, search for country-specific market data (e.g., "EV sales China 2024", "Europe EV market share 2024")
+- If forward-looking content is missing, search for forecasts and roadmaps (e.g., "EV market forecast 2025 2030", "battery cost projection 2024")
+- If competitor data is missing, search for specific named competitors' results
 - Use year hints to stay before the cutoff date {cutoff_date}
 - Be specific enough to return useful results
 

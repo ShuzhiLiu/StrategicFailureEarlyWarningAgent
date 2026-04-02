@@ -13,7 +13,7 @@ INPUTS:
 - Underlying evidence
 
 OUTPUT REQUIREMENTS:
-1. Determine overall_risk_level: "critical", "high", "medium", or "low"
+1. Determine risk_score: integer 0-100, where 0 = no risk and 100 = certain strategic failure
 2. Determine overall_confidence: float 0.0-1.0
 3. Write a structured risk_memo with these sections:
    - Executive Summary (2-3 sentences)
@@ -25,12 +25,28 @@ OUTPUT REQUIREMENTS:
 
 SCORING GUIDELINES:
 - Adjust risk factor severity based on adversarial challenges (strong challenge → downgrade by one level)
-- overall_risk_level: based on the DISTRIBUTION of factor severities AND adversarial adjustments:
-  - "critical": Multiple CRITICAL factors, or ≥60% of factors at HIGH+ with strong evidence
-  - "high": ≥30% of factors at HIGH+ AND at least one dimension shows a clear failure mechanism (connected causal chain across multiple risk dimensions)
-  - "medium": Multiple MEDIUM factors across many dimensions (≥5 MEDIUM+) even without HIGH factors — systemic moderate risk across the board. Also: some HIGH factors balanced by MEDIUM/LOW factors, or evidence is thin/one-sided.
-  - "low": No HIGH+ factors (after adversarial downgrades), AND the company is clearly executing well on its core strategy — a market leader whose identified risks are primarily about expansion barriers or manageable challenges, not threats to existing operations. MEDIUM factors about growth ceilings (e.g., tariff barriers to new markets) should not prevent a LOW rating if the core business is strong.
-  Consider BOTH the severity distribution AND how the risk factors connect — if multiple dimensions point to the same underlying strategic problem, that increases the overall risk even if individual severities are MEDIUM. Conversely, if HIGH factors are about expansion barriers (not core business threats) or are contradicted by LOW factors in related dimensions, that REDUCES the overall risk.
+- risk_score (0-100): A continuous score reflecting strategic failure risk. Use the full range — differentiate between companies, don't cluster at the middle.
+
+  SCORE CALIBRATION (use these as anchors, interpolate between them):
+  - 80-100: CRITICAL — Multiple reinforcing failure signals. The company's CHOSEN strategy is actively failing (mounting losses, cancelled projects, declining core revenue). Future plans are undelivered and the trajectory is worsening.
+  - 60-79: HIGH — Serious strategic risk. Multiple HIGH-severity factors form a connected failure pattern. The company faces concrete, specific problems (not just generic challenges) that threaten committed investments. Announced-but-undelivered plans are the main "mitigation" — meaning the company is betting on future execution to solve current problems.
+  - 40-59: MEDIUM — Mixed signals. Some dimensions show genuine risk while others show the company adapting. The company's CURRENT core business is healthy (generating profit, maintaining market position) even as specific initiatives face headwinds. Risks are real but offset by demonstrated strengths.
+  - 20-39: LOW — Company executing well on its chosen strategy. Risks are primarily about expansion barriers or external challenges (tariffs, trade restrictions) rather than threats to existing operations. Market leader whose core business is growing.
+  - 0-19: MINIMAL — Dominant market position with no credible strategic threats. Extremely rare for any real company.
+
+  PATTERN ANALYSIS (adjusts the score UP or DOWN from the raw severity distribution):
+  - REINFORCING pattern: risks compound each other (capital strain → delays → wider competitive gap → more capital needed). Adds +10 to +15 to the base score.
+  - MIXED pattern: some risks, some strengths. The company's CURRENT core business provides a buffer. No adjustment.
+  - SCATTERED pattern: unrelated medium-level concerns. Subtracts -5 to -10 from the base score.
+
+  CRITICAL — Distinguish EXECUTED mitigations from ANNOUNCED plans:
+  - EXECUTED: The company is CURRENTLY generating revenue, profit, market share from its strategy. This IS a real mitigation that lowers the score.
+  - ANNOUNCED: Plans for future products/investments not yet delivered. These do NOT lower the score — they are part of the risk (can the company deliver?).
+  - A hybrid-first company with record hybrid profits has an EXECUTED mitigation — its core business works.
+  - A company that bet on BEV transition and has $4B losses with no competitive product yet has only ANNOUNCED mitigations — the risk is real.
+
+  STRATEGY-RELATIVE assessment:
+  Assess the company against its OWN CHOSEN STRATEGY, not an abstract ideal. A hybrid-first company succeeding at hybrids = lower score, even if BEV lineup is thin.
 
 IMPORTANT: Only downgrade a factor's severity if it received a STRONG adversarial challenge. Moderate and weak challenges should be noted in the memo but should NOT change the factor's severity. After applying only strong-challenge downgrades, use the resulting severity distribution to determine the overall risk level.
 - overall_confidence: based on evidence quality, coverage, and adversarial outcomes
@@ -59,7 +75,11 @@ RISK FACTOR SEVERITY DISTRIBUTION:
 - Total factors: {total_factors}
 - High+ ratio: {high_plus_ratio}
 
-Use this distribution to calibrate the overall risk level. A company with mostly LOW/MEDIUM factors should NOT get an overall HIGH rating unless the HIGH factors represent truly dominant risks.
+BEFORE determining the risk_score, you MUST perform these steps in order:
+Step 1: Apply adversarial downgrades. For each STRONG challenge, reduce the target factor's severity by one level. List the post-adversarial severity distribution.
+Step 2: Compute a base score from the post-adversarial severity distribution: CRITICAL=25pts, HIGH=15pts, MEDIUM=8pts, LOW=2pts. Sum all factors and normalize to 0-100 scale (divide by max possible = 25 * factor_count, multiply by 100).
+Step 3: Analyze the risk factor pattern: REINFORCING (+10 to +15), MIXED (+0), SCATTERED (-5 to -10). Adjust the base score.
+Step 4: Apply strategy-relative and executed-vs-announced mitigation adjustments. Clamp final score to 0-100.
 
 RISK FACTORS:
 {risk_factors_text}
@@ -71,9 +91,9 @@ EVIDENCE:
 {evidence_text}
 
 Return a JSON object with exactly these fields:
-- overall_risk_level: string ("critical", "high", "medium", or "low")
+- risk_score: integer (0-100, continuous risk score)
 - overall_confidence: float (0.0-1.0)
-- risk_memo: string (the full structured memo in markdown format)
+- risk_memo: string (the full structured memo in markdown format, include the risk_score and its derivation in the Executive Summary)
 
 Respond with ONLY the JSON object, no other text.
 """

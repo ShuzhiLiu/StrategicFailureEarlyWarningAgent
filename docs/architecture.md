@@ -38,7 +38,7 @@ Modern production agent systems (Claude Code, Anthropic's SWE harness, TradingAg
 │  │  EVALUATOR: Independent Adversarial Review                    │  │
 │  │  "Agents cannot self-evaluate" (Anthropic's key insight)      │  │
 │  │                                                               │  │
-│  │  Thinking mode. Checks 5 bias types. Grades challenges.      │  │
+│  │  Thinking mode. Checks 6 bias types. Grades challenges.      │  │
 │  │  Honda: 0 strong → HIGH preserved.                            │  │
 │  │  BYD: 3 strong → enables LOW rating.                          │  │
 │  │  Can route back for reanalysis if factors fundamentally weak. │  │
@@ -46,7 +46,7 @@ Modern production agent systems (Claude Code, Anthropic's SWE harness, TradingAg
 │                              │                                      │
 │  ┌───────────────────────────────────────────────────────────────┐  │
 │  │  SYNTHESIZER + VALIDATOR (domain-specific extension)          │  │
-│  │  risk_synthesis → backtest against ground truth               │  │
+│  │  risk_synthesis (continuous 0-100 score) → backtest           │  │
 │  └───────────────────────────────────────────────────────────────┘  │
 │                                                                     │
 │  Cross-cutting: Pipeline Context Injection, Dead-Loop Protection,  │
@@ -60,7 +60,7 @@ Modern production agent systems (Claude Code, Anthropic's SWE harness, TradingAg
 |---|---|---|
 | **Planner** | Expands prompts into specs; decides scope | retrieval (3-pass agentic search) + quality_gate (LLM decides evidence sufficiency) |
 | **Generator** | Implements code in sprints | 3 parallel analysts with scope boundaries produce risk factors |
-| **Evaluator** | Playwright E2E tests + separate agent grading | Adversarial reviewer (thinking mode, 5 bias checks, 3-level severity) |
+| **Evaluator** | Playwright E2E tests + separate agent grading | Adversarial reviewer (thinking mode, 6 bias checks, 3-level severity) |
 | **Sprint contracts** | Generator+Evaluator negotiate criteria | Fixed 9-dimension ontology (known in advance for domain-specific task) |
 | **Feedback loop** | Failed eval → Generator retries | "reanalyze" recommendation → back to extraction/analysts |
 
@@ -136,10 +136,10 @@ Every routing decision is made by the LLM reading its own output state — itera
 | Capability | Where It Happens | Evidence from Traces |
 |---|---|---|
 | **LLM Orchestration** | StateGraph with conditional edges, fan-out | 10 nodes, 3 parallel analysts, 2 feedback loops |
-| **Tool Calling** | Retrieval agent calls DuckDuckGo + temporal filter | Honda: 138 docs retrieved across 3 search passes |
+| **Tool Calling** | Retrieval agent calls DuckDuckGo + temporal filter | 100-140 docs retrieved across 3 search passes per company |
 | **State Management** | `Annotated[list, operator.add]` reducers | 3 analysts write to `risk_factors` concurrently — no conflicts |
 | **Multi-Step Reasoning Loop** | Quality gate + adversarial loop-back | All 3 companies: iteration_count=3 (quality gate looped) |
-| **Autonomous Action** | End-to-end without human intervention | Honda 29 evidence → HIGH, BYD 27 evidence → LOW, same pipeline |
+| **Autonomous Action** | End-to-end without human intervention | Honda 33 evidence → 61/100, BYD 19 evidence → 30/100, same pipeline |
 
 ---
 
@@ -155,27 +155,27 @@ SFEWA implements this through a **structurally separated adversarial reviewer**:
 |---|---|---|
 | Structural separation | Separate agent, own context | Separate node, thinking mode, different prompt |
 | Never sees generator reasoning | Only sees code output | Only sees risk factors + evidence, not analyst prompts |
-| Objective criteria | Playwright tests, weighted rubric | 5 bias checks, 3-level severity grading |
+| Objective criteria | Playwright tests, weighted rubric | 6 bias checks, 3-level severity grading |
 | Feedback loop | Failed eval → Generator retries | "reanalyze" → back to extraction/analysts |
 | Access to independent data | Can run its own tests | Sees ALL evidence, not just what analysts cited |
 
 ### How It Behaves Differently Per Company
 
-Same 9 challenges for every company, but severity distribution differs dramatically:
+Same 9 challenges for every company, but severity distribution differs across runs:
 
 ```
-Company    Strong  Moderate  Weak   Effect on Assessment
-─────────  ──────  ────────  ────   ────────────────────
-Honda        0        7        2    No downgrades → HIGH preserved
-Toyota       1        5        3    1 downgrade (narrative) → MEDIUM
-BYD          3        4        2    3 downgrades → enables LOW
+Company    Strong (avg)  Effect on Assessment
+─────────  ────────────  ──────────────────────────────────────
+Honda        0-3          Fewer downgrades → higher risk score (avg 55/100)
+Toyota       0-1          Moderate downgrades → middle score (avg 47/100)
+BYD          0-3          More downgrades → lower risk score (avg 39/100)
 ```
 
-**Honda**: No fundamental flaws found. 7 moderate challenges note nuances but don't undermine core risk factors.
+**Honda**: Adversarial finds fewer fundamental flaws — risk factors are well-supported by EDINET filings and external evidence. When strong challenges occur, they target evidence quality (single-source tariff claims), not the underlying risk logic.
 
-**Toyota**: 1 strong challenge catches that narrative_consistency factor is contradicted by its own evidence — Toyota's "multi-pathway" messaging is actually consistent.
+**Toyota**: Adversarial catches strategy misattribution (rating hybrid-first company HIGH for low BEV sales) and data category errors. Toyota's strong hybrid business provides legitimate counter-evidence.
 
-**BYD**: 3 strong challenges fundamentally undermine factors — market_timing severity inflated (34% profit growth contradicts "unsustainability"), competitive_pressure is redundant, LFP battery reliance is a strength not weakness.
+**BYD**: Adversarial frequently finds inflated severity (profit growth contradicts "unsustainability"), redundant factors, and mischaracterized strengths (LFP battery reliance = advantage, not weakness).
 
 ### The Downgrade Rule
 
@@ -250,7 +250,7 @@ Each analyst sees ALL evidence but only assesses its assigned dimensions. Preven
 | Evidence sufficiency | Fixed threshold (e.g., >10 items) | LLM evaluates coverage, balance, diversity |
 | Routing after quality gate | Always proceed | LLM decides: sufficient → proceed, insufficient → loop |
 | Adversarial routing | Hardcoded % threshold | LLM recommends: proceed or reanalyze |
-| Severity calibration | Fixed rules | LLM weighs evidence for/against, assesses materiality |
+| Severity calibration | Fixed rules | LLM weighs evidence for/against, assesses materiality, outputs continuous risk score (0-100) |
 | Context awareness | Each node isolated | Pipeline context injected — downstream knows upstream history |
 
 6+ autonomous decisions per run that alter behavior. Different companies trigger different paths through the same architecture.
@@ -284,7 +284,7 @@ Each analyst sees ALL evidence but only assesses its assigned dimensions. Preven
 |---|---|
 | LLM world knowledge leakage | "We filter documents by date, but can't prevent the model from knowing Honda revised targets. Hardest unsolved problem in temporal backtesting." |
 | Structured output reliability | "Qwen3.5 sometimes breaks JSON. We retry with error messages. Production needs schema-constrained decoding." |
-| Run-to-run variability | "Honda HIGH ~80% of runs, BYD LOW ~30%. Pre-cached results for demo. Production needs ensemble runs." |
+| Run-to-run variability | "Continuous risk scores vary ±15 points per run (Honda 45-62, Toyota 44-50, BYD 30-44). Ordering Honda > Toyota > BYD is stable. Production would use ensemble of 3-5 runs, take median." |
 | Evaluator is LLM-only | "Claude Code uses Playwright for objective tests. A future version could add programmatic checks alongside LLM judgment." |
 
 ### Recommended Demo Narrative
@@ -295,9 +295,9 @@ Each analyst sees ALL evidence but only assesses its assigned dimensions. Preven
 
 **Min 4-6**: Live trace — Quality gate looping, analysts producing severity profiles, adversarial reviewer finding 0 strong challenges for Honda.
 
-**Min 6-8**: Cross-company proof — Same pipeline, same model: Honda HIGH, Toyota MEDIUM, BYD LOW. Drill into BYD's 3 strong adversarial challenges.
+**Min 6-8**: Cross-company proof — Same pipeline, same model: Honda 62/100, Toyota 50/100, BYD 30/100. Continuous scores show clear differentiation. Drill into BYD's strong adversarial challenges.
 
-**Min 8-9**: Backtest — Honda 3x STRONG match. "Predicted failure 10 months early."
+**Min 8-9**: Backtest — Honda STRONG matches on target revision and EV cancellation. "Predicted failure 10 months early."
 
 **Min 9-10**: Honest failures — Three unsolved problems. Invite discussion.
 
