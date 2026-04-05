@@ -263,9 +263,89 @@ Honda's analysts found concerning patterns at EVERY dimension and went deep on a
 
 ---
 
+## Iteration 30: Score Stability — Clamp, Strategy Relevance, Depth Gate Enforcement
+
+**Goal**: Fix three instability problems found during cross-company verification (7 runs pre-fix):
+1. **Honda score instability**: 50-90 range (base 77-88, LLM delta -27 to +2)
+2. **Toyota over-scored**: 75-78 HIGH (expected ~50 MEDIUM) — analysts rate BEV dimensions HIGH for a hybrid-first company
+3. **Adversarial too lenient**: 0 STRONG challenges for Honda/Toyota across most runs
+
+### Pre-fix verification results (7 runs)
+
+| Run | Honda | Toyota | BYD |
+|-----|-------|--------|-----|
+| R1 | 81 CRITICAL (base=81) | 78 HIGH (base=72) | 31 LOW (base=34) |
+| R2 | 90 CRITICAL (base=88) | 75 HIGH (base=67) | 32 LOW (base=30) |
+| R3 | 50 MEDIUM (base=77) | — | — |
+
+Honda's synthesis LLM adjusted -27 from base in R3 — unbounded and destructive.
+
+### Three fixes applied
+
+**Fix A: Clamp synthesis ±15** (`src/sfewa/agents/risk_synthesis.py`)
+- After computing `risk_score` from LLM, clamp to `base_score ± 15`
+- Safety bound (like MAX_ITERATIONS), not a hardcoded override
+- Prevents the LLM from producing wild adjustments like -27
+
+**Fix B: Strategy relevance tags** (3 files)
+- `src/sfewa/prompts/init_case.py` — Added `strategy_relevance: "primary" | "secondary"` field to dimension schema. Includes guidance for the LLM to first determine the company's ACTUAL strategic approach, then classify dimensions relative to that approach. Examples for Toyota hybrid-first, Honda EV transition, BYD global expansion.
+- `src/sfewa/agents/init_case.py` — Added `[Strategy relevance: primary/secondary]` tag to dimension descriptions. Stored `dimension_relevance` dict in metadata for downstream nodes.
+- `src/sfewa/prompts/analysis.py` — Replaced the depth gate judgment call ("ask: Does this risk threaten the PRIMARY strategy?") with structured tag lookup ("check the [Strategy relevance] tag"). Secondary → MEDIUM max, STOP. Exception requires explicit justification.
+
+**Fix C: Adversarial depth gate enforcement** (3 files)
+- `src/sfewa/prompts/adversarial.py` — Added depth gate violation check to Step 3 (ASSESS depth): if dimension is `[Strategy relevance: secondary]` AND severity is HIGH/CRITICAL without explicit depth gate override justification → STRONG challenge. Added `strategy_relevance` to `format_risk_factors_for_review()` output.
+- `src/sfewa/agents/adversarial.py` — Extracts `dimension_relevance` from `state["analysis_dimensions"]` and passes to format function.
+- `src/sfewa/agents/risk_synthesis.py` — Same extraction and passing.
+
+### Post-fix verification results (4 runs, all with improved prompt)
+
+| Run | Honda | Toyota | BYD |
+|-----|-------|--------|-----|
+| R1 | **91 CRITICAL** (10 factors, 7H+3M, 0 STR) | **78 HIGH** (10 factors, 4H+6M, 0 STR) | **54 MEDIUM** (10 factors, 2H+7M+1L, 0 STR) |
+| R2 | **54 MEDIUM** (13 factors, 1C+5H+7M, 3 STR) | **50 MEDIUM** (10 factors, 4H+6M, 2 STR) | **42 MEDIUM** (10 factors, 1H+7M+2L, 0 STR) |
+
+### Strategy relevance tag generation
+
+| Company | Primary | Secondary | Example secondary dimensions |
+|---------|---------|-----------|------------------------------|
+| Honda | 9 | 1 | hybrid_cash_flow_sustainability |
+| Toyota | 5-6 | 4-5 | china_market_share_erosion, cost_vs_vertical_integrators, platform_modularity_vs_dedicated_ev, charging_infrastructure_deployment_lag |
+| BYD | 8 | 2 | dmi_hybrid_strategy_dependency, charging_network_compatibility |
+
+Toyota's secondary dimensions are correctly identified as known trade-offs of the hybrid-first strategy. Analysts respect the depth gate — all secondary dimensions stop at Layer 2 (MEDIUM).
+
+### What improved
+
+1. **Toyota discrimination**: Went from consistently HIGH (75-78) to MEDIUM achievable (50-78). The strategy_relevance tags correctly identify 4-5 secondary dimensions that cap at MEDIUM, reducing pre-adversarial HIGHs from 7 to 4.
+2. **Adversarial now generates STRONG**: Toyota R2 got 2 STRONG, Honda R2 got 3 STRONG. The depth gate violation check adds teeth.
+3. **Clamp prevents extreme divergence**: All scores within base ±15.
+
+### Remaining instability
+
+Honda R2 scored 54 MEDIUM — an outlier caused by:
+- 13 factors (vs 10 in R1) — init_case dimension count varies 10-13
+- 3 STRONG adversarial challenges — more aggressive adversarial sometimes over-corrects
+
+Variability sources (not yet addressed):
+1. **Factor count**: 10-13 per run (init_case generates 9-13 dimensions)
+2. **STRONG challenge count**: 0-3 per company per run
+3. **Evidence count**: 21-47 depending on DuckDuckGo availability
+
+### Cross-company ordering
+
+| Run | Ordering | Correct? |
+|-----|----------|----------|
+| R1 | Honda 91 > Toyota 78 > BYD 54 | ✓ |
+| R2 | Honda 54 ≈ Toyota 50 > BYD 42 | ✗ (Honda too low) |
+
+Ordering is maintained when STRONG challenge counts are stable (R1). Breaks when Honda gets 3 STRONG challenges (R2). This is a known limitation — production would use ensemble scoring (median of 3-5 runs).
+
+---
+
 ## Next Steps
 
 1. **Demo preparation**: Pre-cache best runs per company. risk_score provides cleaner cross-company comparison than categories.
 2. **Ensemble scoring**: Production system would run 3-5 times per company, take median score. Reduces variability from ±15 to ±5.
 3. **Evidence quality**: Toyota and BYD would benefit from primary source filings (equivalent to Honda's EDINET).
-4. **liteagent expansion**: Add `tool.py` and `agent.py` modules when a consumer needs the tool-loop agent pattern.
+4. **Dimension count stabilization**: Consider fixing dimension count to exactly 10 (3 external + 4 internal + 3 comparative) to reduce one source of variability.
+5. **liteagent expansion**: Add `tool.py` and `agent.py` modules when a consumer needs the tool-loop agent pattern.

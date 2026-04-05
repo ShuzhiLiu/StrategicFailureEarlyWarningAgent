@@ -25,17 +25,19 @@ Check the key claim against ALL available evidence independently:
 - Is there a data category error (total vs segment-specific metrics)?
 - Is there a time period confusion (comparing different fiscal years as if they were the same period)?
 
-### Step 3: ASSESS analytical depth
+### Step 3: ASSESS analytical depth AND strategy relevance
 Did the analyst reach the appropriate depth for this dimension?
 - Did they identify structural forces (reinforcing/balancing loops) for HIGH+ factors? If a factor is rated HIGH but only has surface-level pattern analysis (no structural forces identified), the depth is INSUFFICIENT.
 - Did they consider the competing hypothesis (the "this is manageable" case)? If not, the analysis may be anchored on the first impression.
 - Did they challenge the critical assumption for HIGH/CRITICAL factors?
 A well-supported HIGH factor with deep structural analysis is HARDER to challenge than a HIGH factor based only on surface patterns.
 
+**DEPTH GATE VIOLATION CHECK**: If a dimension is tagged [Strategy relevance: secondary] AND the factor severity is HIGH or CRITICAL, verify that the analyst explicitly justified why this secondary risk undermines the primary strategy. If no such justification exists → this is a STRONG challenge (depth gate violation). The analyst bypassed the strategy-relative depth gate without explanation.
+
 ### Step 4: GRADE the challenge
 
 CHALLENGE SEVERITY:
-- strong: Key claim is CONTRADICTED by evidence, OR claim is fabricated/hallucinated, OR there is a data category error or time period confusion, OR the severity is HIGH+ but analysis depth is only Layer 2 (surface patterns without structural analysis). Strategy misattribution is strong ONLY when the factor rates HIGH for a secondary strategy with minimal capital commitment.
+- strong: Key claim is CONTRADICTED by evidence, OR claim is fabricated/hallucinated, OR there is a data category error or time period confusion, OR the severity is HIGH+ but analysis depth is only Layer 2 (surface patterns without structural analysis), OR the dimension is [Strategy relevance: secondary] AND severity is HIGH/CRITICAL without explicit justification for depth gate override (depth gate violation).
 - moderate: Key claim is partially supported but the analysis has weaknesses — severity inflation, missing counter-evidence, generic framing, or incomplete structural analysis. The underlying concern is still valid.
 - weak: Key claim is well-supported, analysis depth is appropriate for the severity level, and counter-evidence was acknowledged. The factor stands.
 
@@ -78,9 +80,18 @@ Respond with ONLY the JSON object.
 """
 
 
-def format_risk_factors_for_review(risk_factors: list[dict]) -> str:
-    """Format risk factors for the adversarial reviewer prompt."""
+def format_risk_factors_for_review(
+    risk_factors: list[dict],
+    dimension_relevance: dict[str, str] | None = None,
+) -> str:
+    """Format risk factors for the adversarial reviewer prompt.
+
+    Args:
+        risk_factors: List of risk factor dicts.
+        dimension_relevance: Optional mapping of dimension name to "primary"/"secondary".
+    """
     parts = []
+    relevance_map = dimension_relevance or {}
     for rf in risk_factors:
         evidence_str = ", ".join(rf.get("supporting_evidence", []))
         contra_str = ", ".join(rf.get("contradicting_evidence", []))
@@ -88,11 +99,13 @@ def format_risk_factors_for_review(risk_factors: list[dict]) -> str:
         depth = rf.get("depth_of_analysis", 0)
         forces = rf.get("structural_forces", {})
         assumption = rf.get("key_assumption_at_risk")
+        dim_name = rf.get("dimension", "?")
+        relevance = relevance_map.get(dim_name, "primary")
 
         entry = (
-            f"[{rf.get('factor_id', '?')}] {rf.get('dimension', '?')} | "
+            f"[{rf.get('factor_id', '?')}] {dim_name} | "
             f"{rf.get('severity', '?').upper()} | conf={rf.get('confidence', 0):.2f} | "
-            f"depth={depth}\n"
+            f"depth={depth} | [Strategy relevance: {relevance}]\n"
             f"  Title: {rf.get('title', '?')}\n"
             f"  Description: {rf.get('description', '?')}\n"
             f"  Supporting evidence: {evidence_str}\n"

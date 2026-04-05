@@ -55,8 +55,15 @@ def adversarial_review_node(state: PipelineState) -> dict:
             "current_stage": "adversarial_review",
         }
 
+    # Extract dimension_relevance from analysis_dimensions for depth gate check
+    dimension_relevance: dict[str, str] = {}
+    analysis_dims = state.get("analysis_dimensions", {})
+    for group in analysis_dims.values():
+        if isinstance(group, dict) and "dimension_relevance" in group:
+            dimension_relevance.update(group["dimension_relevance"])
+
     # Format prompt with pipeline context injection
-    rf_text = format_risk_factors_for_review(risk_factors)
+    rf_text = format_risk_factors_for_review(risk_factors, dimension_relevance)
     evidence_text = format_evidence_for_analyst(evidence)
     pipeline_context = build_pipeline_context(state)
 

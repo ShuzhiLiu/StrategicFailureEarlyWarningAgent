@@ -41,6 +41,22 @@ For EACH dimension, provide:
 - description: 2-3 sentences explaining WHAT to analyze, WHAT data to look for, and what makes this dimension critical for THIS company's strategy. Include guidance on both current state AND future trajectory.
 - structural_hint: 1 sentence describing what STRUCTURAL FORCES (reinforcing loops, systemic dependencies) might drive risk on this dimension. This guides deep analysis when surface-level evidence is concerning.
 - critical_assumption: 1 sentence describing the KEY ASSUMPTION the company's strategy depends on for this dimension. This is what a pre-mortem analysis should challenge.
+- strategy_relevance: "primary" or "secondary". IMPORTANT: This must be relative to the company's ACTUAL strategic approach, which may differ from the strategy theme being analyzed.
+
+BEFORE assigning strategy_relevance, first determine: What is this company's ACTUAL strategic commitment within this theme? The strategy theme describes the DOMAIN of analysis, not the company's approach. Different companies approach the same domain differently:
+  - A company that committed billions to BEV and set aggressive EV targets → their EV dimensions are PRIMARY
+  - A company that chose hybrid-first and is cautiously hedging with limited EV investment → their BEV-specific dimensions are SECONDARY (known trade-offs), while hybrid-related dimensions are PRIMARY
+
+Then classify each dimension:
+  - "primary": This dimension directly threatens the company's CHOSEN strategic approach — the thing they invested capital in and staked their reputation on.
+  - "secondary": This dimension reflects a KNOWN TRADE-OFF of the company's chosen approach. They deliberately chose a different path, and weakness here is an expected consequence, not a strategic failure.
+
+STRATEGY RELEVANCE EXAMPLES (note: the company's ACTUAL approach determines the classification):
+- Toyota (actual approach: hybrid-first with gradual EV hedge): hybrid_market_share → primary, solid_state_battery_timeline → primary (committed R&D), bev_market_penetration → secondary, cost_vs_vertical_integrators → secondary, china_ev_share → secondary
+- Honda (actual approach: aggressive EV transition, 2040 target): ev_platform_readiness → primary, china_ev_market → primary, hybrid_profitability → secondary
+- BYD (actual approach: global EV expansion from domestic strength): domestic_dominance → primary, western_market_access → secondary
+
+For a hybrid-first company analyzed on "EV electrification strategy", expect 3-5 secondary dimensions (BEV-specific gaps that are known consequences of the hybrid-first choice). For a BEV-committed company, expect 1-2 secondary dimensions at most.
 
 CRITICAL: Dimensions must be SPECIFIC to this strategy theme. Examples:
 - For an EV company: battery_technology, charging_infrastructure, platform_architecture, supply_chain_vertical_integration
@@ -62,7 +78,7 @@ Return a JSON object with:
 - "peers": array of company name strings
 - "analysis_dimensions": object with 3 keys ("external", "internal", "comparative"), each containing:
   - "role_name": string (human-readable analyst role, e.g., "External Environment Analyst")
-  - "dimensions": array of objects, each with "name" (string), "description" (string), "structural_hint" (string), and "critical_assumption" (string)
+  - "dimensions": array of objects, each with "name" (string), "description" (string), "structural_hint" (string), "critical_assumption" (string), and "strategy_relevance" (string: "primary" or "secondary")
   - "scope_boundary": string (what this analyst should NOT analyze — covered by the other two)
 
 Respond with ONLY the JSON object, no other text.

@@ -30,16 +30,10 @@ What TREND does this evidence reveal?
 → If the pattern is BENIGN (stable or improving, company executing well, strong results): assign LOW severity. Analysis depth = 2 layers.
 
 ### STRATEGY-RELATIVE DEPTH GATE (before going deeper, always apply this check)
-Before proceeding to Layer 3, ask: Does this risk threaten the company's PRIMARY strategic commitment?
-- PRIMARY strategy risk (the company invested heavily, committed capital, staked reputation on THIS domain) → Proceed to Layer 3.
-- SECONDARY domain trade-off (the company deliberately chose a DIFFERENT strategic approach, and this dimension reflects a KNOWN CONSEQUENCE of that choice) → The concerning pattern at Layer 2 is a trade-off of the chosen strategy, not evidence of failure. Assign MEDIUM severity. STOP.
-  Only proceed to Layer 3 for a secondary domain if the risk threatens to UNDERMINE the primary strategy itself (e.g., if market shift is so fast that the primary strategy becomes obsolete before the company can pivot).
-
-Examples:
-- Hybrid-first company losing BEV market share → SECONDARY trade-off → MEDIUM. (They chose not to prioritize BEV.)
-- Hybrid-first company losing HYBRID market share → PRIMARY risk → proceed to Layer 3.
-- BEV-committed company with mounting EV losses → PRIMARY risk → proceed to Layer 3-4.
-- Market leader blocked by tariffs from a new market → SECONDARY (expansion barrier) → MEDIUM.
+Before proceeding to Layer 3, check the [Strategy relevance] tag on this dimension:
+- [Strategy relevance: primary] → This is a PRIMARY strategy risk. Proceed to Layer 3.
+- [Strategy relevance: secondary] → This is a SECONDARY domain trade-off. The concerning pattern at Layer 2 is a known consequence of the company's chosen strategy, not evidence of failure. Assign MEDIUM severity. STOP.
+  EXCEPTION: Proceed to Layer 3 for a secondary dimension ONLY if evidence shows the risk threatens to UNDERMINE the primary strategy itself. You MUST explicitly state WHY this secondary risk undermines the primary strategy — otherwise, STOP at MEDIUM.
 
 ### Layer 3 — STRUCTURAL ANALYSIS (only when Layer 2 reveals a concerning pattern AND the depth gate confirms primary strategy risk)
 What FORCES make this pattern persist or worsen?

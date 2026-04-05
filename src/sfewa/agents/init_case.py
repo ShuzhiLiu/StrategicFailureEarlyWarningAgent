@@ -37,17 +37,25 @@ def _format_dimensions(dims_data: dict) -> dict:
             desc = d.get("description", "")
             structural_hint = d.get("structural_hint", "")
             critical_assumption = d.get("critical_assumption", "")
+            strategy_relevance = d.get("strategy_relevance", "primary")
             entry = f"- {name}: {desc}"
+            entry += f"\n  [Strategy relevance: {strategy_relevance}]"
             if structural_hint:
                 entry += f"\n  [Structural hint]: {structural_hint}"
             if critical_assumption:
                 entry += f"\n  [Critical assumption to test]: {critical_assumption}"
             lines.append(entry)
+        # Build dimension_relevance mapping for downstream nodes
+        dim_relevance = {
+            d.get("name", "unknown"): d.get("strategy_relevance", "primary")
+            for d in dims
+        }
         result[key] = {
             "role_name": role_name,
             "dimensions_description": "\n".join(lines),
             "scope_boundary": scope,
             "dimension_names": [d.get("name", "unknown") for d in dims],
+            "dimension_relevance": dim_relevance,
         }
     return result
 

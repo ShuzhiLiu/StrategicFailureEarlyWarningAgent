@@ -153,8 +153,15 @@ def risk_synthesis_node(state: PipelineState) -> dict:
         "downgrades": len(downgrades_applied),
     })
 
+    # Extract dimension_relevance for synthesis context
+    dimension_relevance: dict[str, str] = {}
+    analysis_dims = state.get("analysis_dimensions", {})
+    for group in analysis_dims.values():
+        if isinstance(group, dict) and "dimension_relevance" in group:
+            dimension_relevance.update(group["dimension_relevance"])
+
     # Format prompt with pipeline context injection
-    rf_text = format_risk_factors_for_review(risk_factors)
+    rf_text = format_risk_factors_for_review(risk_factors, dimension_relevance)
     challenges_text = format_challenges_for_synthesis(challenges)
     evidence_text = format_evidence_for_analyst(evidence)
     pipeline_context = build_pipeline_context(state)
@@ -217,6 +224,18 @@ def risk_synthesis_node(state: PipelineState) -> dict:
         # Validate and derive categorical label from score
         risk_score = max(0, min(100, int(risk_score)))
         confidence = max(0.0, min(1.0, float(confidence)))
+
+        # Clamp LLM adjustment to ±15 of programmatic base score.
+        # The base score is deterministic; the LLM adjustment is qualitative.
+        # This is a safety bound (like MAX_ITERATIONS), not a hardcoded override.
+        raw_llm_score = risk_score
+        risk_score = max(base_score - 15, min(base_score + 15, risk_score))
+        if raw_llm_score != risk_score:
+            reporting.log_action("Score clamped", {
+                "raw_llm": raw_llm_score,
+                "base": base_score,
+                "clamped": risk_score,
+            })
 
         if risk_score >= 80:
             risk_level = "critical"

@@ -20,7 +20,7 @@ SFEWA is a Planner-Generator-Evaluator system for strategic failure early warnin
 │    Generates own queries. Evaluates own coverage. Loops until    │
 │    satisfied. Temporal filter prevents information leakage.      │
 │                                                                  │
-│                    evidence_sufficient?                           │
+│                    evidence_sufficient?                          │
 │                     (LLM decides)                                │
 │                                                                  │
 │  GENERATOR: Multi-Expert Risk Analysis (Iceberg Model)           │
@@ -76,17 +76,17 @@ SFEWA is a Planner-Generator-Evaluator system for strategic failure early warnin
                     │    │              │ + generates analysis dimensions
                     │    └──────┬───────┘
                     │           ▼
-                    │    ┌──────────────┐    ┌──────────────────────────┐
-                    │    │  retrieval   │◄───│ 3-pass agentic search:   │
+                    │    ┌──────────────┐    ┌────────────────────────────┐
+                    │    │  retrieval   │◄───│ 3-pass agentic search:     │
                     │    │  (3-pass)    │    │ seed -> gap-fill -> counter│
-                    │    └──────┬───────┘    └──────────────────────────┘
+                    │    └──────┬───────┘    └────────────────────────────┘
                     │           ▼
                     │    ┌──────────────┐
                     │    │  evidence    │
                     │    │  extraction  │
                     │    └──────┬───────┘
                     │           ▼
-  LLM-driven   ────┤    ┌──────────────┐
+  LLM-driven   ─────┤    ┌──────────────┐
   Loop 1            │    │ quality_gate │── LLM decides: sufficient?
   (evidence         │    └──────┬───────┘     │
    sufficiency)     │      sufficient         insufficient
@@ -102,7 +102,7 @@ SFEWA is a Planner-Generator-Evaluator system for strategic failure early warnin
                     │    └──────┬───────┘─────┬─────┘─────┬─────┘
                     │           └─────────────┼───────────┘
                     │                         ▼
-  LLM-driven   ────┤    ┌─────────────────────────────┐
+  LLM-driven   ─────┤    ┌─────────────────────────────┐
   Loop 2            │    │   adversarial_review        │── LLM decides: proceed?
   (adversarial      │    │   Chain of Verification     │     │
    challenge)       │    └──────────────┬──────────────┘     reanalyze
