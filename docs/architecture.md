@@ -350,9 +350,11 @@ The retrieval agent (`sfewa/agents/retrieval.py`) performs autonomous multi-pass
 
 ```
 Pass 1: Seed Search
-  LLM generates 15-20 search queries from case context
-  EDINET corpus loaded (for Japanese companies with filings)
-  DuckDuckGo web + news search
+  LLM generates up to 15 search queries from case context
+  + site-specific archival queries (Reuters, Bloomberg, FT, etc.)
+  EDINET corpus loaded (currently Honda only; extends to any
+  company with locally stored filings)
+  DuckDuckGo text + news search (both run per query)
 
 Pass 2: Gap Analysis
   LLM analyzes retrieved docs
@@ -365,7 +367,7 @@ Pass 3: Counternarrative
   Prevents confirmation bias in the evidence base
 ```
 
-**Follow-up mode**: When the quality gate routes back to retrieval, only Pass 2 runs -- using the gate's `follow_up_queries` to fill specific gaps.
+**Follow-up mode**: When the quality gate routes back to retrieval, the three-pass flow is skipped entirely. Only the gate's `follow_up_queries` are run as direct web searches to fill specific gaps.
 
 **Temporal integrity**: All prompts include `Do NOT use knowledge about events after {cutoff_date}`. The temporal filter hard-rejects documents published after the cutoff.
 
@@ -400,8 +402,9 @@ base_score = round(total_points / (15 * num_factors) * 100)
 - 80-100: CRITICAL
 - 60-79: HIGH
 - 40-59: MEDIUM
-- 20-39: LOW
-- 0-19: MINIMAL
+- 0-39: LOW
+
+Note: The synthesis prompt uses a 5-band scale (including 0-19 MINIMAL) as a calibration anchor for the LLM, but the code maps all scores below 40 to "low".
 
 ---
 
@@ -412,7 +415,7 @@ base_score = round(total_points / (15 * num_factors) * 100)
 State flows as a plain `dict` through the pipeline. `PipelineState` (TypedDict) documents the expected fields:
 
 **Case config fields** (set at init, read-only):
-- `company`, `strategy_theme`, `cutoff_date`, `case_id`, `regions`, `peers`
+- `company`, `strategy_theme`, `cutoff_date`, `case_id`, `regions`, `peers`, `ground_truth_events`
 
 **Generated fields** (set by init_case):
 - `analysis_dimensions` -- LLM-generated dimensions per analyst perspective
@@ -424,7 +427,7 @@ State flows as a plain `dict` through the pipeline. `PipelineState` (TypedDict) 
 - `backtest_events` -- list of backtest match dicts
 
 **Overwriting fields** (latest value wins):
-- `retrieved_docs`, `risk_score`, `risk_level`, `confidence`, `memo`
+- `retrieved_docs`, `risk_score`, `overall_risk_level`, `overall_confidence`, `risk_memo`, `backtest_summary`
 
 **Routing fields** (set by one node, read by routing functions):
 - `evidence_sufficient` -- quality gate decision
@@ -563,8 +566,11 @@ SFEWA depends on `liteagent` for generic agent patterns and adds domain-specific
 | `openai` | OpenAI-compatible API (via liteagent) |
 | `pydantic` | Schema definitions (CaseConfig, evidence models) |
 | `pyyaml` | Case config loading |
+| `python-dotenv` | `.env` file loading (LLM endpoint, API keys) |
 | `ddgs` | DuckDuckGo web + news search |
 | `pdfplumber` | EDINET PDF text extraction |
+| `pypdf` | PDF parsing fallback |
+| `beautifulsoup4` | HTML content extraction |
 | `httpx` | EDINET API HTTP client |
 | `rich` | Terminal reporting |
 | `typer` | CLI interface |
