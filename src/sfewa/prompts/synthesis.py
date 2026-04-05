@@ -34,10 +34,10 @@ SCORING GUIDELINES:
   - 20-39: LOW — Company executing well on its chosen strategy. Risks are primarily about expansion barriers or external challenges (tariffs, trade restrictions) rather than threats to existing operations. Market leader whose core business is growing.
   - 0-19: MINIMAL — Dominant market position with no credible strategic threats. Extremely rare for any real company.
 
-  PATTERN ANALYSIS (adjusts the score UP or DOWN from the base score):
-  - REINFORCING pattern: risks compound each other (capital strain → delays → wider competitive gap → more capital needed). Adds +5 to +10 to the base score.
-  - MIXED pattern: some risks, some strengths. The company's CURRENT core business provides a buffer. No adjustment.
-  - SCATTERED pattern: unrelated medium-level concerns. Subtracts -5 to -10 from the base score.
+  PATTERN ANALYSIS — use the STRUCTURAL ANALYSIS SUMMARY (reinforcing loops vs balancing loops from analyst output) to determine the pattern:
+  - REINFORCING pattern: More reinforcing loops than balancing loops. Risks compound each other through shared causal mechanisms. Adds +5 to +10 to the base score.
+  - MIXED pattern: Roughly balanced. Current business succeeding but future-oriented initiatives face structural challenges. The score adjustment depends on HOW LONG the balancing loops remain effective — if the market is shifting fast and balancing loops are time-limited, do NOT reduce the score.
+  - SCATTERED pattern: More balancing loops, or risks are independent with no shared causal links. Subtracts -5 to -10 from the base score.
 
   CRITICAL — Distinguish EXECUTED mitigations from ANNOUNCED plans:
   - EXECUTED: The company is CURRENTLY generating revenue, profit, market share from its strategy. This IS a real mitigation that lowers the score.
@@ -46,7 +46,11 @@ SCORING GUIDELINES:
   - A company that bet on BEV transition and has $4B losses with no competitive product yet has only ANNOUNCED mitigations — the risk is real.
 
   STRATEGY-RELATIVE assessment:
-  Assess the company against its OWN CHOSEN STRATEGY, not an abstract ideal. A hybrid-first company succeeding at hybrids = lower score, even if BEV lineup is thin.
+  Assess the company against its OWN CHOSEN STRATEGY. But also assess the RISK OF THAT STRATEGY ITSELF:
+  - A company succeeding at its chosen strategy = lower score IF the strategy is well-positioned for the future.
+  - A company succeeding at a strategy that may become OBSOLETE = higher score, because current success masks future vulnerability.
+  - KEY: Is the company building capabilities for multiple scenarios, or betting everything on one path? Concentrated bets on uncertain outcomes (e.g., "hybrids will remain dominant until 2035") carry strategic risk even when currently profitable.
+  - A company with NO competitive offering in a fast-growing domain (e.g., no BEV platform while BEV market grows 25%+ annually) has strategic positioning risk. Current profitability from legacy business does not eliminate this risk — it masks it.
 
 IMPORTANT: Only downgrade a factor's severity if it received a STRONG adversarial challenge. Moderate and weak challenges should be noted in the memo but should NOT change the factor's severity. After applying only strong-challenge downgrades, use the resulting severity distribution to determine the overall risk level.
 - overall_confidence: based on evidence quality, coverage, and adversarial outcomes
@@ -74,11 +78,26 @@ PRE-COMPUTED BASE SCORE (from post-adversarial severity distribution):
 - High+ ratio: {high_plus_ratio}
 (STRONG adversarial challenges have already been applied as severity downgrades. The base score above reflects the post-adversarial distribution.)
 
+STRUCTURAL ANALYSIS SUMMARY:
+{structural_summary}
+
 BEFORE determining the final risk_score, you MUST perform these steps in order:
+
 Step 1: Start with the pre-computed base score of {base_score}.
-Step 2: Analyze the risk factor pattern: REINFORCING (+5 to +10), MIXED (+0), SCATTERED (-5 to -10). Adjust the base score.
-Step 3: Apply strategy-relative and executed-vs-announced mitigation adjustments (±5 max). Clamp final score to 0-100.
-Step 4: Verify the final score makes sense against the calibration anchors (80-100=CRITICAL, 60-79=HIGH, 40-59=MEDIUM, 20-39=LOW, 0-19=MINIMAL).
+
+Step 2: CAUSAL LOOP ANALYSIS — Count the reinforcing loops vs balancing loops across ALL risk factors (from the structural analysis summary above). Are the risks connected through shared causal mechanisms, or are they independent concerns?
+- More reinforcing loops than balancing loops → REINFORCING pattern (+5 to +10)
+- Roughly equal → MIXED pattern (+0)
+- More balancing loops or mostly independent concerns → SCATTERED pattern (-5 to -10)
+
+Step 3: STRATEGY-RELATIVE + MITIGATION ADJUSTMENTS (±5 max):
+- EXECUTED mitigations (company currently generating revenue/profit from its strategy) lower the score.
+- ANNOUNCED plans (future products not yet delivered) do NOT lower the score.
+- A company succeeding at a strategy that may become obsolete raises the score.
+
+Step 4: PRE-MORTEM CHECK — Before finalizing, ask: "If this risk assessment turns out to be completely wrong in 3 years, what would be the most likely reason?" Write this into the memo. If the pre-mortem reveals a major blind spot, adjust the score ±3.
+
+Step 5: Verify the final score against calibration anchors (80-100=CRITICAL, 60-79=HIGH, 40-59=MEDIUM, 20-39=LOW, 0-19=MINIMAL). Clamp to 0-100.
 
 RISK FACTORS:
 {risk_factors_text}
@@ -92,7 +111,7 @@ EVIDENCE:
 Return a JSON object with exactly these fields:
 - risk_score: integer (0-100, continuous risk score)
 - overall_confidence: float (0.0-1.0)
-- risk_memo: string (the full structured memo in markdown format, include the risk_score and its derivation in the Executive Summary)
+- risk_memo: string (the full structured memo in markdown format. Include: Executive Summary with score derivation, Risk Factor Table, Causal Loop Analysis showing how risks connect, Adversarial Resolutions, Pre-Mortem blind spot check, Evidence Gaps, Conclusion)
 
 Respond with ONLY the JSON object, no other text.
 """

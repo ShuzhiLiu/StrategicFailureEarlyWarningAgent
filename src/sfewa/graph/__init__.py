@@ -1,1 +1,1 @@
-"""LangGraph pipeline assembly."""
+"""Pipeline execution and routing."""

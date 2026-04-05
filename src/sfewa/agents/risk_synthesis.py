@@ -10,6 +10,8 @@ from __future__ import annotations
 import json
 import re
 
+from liteagent import dedup_by_key, count_by, extract_json, strip_thinking
+
 from sfewa import reporting
 from sfewa.context import build_pipeline_context
 from sfewa.llm import get_llm_for_role
@@ -22,6 +24,45 @@ from sfewa.prompts.synthesis import (
     format_challenges_for_synthesis,
 )
 from sfewa.schemas.state import PipelineState
+
+
+def _build_structural_summary(risk_factors: list[dict]) -> str:
+    """Build a summary of structural forces from risk factor analysis.
+
+    Extracts reinforcing loops, balancing loops, and key assumptions from
+    the Iceberg Model layered analysis output.
+    """
+    lines = []
+    total_reinforcing = 0
+    total_balancing = 0
+
+    for rf in risk_factors:
+        dim = rf.get("dimension", "?")
+        depth = rf.get("depth_of_analysis", 0)
+        forces = rf.get("structural_forces", {})
+        assumption = rf.get("key_assumption_at_risk")
+
+        reinforcing = forces.get("reinforcing_loops", []) if isinstance(forces, dict) else []
+        balancing = forces.get("balancing_loops", []) if isinstance(forces, dict) else []
+        total_reinforcing += len(reinforcing)
+        total_balancing += len(balancing)
+
+        if depth >= 3 or reinforcing or balancing or assumption:
+            entry = f"[{dim}] depth={depth}"
+            if reinforcing:
+                entry += f"\n  Reinforcing: {'; '.join(str(r) for r in reinforcing[:3])}"
+            if balancing:
+                entry += f"\n  Balancing: {'; '.join(str(b) for b in balancing[:3])}"
+            if assumption:
+                entry += f"\n  Critical assumption: {assumption}"
+            lines.append(entry)
+
+    summary = f"Total loops: {total_reinforcing} reinforcing, {total_balancing} balancing\n"
+    if lines:
+        summary += "\n".join(lines)
+    else:
+        summary += "(No structural forces reported — analysts stayed at Layer 1-2 for all dimensions)"
+    return summary
 
 
 def risk_synthesis_node(state: PipelineState) -> dict:
@@ -41,11 +82,7 @@ def risk_synthesis_node(state: PipelineState) -> dict:
 
     # Deduplicate risk factors: if multiple passes produced factors for the
     # same dimension, keep only the LATEST one (last in list = most recent pass)
-    seen_dims: dict[str, dict] = {}
-    for rf in raw_risk_factors:
-        dim = rf.get("dimension", "unknown")
-        seen_dims[dim] = rf  # last writer wins per dimension
-    risk_factors = list(seen_dims.values())
+    risk_factors = dedup_by_key(raw_risk_factors, "dimension")
 
     reporting.enter_node("risk_synthesis", {
         "risk_factors_raw": len(raw_risk_factors),
@@ -66,17 +103,14 @@ def risk_synthesis_node(state: PipelineState) -> dict:
         }
 
     # Compute evidence statistics for calibration
-    stance_supports = sum(1 for e in evidence if e.get("stance") == "supports_risk")
-    stance_contradicts = sum(1 for e in evidence if e.get("stance") == "contradicts_risk")
-    stance_neutral = sum(1 for e in evidence if e.get("stance") == "neutral")
-    source_types = {}
-    for e in evidence:
-        st = e.get("source_type", "unknown")
-        source_types[st] = source_types.get(st, 0) + 1
+    stance_counts = count_by(evidence, "stance")
+    stance_supports = stance_counts.get("supports_risk", 0)
+    stance_contradicts = stance_counts.get("contradicts_risk", 0)
+    stance_neutral = stance_counts.get("neutral", 0)
+    source_types = count_by(evidence, "source_type")
     source_summary = ", ".join(f"{k}: {v}" for k, v in sorted(source_types.items()))
 
-    # ── Apply STRONG adversarial downgrades programmatically ──
-    # Build a map of factor_id → severity for the downgrade step
+    # -- Apply STRONG adversarial downgrades programmatically --
     DOWNGRADE = {"critical": "high", "high": "medium", "medium": "low", "low": "low"}
     strong_targets: set[str] = set()
     for c in challenges:
@@ -94,25 +128,20 @@ def risk_synthesis_node(state: PipelineState) -> dict:
         else:
             post_adversarial.append({"factor_id": fid, "dimension": rf.get("dimension", "?"), "original": orig_sev, "post": orig_sev})
 
-    # ── Compute base_score in code (not by LLM) ──
+    # -- Compute base_score in code (not by LLM) --
     SEVERITY_POINTS = {"critical": 25, "high": 15, "medium": 8, "low": 2}
     total_factors = len(risk_factors)
     points = sum(SEVERITY_POINTS.get(pa["post"], 8) for pa in post_adversarial)
-    # Normalize against HIGH (15) as realistic max — CRITICAL is rare
     base_score = round(points / (15 * total_factors) * 100) if total_factors > 0 else 0
     base_score = max(0, min(100, base_score))
 
     # Compute post-adversarial severity distribution for display
-    post_sev_counts = {"critical": 0, "high": 0, "medium": 0, "low": 0}
-    for pa in post_adversarial:
-        if pa["post"] in post_sev_counts:
-            post_sev_counts[pa["post"]] += 1
-
+    post_sev_counts = count_by(post_adversarial, "post")
     post_adversarial_dist = (
-        f"{post_sev_counts['critical']} CRITICAL, {post_sev_counts['high']} HIGH, "
-        f"{post_sev_counts['medium']} MEDIUM, {post_sev_counts['low']} LOW"
+        f"{post_sev_counts.get('critical', 0)} CRITICAL, {post_sev_counts.get('high', 0)} HIGH, "
+        f"{post_sev_counts.get('medium', 0)} MEDIUM, {post_sev_counts.get('low', 0)} LOW"
     )
-    high_plus = post_sev_counts["critical"] + post_sev_counts["high"]
+    high_plus = post_sev_counts.get("critical", 0) + post_sev_counts.get("high", 0)
     high_plus_ratio = f"{high_plus}/{total_factors} ({high_plus/total_factors*100:.0f}%)" if total_factors > 0 else "0/0"
 
     # Log the computation for debugging
@@ -136,6 +165,7 @@ def risk_synthesis_node(state: PipelineState) -> dict:
     )
     if pipeline_context:
         system_msg += f"\n\n{pipeline_context}"
+    structural_summary = _build_structural_summary(risk_factors)
     user_msg = SYNTHESIS_USER.format(
         risk_factors_text=rf_text,
         challenges_text=challenges_text,
@@ -149,6 +179,7 @@ def risk_synthesis_node(state: PipelineState) -> dict:
         post_adversarial_distribution=post_adversarial_dist,
         total_factors=total_factors,
         high_plus_ratio=high_plus_ratio,
+        structural_summary=structural_summary,
     )
 
     # Call LLM with thinking mode
@@ -169,23 +200,15 @@ def risk_synthesis_node(state: PipelineState) -> dict:
         ]
         response = llm.invoke(messages)
         log_llm_call("risk_synthesis", messages, response, label="synthesis")
-        raw_text = response.content
-
-        # Strip <think> blocks
-        raw_text = re.sub(r"<think>[\s\S]*?</think>", "", raw_text).strip()
-
-        # Parse JSON object
-        match = re.search(r"```(?:json)?\s*([\s\S]*?)```", raw_text)
-        if match:
-            raw_text = match.group(1).strip()
-        start = raw_text.find("{")
-        end = raw_text.rfind("}")
-        if start != -1 and end != -1:
-            raw_text = raw_text[start : end + 1]
+        raw_text = strip_thinking(response.content)
 
         # Sanitize invalid JSON escapes (e.g. \* from markdown in memo)
         raw_text = re.sub(r'\\(?!["\\/bfnrtu])', r'\\\\', raw_text)
-        parsed = json.loads(raw_text)
+
+        try:
+            parsed = extract_json(raw_text)
+        except json.JSONDecodeError:
+            parsed = {}
 
         risk_score = parsed.get("risk_score", 50)
         confidence = parsed.get("overall_confidence", 0.5)

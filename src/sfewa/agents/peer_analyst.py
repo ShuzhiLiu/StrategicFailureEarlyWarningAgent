@@ -1,6 +1,8 @@
-"""Peer Benchmark Analyst agent node.
+"""Peer/Comparative Analyst agent node.
 
-Analyzes competitor positioning and relative strategic gaps.
+Analyzes competitive positioning, technology gaps, and market coverage.
+Dimensions are generated dynamically by init_case based on the strategy theme.
+Falls back to hardcoded EV dimensions if not provided.
 """
 
 from __future__ import annotations
@@ -11,17 +13,19 @@ from sfewa.schemas.state import PipelineState
 
 
 def peer_analyst_node(state: PipelineState) -> dict:
-    """Analyze peer-relative risk factors.
+    """Analyze comparative/competitive risk factors."""
+    # Use dynamic dimensions if available, else fall back to hardcoded
+    dims = state.get("analysis_dimensions", {}).get("comparative", {})
+    dimensions_desc = dims.get("dimensions_description", PEER_DIMENSIONS)
+    scope = dims.get("scope_boundary", PEER_SCOPE)
+    role = dims.get("role_name", "Peer Benchmark Analyst")
 
-    Focus: Competitor positioning, cost advantages, time-to-market, software capability.
-    Dimensions: competitive_pressure, regional_mismatch, technology_capability
-    """
     return run_analyst(
         state,
         node_name="peer_analyst",
-        role_name="Peer Benchmark Analyst",
+        role_name=role,
         llm_role="peer_analyst",
-        dimensions_description=PEER_DIMENSIONS,
-        scope_boundary=PEER_SCOPE,
+        dimensions_description=dimensions_desc,
+        scope_boundary=scope,
         factor_prefix="PEER",
     )

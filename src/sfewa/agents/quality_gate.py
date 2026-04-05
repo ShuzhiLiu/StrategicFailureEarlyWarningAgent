@@ -12,7 +12,8 @@ that reasons about its own information state.
 from __future__ import annotations
 
 import json
-import re
+
+from liteagent import extract_json, strip_thinking
 
 from sfewa import reporting
 from sfewa.llm import get_llm_for_role
@@ -159,13 +160,12 @@ def quality_gate_node(state: PipelineState) -> dict:
         ]
         response = llm.invoke(messages)
         log_llm_call("quality_gate", messages, response, label="quality_gate")
-        raw = response.content
-        raw = re.sub(r"<think>[\s\S]*?</think>", "", raw).strip()
+        raw = strip_thinking(response.content)
 
-        match = re.search(r"\{[\s\S]*\}", raw)
-        if match:
-            raw = match.group()
-        parsed = json.loads(raw)
+        try:
+            parsed = extract_json(raw)
+        except json.JSONDecodeError:
+            parsed = {}
 
         decision = parsed.get("decision", "sufficient")
         reasoning = parsed.get("reasoning", "")

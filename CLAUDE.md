@@ -1,7 +1,7 @@
 # Strategic Failure Early Warning Agent
 
 ## Project Overview
-A time-bounded multi-agent system (Planner-Generator-Evaluator) for strategic failure early warning on public companies. Uses LangGraph for orchestration, Qwen3.5-27B on local vLLM for reasoning, and evidence-driven analysis with temporal integrity.
+A time-bounded multi-agent system (Planner-Generator-Evaluator) for strategic failure early warning on public companies. Built on `liteagent` (a minimal agent framework -- utilities, not a runtime) with Qwen3.5-27B on local vLLM for reasoning, and evidence-driven analysis with temporal integrity.
 
 **Case studies** (all cutoff 2025-05-19):
 - **Honda** → HIGH risk (ground truth: May 2025 target revision + March 2026 writedown)
@@ -13,7 +13,7 @@ A time-bounded multi-agent system (Planner-Generator-Evaluator) for strategic fa
 **Status**: Phase A (pipeline flow) and Phase B (prompt quality) complete. All 10 nodes produce valid structured output. Cross-company discrimination achieved through evidence-driven reasoning, not config tuning.
 
 ## Tech Stack
-- **Agent framework**: LangGraph 2.x + LangChain
+- **Agent framework**: `liteagent` (in-house, ~800 lines, plain Python + OpenAI SDK)
 - **LLM**: Qwen3.5-27B-GPTQ-Int4 on local vLLM (OpenAI-compatible API, no cloud dependency)
 - **Modes**: Thinking mode for adversarial + synthesis; non-thinking mode for extraction + analysis
 - **Package manager**: uv
@@ -47,8 +47,9 @@ init_case → retrieval (3-pass) → evidence_extraction → quality_gate
 - Never use data published after the case's `cutoff_date`
 - Agent outputs must be structured (TypedDict/Pydantic), not free-form prose
 - All high-level conclusions must reference `evidence_id` list
-- State flows through LangGraph StateGraph; no global mutable state
-- Use `Annotated[list, operator.add]` for accumulating state fields (evidence, risk_factors, challenges, backtest_events)
+- State flows as a plain dict through `run_pipeline()`; no global mutable state
+- Use `merge_state(accumulate={"evidence", "risk_factors", ...})` for accumulating state fields
+- Use `dedup_by_key()` from liteagent when loop-back creates duplicates
 
 ### Temporal integrity (enforced at 3 levels)
 1. **Retrieval**: `published_at > cutoff_date` → hard reject
@@ -70,9 +71,9 @@ init_case → retrieval (3-pass) → evidence_extraction → quality_gate
 - Enables synthesis to adjust confidence based on evidence quality, adversarial to factor in retrieval coverage
 
 ### Risk factor deduplication
-- `risk_factors` uses `operator.add` (accumulates across passes)
+- `risk_factors` accumulates across passes via `merge_state(accumulate=...)`
 - On adversarial loop-back, analysts produce duplicates
-- Adversarial, synthesis, backtest, and artifacts all deduplicate by dimension (latest per dimension wins)
+- Adversarial, synthesis, backtest, and artifacts all call `dedup_by_key(factors, "dimension")` (latest per dimension wins)
 
 ## Development Rules
 
@@ -135,6 +136,7 @@ Qwen3.5 may break Pydantic schemas. Each LLM-calling node should:
 - Keep PRs focused on one concern
 
 @docs/architecture.md
+@docs/liteagent_architecture.md
 @docs/cross_company_results.md
 @docs/iteration_log.md
 @.env

@@ -20,6 +20,7 @@ import json
 from datetime import datetime, timezone
 from pathlib import Path
 
+from liteagent import dedup_by_key
 from sfewa.tools.chat_log import get_log
 
 
@@ -31,16 +32,7 @@ def get_run_dir(run_id: str, base_dir: str = "outputs") -> Path:
 
 
 def save_artifact(run_id: str, name: str, data: list | dict | str) -> Path:
-    """Save a pipeline artifact to the run directory.
-
-    Args:
-        run_id: Unique identifier for this pipeline run.
-        name: Artifact name (e.g., "evidence.json", "risk_memo.md").
-        data: Data to save. Dicts/lists are saved as JSON, strings as text.
-
-    Returns:
-        Path to the saved artifact.
-    """
+    """Save a pipeline artifact to the run directory."""
     run_dir = get_run_dir(run_id)
     path = run_dir / name
 
@@ -84,31 +76,15 @@ def save_run_metadata(
 
 
 def save_run_artifacts(state: dict) -> Path:
-    """Save all pipeline outputs from a completed run.
-
-    Creates a timestamped directory with:
-      evidence.json        — accepted evidence items with traceability
-      risk_factors.json    — risk factors with causal chains
-      challenges.json      — adversarial challenges
-      backtest.json        — backtest matches and summary
-      risk_memo.md         — full risk assessment memo
-      run_summary.json     — high-level metrics for quick review
-
-    Returns:
-        Path to the run directory.
-    """
+    """Save all pipeline outputs from a completed run."""
     case_id = state.get("case_id", "unknown")
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     run_id = f"{case_id}_{timestamp}"
 
     save_artifact(run_id, "evidence.json", state.get("evidence", []))
 
-    # Deduplicate risk factors: keep latest per dimension (handles multi-pass)
-    raw_factors = state.get("risk_factors", [])
-    seen_dims: dict[str, dict] = {}
-    for rf in raw_factors:
-        seen_dims[rf.get("dimension", "unknown")] = rf
-    deduped_factors = list(seen_dims.values())
+    # Deduplicate risk factors using liteagent utility
+    deduped_factors = dedup_by_key(state.get("risk_factors", []), "dimension")
     save_artifact(run_id, "risk_factors.json", deduped_factors)
     save_artifact(run_id, "challenges.json", state.get("adversarial_challenges", []))
 

@@ -1,17 +1,17 @@
-"""LangGraph pipeline state definition."""
+"""Pipeline state definition."""
 
 from __future__ import annotations
 
-import operator
-from typing import Annotated, Literal
+from typing import Literal
 
 from typing_extensions import TypedDict
 
 
 class PipelineState(TypedDict):
-    """Central state flowing through the LangGraph pipeline.
+    """Central state flowing through the pipeline.
 
-    Fields with Annotated[list, operator.add] accumulate across nodes.
+    Accumulating fields (evidence, risk_factors, adversarial_challenges,
+    backtest_events) are extended via merge_state() in the pipeline executor.
     Other fields are overwritten by the last writer.
     """
 
@@ -23,12 +23,13 @@ class PipelineState(TypedDict):
     regions: list[str]
     peers: list  # list[str] or list[dict] — both supported
     ground_truth_events: list[dict]
+    analysis_dimensions: dict  # LLM-generated per-analyst dimensions (optional)
 
-    # ── Accumulating fields ──
-    evidence: Annotated[list[dict], operator.add]
-    risk_factors: Annotated[list[dict], operator.add]
-    adversarial_challenges: Annotated[list[dict], operator.add]
-    backtest_events: Annotated[list[dict], operator.add]
+    # ── Accumulating fields (extended by merge_state in pipeline executor) ──
+    evidence: list[dict]
+    risk_factors: list[dict]
+    adversarial_challenges: list[dict]
+    backtest_events: list[dict]
 
     # ── Overwriting fields ──
     retrieved_docs: list[dict]

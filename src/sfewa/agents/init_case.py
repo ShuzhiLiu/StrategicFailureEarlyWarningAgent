@@ -8,7 +8,8 @@ Planner's first decision — scoping the analysis.
 from __future__ import annotations
 
 import json
-import re
+
+from liteagent import extract_json, strip_thinking
 
 from sfewa import reporting
 from sfewa.llm import get_llm_for_role
@@ -17,10 +18,44 @@ from sfewa.schemas.state import PipelineState
 from sfewa.tools.chat_log import log_llm_call
 
 
+def _format_dimensions(dims_data: dict) -> dict:
+    """Convert LLM-generated dimensions into the format analysts expect.
+
+    Returns dict mapping analyst key ("external", "internal", "comparative")
+    to {"role_name": str, "dimensions_description": str, "scope_boundary": str}.
+    """
+    result = {}
+    for key in ("external", "internal", "comparative"):
+        group = dims_data.get(key, {})
+        role_name = group.get("role_name", f"{key.title()} Analyst")
+        scope = group.get("scope_boundary", "")
+        dims = group.get("dimensions", [])
+        # Format dimensions with depth guidance for the analyst prompt
+        lines = []
+        for d in dims:
+            name = d.get("name", "unknown")
+            desc = d.get("description", "")
+            structural_hint = d.get("structural_hint", "")
+            critical_assumption = d.get("critical_assumption", "")
+            entry = f"- {name}: {desc}"
+            if structural_hint:
+                entry += f"\n  [Structural hint]: {structural_hint}"
+            if critical_assumption:
+                entry += f"\n  [Critical assumption to test]: {critical_assumption}"
+            lines.append(entry)
+        result[key] = {
+            "role_name": role_name,
+            "dimensions_description": "\n".join(lines),
+            "scope_boundary": scope,
+            "dimension_names": [d.get("name", "unknown") for d in dims],
+        }
+    return result
+
+
 def _generate_case_context(
     company: str, strategy_theme: str, cutoff_date: str,
 ) -> dict:
-    """Use LLM to generate regions and peers from minimal input."""
+    """Use LLM to generate regions, peers, and analysis dimensions."""
     llm = get_llm_for_role("retrieval")  # non-thinking, fast
 
     try:
@@ -35,16 +70,20 @@ def _generate_case_context(
         response = llm.invoke(messages)
         log_llm_call("init_case", messages, response, label="case_expansion")
         raw = response.content
-        raw = re.sub(r"<think>[\s\S]*?</think>", "", raw).strip()
+        raw = strip_thinking(raw)
 
-        # Extract JSON object
-        match = re.search(r"\{[\s\S]*\}", raw)
-        if match:
-            parsed = json.loads(match.group())
-            return {
+        parsed = extract_json(raw)
+        if isinstance(parsed, dict):
+            result = {
                 "regions": parsed.get("regions", []),
                 "peers": parsed.get("peers", []),
             }
+            # Process analysis dimensions if provided
+            if "analysis_dimensions" in parsed:
+                result["analysis_dimensions"] = _format_dimensions(
+                    parsed["analysis_dimensions"],
+                )
+            return result
     except Exception as e:
         reporting.log_action("LLM case expansion failed — using defaults", {
             "error": str(e)[:150],
@@ -76,35 +115,50 @@ def init_case_node(state: PipelineState) -> dict:
         "cutoff_date": cutoff,
     })
 
-    # LLM-driven case expansion if regions or peers not provided
+    # LLM-driven case expansion: always generate dimensions, plus
+    # regions/peers if not provided in config
     updates: dict = {}
-    if not regions or not peers:
-        reporting.log_action(
-            "Generating regions and peers from case context (LLM)",
-        )
-        generated = _generate_case_context(company, theme, cutoff)
+    need_regions_peers = not regions or not peers
 
-        if not regions:
-            regions = generated["regions"]
-            updates["regions"] = regions
-            reporting.log_action("Generated regions", {
-                "regions": ", ".join(regions),
-            })
+    reporting.log_action(
+        "Generating analysis dimensions from case context (LLM)",
+    )
+    generated = _generate_case_context(company, theme, cutoff)
 
-        if not peers:
-            peers = generated["peers"]
-            updates["peers"] = peers
-            reporting.log_action("Generated peers", {
-                "peers": ", ".join(
-                    p.get("company", p) if isinstance(p, dict) else str(p)
-                    for p in peers
-                ),
-            })
-    else:
+    if not regions:
+        regions = generated["regions"]
+        updates["regions"] = regions
+        reporting.log_action("Generated regions", {
+            "regions": ", ".join(regions),
+        })
+
+    if not peers:
+        peers = generated["peers"]
+        updates["peers"] = peers
+        reporting.log_action("Generated peers", {
+            "peers": ", ".join(
+                p.get("company", p) if isinstance(p, dict) else str(p)
+                for p in peers
+            ),
+        })
+
+    if not need_regions_peers:
         reporting.log_action("Using provided regions and peers", {
             "regions": ", ".join(regions),
             "peers": len(peers),
         })
+
+    # Store generated analysis dimensions
+    if "analysis_dimensions" in generated:
+        updates["analysis_dimensions"] = generated["analysis_dimensions"]
+        for key, group in generated["analysis_dimensions"].items():
+            dim_names = group.get("dimension_names", [])
+            reporting.log_action(f"Dimensions [{key}]", {
+                "role": group.get("role_name", "?"),
+                "dimensions": ", ".join(dim_names),
+            })
+    else:
+        reporting.log_action("No dimensions generated — using hardcoded defaults")
 
     result = {
         "current_stage": "init_case",

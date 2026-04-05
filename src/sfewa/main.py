@@ -23,7 +23,7 @@ from rich.panel import Panel
 load_dotenv()
 
 from sfewa import reporting
-from sfewa.graph.pipeline import compile_pipeline
+from sfewa.graph.pipeline import run_pipeline
 from sfewa.schemas.config import CaseConfig
 from sfewa.tools.artifacts import save_run_artifacts
 from sfewa.tools.chat_log import clear_log
@@ -46,16 +46,22 @@ def _make_case_id(company: str, cutoff: str) -> str:
 @app.command()
 def run(
     company: str = typer.Argument(
-        ...,
+        None,
         help="Company name (e.g., 'Honda Motor Co., Ltd.')",
     ),
     strategy_theme: str = typer.Argument(
-        ...,
+        None,
         help="Strategy theme to analyze (e.g., 'EV electrification strategy')",
     ),
     cutoff_date: str = typer.Argument(
-        ...,
+        None,
         help="Analysis cutoff date, ISO format (e.g., '2025-05-19')",
+    ),
+    case: Optional[Path] = typer.Option(
+        None,
+        "--case",
+        "-c",
+        help="YAML case config file (alternative to positional args)",
     ),
     ground_truth: Optional[Path] = typer.Option(
         None,
@@ -66,37 +72,57 @@ def run(
 ) -> None:
     """Analyze strategic risk for a company.
 
-    The agent autonomously generates search context (regions, peers),
-    retrieves evidence, runs parallel risk analysis, challenges its own
-    conclusions, and produces a structured risk memo.
-
     Examples:
 
         python -m sfewa.main "Honda Motor Co., Ltd." "EV electrification strategy" 2025-05-19
 
-        python -m sfewa.main "BYD Company Limited" "EV electrification strategy" 2025-05-19
+        python -m sfewa.main --case configs/cases/honda_ev_pre_reset.yaml
 
-        python -m sfewa.main "Honda Motor Co., Ltd." "EV electrification strategy" 2025-05-19 -g configs/cases/honda_ground_truth.yaml
+        python -m sfewa.main "BYD Company Limited" "EV electrification strategy" 2025-05-19
     """
+    # Load from YAML config if --case provided
+    if case:
+        with open(case) as f:
+            cfg = yaml.safe_load(f)
+        company = cfg["company"]
+        strategy_theme = cfg["strategy_theme"]
+        cutoff_date = cfg["cutoff_date"]
+        regions = cfg.get("regions", [])
+        peers = cfg.get("peers", [])
+        # Normalize peer dicts to strings
+        peers = [
+            p.get("company", str(p)) if isinstance(p, dict) else str(p)
+            for p in peers
+        ]
+        gt_events = cfg.get("ground_truth_events", [])
+    elif not company or not strategy_theme or not cutoff_date:
+        console.print("[red]Error: Provide company, strategy_theme, cutoff_date "
+                      "or use --case config.yaml[/red]")
+        raise typer.Exit(1)
+    else:
+        regions = []
+        peers = []
+        gt_events = []
+
+    # Load ground truth from separate file if provided
+    if ground_truth:
+        with open(ground_truth) as f:
+            gt_raw = yaml.safe_load(f)
+        gt_list = gt_raw if isinstance(gt_raw, list) else gt_raw.get("ground_truth_events", [])
+        gt_events = gt_list
+
     console.print(Panel(
         f"[bold]{company}[/bold]\n"
         f"{strategy_theme} | cutoff: [red]{cutoff_date}[/red]",
         title="SFEWA", style="blue",
     ))
 
-    # Load ground truth if provided (for backtesting only)
-    gt_events: list[dict] = []
-    if ground_truth:
-        with open(ground_truth) as f:
-            gt_raw = yaml.safe_load(f)
-        gt_list = gt_raw if isinstance(gt_raw, list) else gt_raw.get("ground_truth_events", [])
-        gt_events = gt_list
+    if gt_events:
         console.print(f"  Backtest: {len(gt_events)} ground truth events loaded")
     else:
         console.print("  Backtest: [dim](no ground truth — skipped)[/dim]")
 
     # Build and run pipeline
-    graph = compile_pipeline()
     case_id = _make_case_id(company, cutoff_date)
 
     initial_state: dict = {
@@ -104,14 +130,14 @@ def run(
         "company": company,
         "strategy_theme": strategy_theme,
         "cutoff_date": cutoff_date,
-        "regions": [],       # LLM generates in init_case
-        "peers": [],         # LLM generates in init_case
+        "regions": regions,
+        "peers": peers,
         "ground_truth_events": gt_events,
     }
 
     clear_log()  # Reset chat log before each run
     t0 = time.time()
-    result = graph.invoke(initial_state)
+    result = run_pipeline(initial_state)
     elapsed = time.time() - t0
 
     # ── Final summary ──

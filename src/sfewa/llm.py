@@ -6,11 +6,7 @@ Qwen3.5 has two modes (NOT two models):
   - Non-thinking mode (enable_thinking=False): direct answer, faster.
     Use for extraction, retrieval, analysis.
 
-Qwen3.5 also supports native tool calling (function calling) via the standard
-OpenAI tools API. vLLM must be started with:
-  --enable-auto-tool-choice --tool-call-parser qwen3_coder --reasoning-parser qwen3
-
-Tool calling works in both thinking and non-thinking modes.
+Thin wrapper over liteagent.LLMClient and liteagent.LLMRouter.
 """
 
 from __future__ import annotations
@@ -19,8 +15,10 @@ import os
 from functools import lru_cache
 from typing import Literal
 
-from langchain_openai import ChatOpenAI
+from liteagent import LLMClient, LLMRouter, SamplingParams
 
+# Re-export LLMResponse from liteagent so existing agent imports still work
+from liteagent.llm import LLMResponse  # noqa: F401
 
 ThinkingMode = Literal["thinking", "non_thinking"]
 
@@ -37,17 +35,19 @@ ROLE_TO_MODE: dict[str, ThinkingMode] = {
 }
 
 # Recommended sampling params per Qwen3.5 docs
-SAMPLING_PARAMS: dict[ThinkingMode, dict] = {
-    "thinking": {
-        "temperature": 1.0,
-        "top_p": 0.95,
-        "max_tokens": 81920,
-    },
-    "non_thinking": {
-        "temperature": 0.7,
-        "top_p": 0.8,
-        "max_tokens": 32768,
-    },
+SAMPLING_PARAMS: dict[ThinkingMode, SamplingParams] = {
+    "thinking": SamplingParams(
+        temperature=1.0,
+        top_p=0.95,
+        max_tokens=81920,
+        extra_body={"chat_template_kwargs": {"enable_thinking": True}},
+    ),
+    "non_thinking": SamplingParams(
+        temperature=0.7,
+        top_p=0.8,
+        max_tokens=32768,
+        extra_body={"chat_template_kwargs": {"enable_thinking": False}},
+    ),
 }
 
 
@@ -66,41 +66,23 @@ def get_model_name() -> str:
 
 
 @lru_cache(maxsize=2)
-def _create_llm(thinking: bool) -> ChatOpenAI:
-    """Create a ChatOpenAI instance configured for thinking or non-thinking mode.
-
-    Uses lru_cache so we reuse the same client across calls.
-    """
+def _create_llm(thinking: bool) -> LLMClient:
+    """Create an LLMClient instance configured for thinking or non-thinking mode."""
     mode: ThinkingMode = "thinking" if thinking else "non_thinking"
-    params = SAMPLING_PARAMS[mode]
-
-    return ChatOpenAI(
+    return LLMClient(
         model=get_model_name(),
         base_url=get_base_url(),
-        temperature=params["temperature"],
-        max_tokens=params["max_tokens"],
-        top_p=params["top_p"],
-        extra_body={
-            "chat_template_kwargs": {"enable_thinking": thinking},
-        },
         api_key=os.environ.get("OPENAI_API_KEY", "not-needed"),
+        sampling=SAMPLING_PARAMS[mode],
     )
 
 
-def get_llm(thinking: bool = False) -> ChatOpenAI:
-    """Get an LLM instance with thinking mode on or off.
-
-    Args:
-        thinking: If True, enables Qwen3.5's chain-of-thought reasoning.
-                  If False, direct answer mode (faster).
-
-    Tool calling: Use llm.bind_tools([tool1, tool2]) to enable tool calling.
-    Qwen3.5 supports tool calling in both modes.
-    """
+def get_llm(thinking: bool = False) -> LLMClient:
+    """Get an LLM instance with thinking mode on or off."""
     return _create_llm(thinking)
 
 
-def get_llm_for_role(role: str) -> ChatOpenAI:
+def get_llm_for_role(role: str) -> LLMClient:
     """Get the LLM instance appropriate for a given agent role.
 
     Adversarial review and synthesis use thinking mode.

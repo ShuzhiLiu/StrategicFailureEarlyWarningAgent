@@ -12,7 +12,8 @@ each source type appropriate attention.
 from __future__ import annotations
 
 import json
-import re
+
+from liteagent import extract_json, strip_thinking
 
 from sfewa import reporting
 from sfewa.llm import get_llm_for_role
@@ -28,17 +29,20 @@ from sfewa.tools.temporal_filter import is_before_cutoff
 
 def _parse_evidence_json(text: str) -> list[dict]:
     """Extract JSON array from LLM response, handling markdown fences."""
-    text = text.strip()
-    match = re.search(r"```(?:json)?\s*([\s\S]*?)```", text)
-    if match:
-        text = match.group(1).strip()
-
-    start = text.find("[")
-    end = text.rfind("]")
-    if start != -1 and end != -1:
-        text = text[start : end + 1]
-
-    return json.loads(text)
+    text = strip_thinking(text)
+    parsed = extract_json(text)
+    if isinstance(parsed, list):
+        return parsed
+    # LLM may wrap array in a dict like {"evidence_items": [...]}
+    if isinstance(parsed, dict):
+        for key in ("evidence_items", "items", "evidence"):
+            if isinstance(parsed.get(key), list):
+                return parsed[key]
+        # Fallback: any key with a list value
+        for value in parsed.values():
+            if isinstance(value, list):
+                return value
+    raise json.JSONDecodeError("Expected JSON array", text, 0)
 
 
 def _validate_evidence_item(item: dict) -> dict | None:
@@ -118,8 +122,6 @@ def _extract_batch(
             response = llm.invoke(messages)
             log_llm_call("evidence_extraction", messages, response, label=batch_label)
             raw_text = response.content
-            raw_text = re.sub(r"<think>[\s\S]*?</think>", "", raw_text).strip()
-
             parsed = _parse_evidence_json(raw_text)
             if not isinstance(parsed, list):
                 raise ValueError(f"Expected list, got {type(parsed).__name__}")

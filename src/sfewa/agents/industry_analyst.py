@@ -1,6 +1,8 @@
-"""Industry Analyst agent node.
+"""Industry/External Environment Analyst agent node.
 
-Analyzes EV market adoption, policy environment, and macro trends.
+Analyzes market dynamics, policy environment, and external forces.
+Dimensions are generated dynamically by init_case based on the strategy theme.
+Falls back to hardcoded EV dimensions if not provided.
 """
 
 from __future__ import annotations
@@ -11,17 +13,19 @@ from sfewa.schemas.state import PipelineState
 
 
 def industry_analyst_node(state: PipelineState) -> dict:
-    """Analyze industry-level risk factors.
+    """Analyze external environment risk factors."""
+    # Use dynamic dimensions if available, else fall back to hardcoded
+    dims = state.get("analysis_dimensions", {}).get("external", {})
+    dimensions_desc = dims.get("dimensions_description", INDUSTRY_DIMENSIONS)
+    scope = dims.get("scope_boundary", INDUSTRY_SCOPE)
+    role = dims.get("role_name", "Industry & Market Analyst")
 
-    Focus: EV adoption rates, charging infra, battery costs, policy changes.
-    Dimensions: market_timing, policy_dependency
-    """
     return run_analyst(
         state,
         node_name="industry_analyst",
-        role_name="Industry & Market Analyst",
+        role_name=role,
         llm_role="industry_analyst",
-        dimensions_description=INDUSTRY_DIMENSIONS,
-        scope_boundary=INDUSTRY_SCOPE,
+        dimensions_description=dimensions_desc,
+        scope_boundary=scope,
         factor_prefix="IND",
     )

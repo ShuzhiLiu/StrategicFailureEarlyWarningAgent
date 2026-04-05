@@ -24,10 +24,13 @@ These three passes demonstrate core agentic capabilities:
 from __future__ import annotations
 
 import json
-import re
 
-from langchain_community.tools import DuckDuckGoSearchResults
-from langchain_community.utilities import DuckDuckGoSearchAPIWrapper
+from liteagent import extract_json, strip_thinking
+
+try:
+    from ddgs import DDGS
+except ImportError:
+    from duckduckgo_search import DDGS  # type: ignore[no-redef]
 
 from sfewa import reporting
 from sfewa.llm import get_llm_for_role
@@ -44,30 +47,187 @@ from sfewa.tools.chat_log import log_llm_call, log_tool_call
 from sfewa.tools.corpus_loader import load_edinet_corpus
 
 
-def _create_search_tool(max_results: int = 5) -> DuckDuckGoSearchResults:
-    """Create a DuckDuckGo search tool."""
-    wrapper = DuckDuckGoSearchAPIWrapper(
-        region="us-en",
-        max_results=max_results,
-    )
-    return DuckDuckGoSearchResults(
-        api_wrapper=wrapper,
-        output_format="list",
-    )
+def _is_english(text: str, threshold: float = 0.6) -> bool:
+    """Check if text is predominantly English (Latin script + ASCII)."""
+    if not text:
+        return False
+    ascii_count = sum(1 for c in text if ord(c) < 128)
+    return ascii_count / len(text) >= threshold
+
+
+def _search_web(query: str, max_results: int = 12, ddgs_instance=None) -> list[dict]:
+    """Run a single DuckDuckGo text search. Returns list of {title, link, snippet}.
+
+    Filters out non-English results to prevent irrelevant Japanese/Chinese
+    pages from polluting the evidence pipeline.
+    """
+    import time as _time
+    for attempt in range(2):
+        try:
+            ddgs = ddgs_instance or DDGS()
+            raw = list(ddgs.text(query, region="us-en", max_results=max_results))
+            results = []
+            for r in raw:
+                snippet = r.get("body", "")
+                title = r.get("title", "")
+                if not _is_english(f"{title} {snippet}"):
+                    continue
+                results.append({
+                    "title": title,
+                    "link": r.get("href", ""),
+                    "snippet": snippet,
+                })
+            return results
+        except Exception as e:
+            if "Ratelimit" in str(e) and attempt == 0:
+                _time.sleep(10)
+                continue
+            return []
+    return []
+
+
+def _search_news(query: str, max_results: int = 10, ddgs_instance=None) -> list[dict]:
+    """Run a DuckDuckGo NEWS search. Returns list of {title, link, snippet}.
+
+    News search returns timestamped articles from news sources — much better
+    for finding pre-cutoff business/financial content than general web search.
+    """
+    import time as _time
+    for attempt in range(2):
+        try:
+            ddgs = ddgs_instance or DDGS()
+            raw = list(ddgs.news(query, region="us-en", max_results=max_results))
+            results = []
+            for r in raw:
+                body = r.get("body", "")
+                title = r.get("title", "")
+                if not _is_english(f"{title} {body}"):
+                    continue
+                # News results have 'date' and 'url' instead of 'href'
+                snippet = body
+                date_str = r.get("date", "")
+                if date_str:
+                    snippet = f"[{date_str[:10]}] {body}"
+                results.append({
+                    "title": title,
+                    "link": r.get("url", ""),
+                    "snippet": snippet,
+                })
+            return results
+        except Exception as e:
+            if "Ratelimit" in str(e) and attempt == 0:
+                _time.sleep(10)
+                continue
+            return []
+    return []
+
+
+def _augment_queries_with_years(
+    queries: list[str],
+    cutoff_date: str,
+) -> list[str]:
+    """Add year-augmented variants for queries missing explicit year hints.
+
+    DuckDuckGo biases toward recent content. Adding "2024" or "FY2024" to
+    queries biases results toward pre-cutoff content, which is critical when
+    the cutoff date is many months in the past.
+    """
+    import re as _re
+
+    # Extract cutoff year and prior year
+    cutoff_year = int(cutoff_date[:4])
+    prior_year = cutoff_year - 1
+    year_pattern = _re.compile(r"\b20[12]\d\b")
+
+    augmented = list(queries)  # keep originals
+    for query in queries:
+        if not year_pattern.search(query):
+            # Query has no year hint — add one variant with prior year
+            augmented.append(f"{query} {prior_year}")
+    return augmented
+
+
+# Reputable English-language financial/business sources with good archives
+_ARCHIVAL_SOURCES = [
+    "reuters.com",
+    "bloomberg.com",
+    "ft.com",
+    "cnbc.com",
+    "asia.nikkei.com",
+    "wsj.com",
+]
+
+
+def _generate_archival_queries(
+    company: str,
+    theme: str,
+    cutoff_date: str,
+    peers: list[str],
+) -> list[str]:
+    """Generate site-specific queries for archival English-language sources.
+
+    DuckDuckGo often returns irrelevant results for non-US companies
+    (Japanese dealer pages, Chinese Q&A sites). Site-specific searches
+    target reputable financial journalism with good historical archives.
+    """
+    cutoff_year = int(cutoff_date[:4])
+    prior_year = cutoff_year - 1
+    # Short company name for queries (e.g., "Toyota Motor Corporation" → "Toyota")
+    short_name = company.split()[0]
+
+    queries = []
+    for site in _ARCHIVAL_SOURCES[:3]:  # top 3 sources to limit API calls
+        queries.append(f"site:{site} {short_name} EV strategy {prior_year}")
+        queries.append(f"site:{site} {short_name} electric vehicle {cutoff_year}")
+    # Competitor comparison queries on one archival source
+    if peers:
+        top_peer = peers[0].split()[0] if peers else "Tesla"
+        queries.append(f"site:reuters.com {short_name} vs {top_peer} EV {prior_year}")
+    return queries
 
 
 def _run_web_searches(
     queries: list[str],
-    search_tool: DuckDuckGoSearchResults,
+    max_results: int = 10,
     search_label: str = "",
+    use_news: bool = True,
 ) -> tuple[list[dict], int]:
-    """Run a batch of search queries. Returns (results, failure_count)."""
+    """Run a batch of search queries using text + news search.
+
+    Uses both DDGS.text() and DDGS.news() to maximize coverage.
+    News search returns timestamped articles from reputable sources.
+    Rate limit mitigation: 2s delays between calls, early stop on
+    consecutive empty results.
+    """
+    import time as _time
+
     all_results: list[dict] = []
     failures = 0
-    for query in queries:
+    consecutive_empty = 0
+    max_consecutive_empty = 6  # Stop if 6 straight empties (likely rate limited)
+    ddgs = DDGS()
+
+    for i, query in enumerate(queries):
+        if consecutive_empty >= max_consecutive_empty:
+            reporting.log_action("Rate limit detected — stopping early", {
+                "completed_queries": i,
+                "total_queries": len(queries),
+                "results_so_far": len(all_results),
+            })
+            break
+
+        # Rate limit compliance: ~20 requests/min safe threshold.
+        # Each query = 2 API calls (text + news).
+        # 3s between queries ≈ 6s per 2 calls ≈ 20 calls/min.
+        # The DDGS library adds its own 0.75s floor between calls.
+        if i > 0:
+            _time.sleep(3)
+
+        got_results = False
         try:
-            results = search_tool.invoke(query)
-            if isinstance(results, list):
+            # Text search
+            results = _search_web(query, max_results=max_results, ddgs_instance=ddgs)
+            if results:
                 log_tool_call(
                     "retrieval", "duckduckgo_search",
                     {"query": query},
@@ -75,8 +235,31 @@ def _run_web_searches(
                     label=search_label,
                 )
                 all_results.extend(results)
+                got_results = True
+
+            # News search — catches timestamped articles text search misses
+            if use_news:
+                _time.sleep(2)
+                news_results = _search_news(
+                    query, max_results=max_results, ddgs_instance=ddgs,
+                )
+                if news_results:
+                    log_tool_call(
+                        "retrieval", "duckduckgo_news",
+                        {"query": query},
+                        news_results,
+                        label=f"{search_label}_news",
+                    )
+                    all_results.extend(news_results)
+                    got_results = True
         except Exception:
             failures += 1
+
+        if got_results:
+            consecutive_empty = 0
+        else:
+            consecutive_empty += 1
+
     return all_results, failures
 
 
@@ -117,14 +300,14 @@ def _llm_generate_queries(
         ]
         response = llm.invoke(messages)
         log_llm_call("retrieval", messages, response, label=label)
-        raw = response.content
-        raw = re.sub(r"<think>[\s\S]*?</think>", "", raw).strip()
+        raw = strip_thinking(response.content)
 
-        match = re.search(r"\[[\s\S]*?\]", raw)
-        if match:
-            queries = json.loads(match.group())
+        try:
+            queries = extract_json(raw)
             if isinstance(queries, list):
                 return [str(q) for q in queries[:max_queries]]
+        except json.JSONDecodeError:
+            pass
     except Exception as e:
         reporting.log_action("LLM query generation failed", {
             "error": str(e)[:150],
@@ -190,7 +373,6 @@ def retrieval_node(state: PipelineState) -> dict:
         "mode": "follow-up (quality gate)" if is_follow_up else "initial",
     })
 
-    search_tool = _create_search_tool(max_results=8)
     seen_links: set[str] = set()
 
     # If this is a follow-up from the quality gate, skip EDINET and seed generation
@@ -202,7 +384,7 @@ def retrieval_node(state: PipelineState) -> dict:
         for q in follow_up_queries:
             reporting.log_item(q, style="dim")
 
-        raw_results, failures = _run_web_searches(follow_up_queries, search_tool, "follow_up")
+        raw_results, failures = _run_web_searches(follow_up_queries, search_label="follow_up")
         unique_results = _deduplicate(raw_results, seen_links)
         follow_up_docs = [_to_doc(r, source="duckduckgo_follow_up") for r in unique_results]
 
@@ -259,11 +441,22 @@ def retrieval_node(state: PipelineState) -> dict:
     if not search_topics:
         search_topics = [f"{company} {theme}", f"{company} EV strategy"]
 
-    reporting.log_action("Pass 1: Seed search (LLM-generated)", {"queries": len(search_topics)})
+    # Add archival source queries (site-specific for reputable English sources)
+    peer_list = [
+        p.get("company", str(p)) if isinstance(p, dict) else str(p)
+        for p in state.get("peers", [])[:5]
+    ]
+    archival_queries = _generate_archival_queries(company, theme, cutoff, peer_list)
+    search_topics.extend(archival_queries)
+
+    reporting.log_action("Pass 1: Seed search (LLM-generated + archival)", {
+        "queries": len(search_topics),
+        "archival": len(archival_queries),
+    })
     for q in search_topics:
         reporting.log_item(q, style="dim")
 
-    raw_results, failures = _run_web_searches(search_topics, search_tool, "seed")
+    raw_results, failures = _run_web_searches(search_topics, search_label="seed")
     unique_results = _deduplicate(raw_results, seen_links)
 
     reporting.log_action("Pass 1 results", {
@@ -297,11 +490,13 @@ def retrieval_node(state: PipelineState) -> dict:
 
     gap_web_docs: list[dict] = []
     if gap_queries:
-        reporting.log_action("Gap analysis queries", {"count": len(gap_queries)})
+        reporting.log_action("Gap analysis queries", {
+            "count": len(gap_queries),
+        })
         for q in gap_queries:
             reporting.log_item(q, style="dim")
 
-        raw_gap, gap_failures = _run_web_searches(gap_queries, search_tool, "gap_fill")
+        raw_gap, gap_failures = _run_web_searches(gap_queries, search_label="gap_fill")
         unique_gap = _deduplicate(raw_gap, seen_links)
 
         reporting.log_action("Pass 2 results", {
@@ -342,7 +537,7 @@ def retrieval_node(state: PipelineState) -> dict:
             reporting.log_item(q, style="dim")
 
         raw_counter, counter_failures = _run_web_searches(
-            counter_queries, search_tool, "counternarrative",
+            counter_queries, search_label="counternarrative",
         )
         unique_counter = _deduplicate(raw_counter, seen_links)
 

@@ -7,7 +7,8 @@ Uses LLM to assess match quality between predictions and actual outcomes.
 from __future__ import annotations
 
 import json
-import re
+
+from liteagent import dedup_by_key, extract_json, strip_thinking
 
 from sfewa import reporting
 from sfewa.llm import get_llm_for_role
@@ -61,12 +62,12 @@ def _format_ground_truth(events: list[dict]) -> str:
         figures = ""
         for fig in e.get("key_figures", []):
             if fig.get("old_value") and fig.get("new_value"):
-                figures += f"\n    {fig['metric']}: {fig['old_value']} → {fig['new_value']}"
+                figures += f"\n    {fig['metric']}: {fig['old_value']} -> {fig['new_value']}"
             elif fig.get("value"):
                 figures += f"\n    {fig['metric']}: {fig['value']}"
 
         parts.append(
-            f"[{e.get('event_id', '?')}] {e.get('event_date', '?')} — "
+            f"[{e.get('event_id', '?')}] {e.get('event_date', '?')} -- "
             f"{e.get('event_type', '?')}\n"
             f"  {e.get('description', '?')}"
             f"{figures}"
@@ -75,21 +76,12 @@ def _format_ground_truth(events: list[dict]) -> str:
 
 
 def backtest_node(state: PipelineState) -> dict:
-    """Evaluate the analysis by backtesting against ground truth events.
-
-    Uses LLM to:
-    1. Match each ground truth event to predicted risk factors
-    2. Score match quality (strong/partial/weak/miss)
-    3. Generate backtest summary
-    """
+    """Evaluate the analysis by backtesting against ground truth events."""
     raw_risk_factors = state.get("risk_factors", [])
     gt_events = state.get("ground_truth_events", [])
 
     # Deduplicate: keep latest factor per dimension
-    seen_dims: dict[str, dict] = {}
-    for rf in raw_risk_factors:
-        seen_dims[rf.get("dimension", "unknown")] = rf
-    risk_factors = list(seen_dims.values())
+    risk_factors = dedup_by_key(raw_risk_factors, "dimension")
 
     reporting.enter_node("backtest", {
         "risk_factors": len(risk_factors),
@@ -97,7 +89,7 @@ def backtest_node(state: PipelineState) -> dict:
     })
 
     if not gt_events or not risk_factors:
-        reporting.log_action("Missing risk factors or ground truth — skipping backtest")
+        reporting.log_action("Missing risk factors or ground truth -- skipping backtest")
         reporting.exit_node("backtest")
         return {
             "backtest_events": [],
@@ -126,19 +118,13 @@ def backtest_node(state: PipelineState) -> dict:
         ]
         response = llm.invoke(messages)
         log_llm_call("backtest", messages, response, label="backtest")
-        raw_text = response.content
-        raw_text = re.sub(r"<think>[\s\S]*?</think>", "", raw_text).strip()
+        raw_text = strip_thinking(response.content)
 
-        # Parse JSON
-        match = re.search(r"```(?:json)?\s*([\s\S]*?)```", raw_text)
-        if match:
-            raw_text = match.group(1).strip()
-        start = raw_text.find("{")
-        end = raw_text.rfind("}")
-        if start != -1 and end != -1:
-            raw_text = raw_text[start : end + 1]
+        try:
+            parsed = extract_json(raw_text)
+        except json.JSONDecodeError:
+            parsed = {}
 
-        parsed = json.loads(raw_text)
         matches = parsed.get("matches", [])
         backtest_summary = parsed.get("backtest_summary", "")
 

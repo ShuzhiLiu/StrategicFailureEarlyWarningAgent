@@ -7,7 +7,8 @@ differing only in role description, assigned dimensions, and factor_id prefix.
 from __future__ import annotations
 
 import json
-import re
+
+from liteagent import extract_json, strip_thinking
 
 from sfewa import reporting
 from sfewa.context import build_pipeline_context
@@ -24,18 +25,20 @@ from sfewa.schemas.state import PipelineState
 
 def _parse_risk_factors_json(text: str) -> list[dict]:
     """Extract JSON array from LLM response."""
-    text = text.strip()
-    # Strip <think> blocks
-    text = re.sub(r"<think>[\s\S]*?</think>", "", text).strip()
-    # Strip markdown fences
-    match = re.search(r"```(?:json)?\s*([\s\S]*?)```", text)
-    if match:
-        text = match.group(1).strip()
-    start = text.find("[")
-    end = text.rfind("]")
-    if start != -1 and end != -1:
-        text = text[start : end + 1]
-    return json.loads(text)
+    text = strip_thinking(text)
+    parsed = extract_json(text)
+    if isinstance(parsed, list):
+        return parsed
+    # LLM may wrap array in a dict like {"risk_factors": [...]}
+    if isinstance(parsed, dict):
+        for key in ("risk_factors", "factors", "items"):
+            if isinstance(parsed.get(key), list):
+                return parsed[key]
+        # Fallback: any key with a list value
+        for value in parsed.values():
+            if isinstance(value, list):
+                return value
+    raise json.JSONDecodeError("Expected JSON array", text, 0)
 
 
 def _validate_risk_factor(item: dict) -> dict | None:
@@ -49,6 +52,25 @@ def _validate_risk_factor(item: dict) -> dict | None:
     for list_field in ["supporting_evidence", "contradicting_evidence", "causal_chain", "unresolved_gaps"]:
         if not isinstance(item.get(list_field), list):
             item[list_field] = []
+
+    # Ensure Iceberg Model fields have defaults
+    if "depth_of_analysis" not in item:
+        item["depth_of_analysis"] = 0
+    else:
+        try:
+            item["depth_of_analysis"] = int(item["depth_of_analysis"])
+        except (TypeError, ValueError):
+            item["depth_of_analysis"] = 0
+
+    if not isinstance(item.get("structural_forces"), dict):
+        item["structural_forces"] = {"reinforcing_loops": [], "balancing_loops": []}
+    else:
+        for key in ("reinforcing_loops", "balancing_loops"):
+            if not isinstance(item["structural_forces"].get(key), list):
+                item["structural_forces"][key] = []
+
+    if "key_assumption_at_risk" not in item:
+        item["key_assumption_at_risk"] = None
 
     # Clamp confidence
     try:
