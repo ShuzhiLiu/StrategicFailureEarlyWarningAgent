@@ -28,13 +28,13 @@ Design a comprehensive strategic risk analysis framework for this company. Ident
 
 2. **peers**: 5-7 competitor companies most relevant for benchmarking.
 
-3. **analysis_dimensions**: 9-12 analysis dimensions organized into 3 analyst perspectives. \
+3. **analysis_dimensions**: Exactly 10 analysis dimensions organized into 3 analyst perspectives. \
 Each dimension should be specific to THIS company and strategy — not generic.
 
 The 3 analyst perspectives are:
-- **external**: External environment (market dynamics, policy, macroeconomic forces, industry trends). 2-4 dimensions.
-- **internal**: Company internal strategy (financial positioning, execution, R&D, partnerships, organizational capability, product strategy). 3-5 dimensions.
-- **comparative**: Competitive positioning (direct competitors, geographic coverage, technology gaps, supply chain, ecosystem advantages). 2-4 dimensions.
+- **external**: External environment (market dynamics, policy, macroeconomic forces, industry trends). Exactly 3 dimensions.
+- **internal**: Company internal strategy (financial positioning, execution, R&D, partnerships, organizational capability, product strategy). Exactly 4 dimensions.
+- **comparative**: Competitive positioning (direct competitors, geographic coverage, technology gaps, supply chain, ecosystem advantages). Exactly 3 dimensions.
 
 For EACH dimension, provide:
 - name: short snake_case identifier (e.g., "battery_cost_trajectory", "clinical_pipeline_strength", "platform_ecosystem")

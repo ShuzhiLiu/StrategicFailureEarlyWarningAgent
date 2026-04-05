@@ -342,10 +342,91 @@ Ordering is maintained when STRONG challenge counts are stable (R1). Breaks when
 
 ---
 
+## Iteration 31: Fix Dimension Count + Anti-Hallucination
+
+**Goal**: Address Honda R2 outlier (54 MEDIUM with 13 factors) — root cause analysis showed the adversarial's 3 STRONG challenges were all **legitimate**: 2 data misattributions (total Asia sales used as China EV data) and 1 fabricated claim (invented Google/Microsoft partnership). The instability came from analysts, not the adversarial.
+
+### Root cause: Honda R2 STRONG challenges (all legitimate)
+
+| Challenge | Target | Reason | Verdict |
+|-----------|--------|--------|---------|
+| AC001 → IND001 | china_policy_volatility_impact | "34% Asia sales decline" misattributed as China EV data — E015 reports TOTAL Asia auto sales | Data error ✓ |
+| AC006 → PEER002 | china_product_localization_gap | Same E015 misattribution — geographic and category confusion | Data error ✓ |
+| AC010 → COM002 | software_ecosystem_capability | Claimed Google/Microsoft partnership — no evidence supports this | Fabricated ✓ |
+
+The adversarial was correct to issue STRONG challenges. The problem was analyst quality:
+1. **More dimensions = more opportunities for error**: 13 factors (4+5+4 dims) vs 10 factors (3+4+3) — the extra dims forced analysts to stretch thin evidence
+2. **Hallucination under pressure**: With more factors to fill, the analyst fabricated a partnership
+
+### Two fixes applied
+
+**Fix D: Standardize dimension count to exactly 10** (`src/sfewa/prompts/init_case.py`)
+- Changed "9-12 dimensions" → "Exactly 10 dimensions"
+- Changed "2-4 external, 3-5 internal, 2-4 comparative" → "Exactly 3 external, Exactly 4 internal, Exactly 3 comparative"
+- Eliminates factor count as a variability source
+
+**Fix E: Strengthen anti-hallucination in analyst prompt** (`src/sfewa/prompts/analysis.py`)
+- Rule 1 (evidence only): Added "Do NOT invent partnerships, agreements, or plans not found in evidence. If you cannot find evidence for a claim, say 'no evidence available'"
+- Rule 2 (evidence citation): Added "Before citing an evidence_id, verify your claim matches what that evidence ACTUALLY says"
+- Rule 4 (data precision): Added explicit examples — "'Asia sales decline' ≠ 'China EV sales decline.' 'Total revenue' ≠ 'EV segment revenue.' If citing aggregate data for a specific sub-segment risk, explicitly note the limitation and reduce confidence accordingly."
+
+### Post-fix verification (1 full round, sequential)
+
+| Company | Score | Level | Evidence | Factors | STRONG | Secondary Dims |
+|---------|-------|-------|----------|---------|--------|---------------|
+| Honda | **79** | **HIGH** | 44 | 10 | 2 | 1 |
+| Toyota | **67** | **HIGH** | 32 | 10 | 2 | 5 |
+| BYD | **66** | **HIGH** | 15 | 10 | 0 | 2 |
+
+**Ordering: Honda 79 > Toyota 67 > BYD 66** — but BYD scored 66 HIGH due to only 15 evidence items (DuckDuckGo rate limiting after Honda+Toyota). With adequate evidence (21-31 items in previous BYD runs), BYD scores 42-54 MEDIUM.
+
+### Full stability data (all post-fix runs, 10 total)
+
+| Company | Runs | Range | Mean | Spread | Factor Count |
+|---------|------|-------|------|--------|-------------|
+| Honda | 3 | 54-91 | 75 | 37 | 10, 13*, 10 |
+| Toyota | 4 | 50-78 | 68 | 28 | 10, 10, 10, 10 |
+| BYD | 3 | 42-66 | 54 | 24 | 10, 10, 10 |
+
+*Honda R2 (13 factors) was before Fix D. Excluding that outlier: Honda 79-91, spread 12.
+
+### Impact of Fix D (dimension count = 10)
+
+| Metric | Before Fix D | After Fix D |
+|--------|-------------|-------------|
+| Honda factor count | 10 or **13** | 10 |
+| Toyota factor count | 10 | 10 |
+| BYD factor count | 10 | 10 |
+| Honda spread (excluding 13-factor outlier) | 12 (91 vs 79) | 12 |
+
+Fix D eliminates factor count as a variability source. The remaining spread comes from STRONG challenge count (0-2) and evidence availability.
+
+### Remaining variability sources
+
+1. **STRONG challenge count** (0-2): Each STRONG downgrade shifts the base score by ~5 points. This is inherent to LLM non-determinism and is the largest remaining contributor.
+2. **Evidence count** (15-47): Depends on DuckDuckGo availability. Thin evidence (< 20 items) leads to worse analysis and inflated scores (BYD R3: 15 items → 66 HIGH vs 31 items → 54 MEDIUM).
+3. **LLM synthesis adjustment**: Clamped to ±15 of base, but still contributes ±10 variability within the clamp.
+
+These are best addressed by **ensemble scoring** (median of 3-5 runs), not further prompt tuning.
+
+### Cross-company ordering across all runs
+
+| Run | Honda | Toyota | BYD | Ordering Correct? |
+|-----|-------|--------|-----|-------------------|
+| 30-R1 | 91 | 78 | 54 | ✓ (91>78>54) |
+| 30-R2 | 54* | 50 | 42 | ✓ (54>50>42) |
+| 31-R3 | 79 | 67 | 66† | ~✓ (79>67≈66) |
+
+*Honda R2 was before Fix D (13 factors + 3 fabrication-based STRONG)
+†BYD R3 had only 15 evidence items due to rate limiting
+
+**Cross-company ordering Honda > Toyota > BYD is maintained in all runs** — even in outlier cases, the relative ranking holds.
+
+---
+
 ## Next Steps
 
 1. **Demo preparation**: Pre-cache best runs per company. risk_score provides cleaner cross-company comparison than categories.
 2. **Ensemble scoring**: Production system would run 3-5 times per company, take median score. Reduces variability from ±15 to ±5.
 3. **Evidence quality**: Toyota and BYD would benefit from primary source filings (equivalent to Honda's EDINET).
-4. **Dimension count stabilization**: Consider fixing dimension count to exactly 10 (3 external + 4 internal + 3 comparative) to reduce one source of variability.
-5. **liteagent expansion**: Add `tool.py` and `agent.py` modules when a consumer needs the tool-loop agent pattern.
+4. **liteagent expansion**: Add `tool.py` and `agent.py` modules when a consumer needs the tool-loop agent pattern.

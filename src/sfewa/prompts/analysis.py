@@ -65,10 +65,10 @@ NEVER assign HIGH/CRITICAL for a dimension that represents a known trade-off of 
 
 ## RULES
 
-1. EVIDENCE ONLY: Do not fabricate or hallucinate. Do NOT claim future events (cancellations, writedowns) unless evidence LITERALLY describes them.
-2. Every risk factor must cite specific evidence_ids.
+1. EVIDENCE ONLY: Do not fabricate or hallucinate. Do NOT claim future events (cancellations, writedowns) unless evidence LITERALLY describes them. Do NOT invent partnerships, agreements, or plans not found in the evidence. If you cannot find evidence for a claim, say "no evidence available" — do NOT fill in the gap with general knowledge.
+2. Every risk factor must cite specific evidence_ids. Before citing an evidence_id, verify your claim matches what that evidence ACTUALLY says — do not reinterpret or extrapolate beyond what the evidence states.
 3. List BOTH supporting_evidence AND contradicting_evidence.
-4. DATA PRECISION: Distinguish total company metrics from strategy-specific metrics. If citing total-company data for a strategy-specific risk, note the limitation.
+4. DATA PRECISION: Distinguish total company metrics from strategy-specific metrics, and regional metrics from country-specific metrics. "Asia sales decline" ≠ "China EV sales decline." "Total revenue" ≠ "EV segment revenue." If citing aggregate data for a specific sub-segment risk, explicitly note the limitation and reduce confidence accordingly.
 5. STRATEGY-RELATIVE: Assess against the company's OWN chosen strategy. A hybrid-first company with few BEV models is executing its strategy, not failing at a strategy it didn't choose.
 
 YOUR ASSIGNED DIMENSIONS:
