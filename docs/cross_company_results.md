@@ -286,20 +286,37 @@ Quality gate looped for all three companies — DuckDuckGo's recency bias means 
 
 ## 6. Run Stability
 
-Results vary between runs due to DuckDuckGo search variability, LLM non-determinism, and variable adversarial challenge severity:
+### Latest verification (9 runs, post Iteration 31 fixes)
 
-| Company | Target | Observed Range (11 runs) | Variability Source |
+| Round | Honda | Toyota | BYD | Ordering |
+|---|---|---|---|---|
+| R1 | 82 CRITICAL | 78 HIGH | 48 MEDIUM | H>T>B ✓ |
+| R2 | 98 CRITICAL | 64 HIGH | 58 MEDIUM | H>T>B ✓ |
+| R3 | 74 HIGH | 70 HIGH | 50 MEDIUM | H>T>B ✓ |
+
+| Metric | Honda | Toyota | BYD |
 |---|---|---|---|
-| Honda | HIGH/CRITICAL | 50-91 (MEDIUM-CRITICAL) | Factor count (10-13), STRONG challenges (0-3) |
-| Toyota | MEDIUM/HIGH | 50-78 (MEDIUM-HIGH) | Strategy relevance tags (4-5 secondary), STRONG challenges (0-2) |
-| BYD | MEDIUM/LOW | 31-54 (LOW-MEDIUM) | Evidence availability, STRONG challenges (0-3) |
+| **Mean** | 84.7 | 70.7 | 52.0 |
+| **Range** | 74-98 (24) | 64-78 (14) | 48-58 (10) |
+| **Level** | HIGH-CRITICAL | HIGH | MEDIUM |
 
-**Cross-company ordering Honda > Toyota > BYD is maintained when STRONG challenge counts are consistent.** Breaks when Honda gets anomalously many STRONG challenges (3 in one run).
+**Cross-company ordering Honda > Toyota > BYD maintained in ALL 9 runs.** Minimum gap: Honda R3 74 vs Toyota R3 70 (4 points).
 
-**Stability improvements** (Iteration 30):
-- Score clamping (±15 from programmatic base) prevents LLM synthesis drift
-- Strategy relevance tags reduce Toyota's pre-adversarial HIGHs from 7 to 4
-- Adversarial depth gate enforcement adds teeth for depth gate violations
+### Variability sources
+
+| Source | Effect | Status |
+|---|---|---|
+| Factor count | Eliminated | Fixed at 10 (Iteration 31) |
+| LLM synthesis drift | Reduced | Clamped to ±15 of base (Iteration 30) |
+| Strategy relevance tags | Working | Toyota gets 4-6 secondary → MEDIUM (Iteration 30) |
+| STRONG challenge count | 0 across all 9 runs | Not generating STRONGs — adversarial checks FORMAT not SUBSTANCE |
+| Evidence count | 18-59 per run | DuckDuckGo variability; rate limiting affects companies run last |
+
+### Known limitations
+
+- **Toyota scores HIGH (64-78) instead of expected MEDIUM**: 5-6 primary dimensions legitimately reach depth 4 (regulatory phaseout, SSB timeline, H2 infrastructure). Adversarial finds analysis well-structured and doesn't challenge.
+- **Honda range of 24 points**: Driven by occasional CRITICAL factors (2 in R2) and base score variance (77-99).
+- **Adversarial not generating STRONG challenges**: All 9 runs produced 0 strong challenges. The adversarial evaluates analytical depth/format rather than whether the severity conclusion is justified by the evidence balance.
 
 **Demo strategy**: Pre-cached runs in `demo/` provide reliable results. Run variability is an honest discussion point — a production system would use ensemble runs (median of 3-5).
 
