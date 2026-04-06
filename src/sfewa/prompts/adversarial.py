@@ -37,20 +37,24 @@ A well-supported HIGH factor with deep structural analysis is HARDER to challeng
 ### Step 4: GRADE the challenge
 
 CHALLENGE SEVERITY:
-- strong: Key claim is CONTRADICTED by evidence, OR claim is fabricated/hallucinated, OR there is a data category error or time period confusion, OR the severity is HIGH+ but analysis depth is only Layer 2 (surface patterns without structural analysis), OR the dimension is [Strategy relevance: secondary] AND severity is HIGH/CRITICAL without explicit justification for depth gate override (depth gate violation).
+- strong: Key claim is CONTRADICTED by evidence, OR claim is fabricated/hallucinated, OR there is a data category error or time period confusion, OR the severity is HIGH+ but analysis depth is only Layer 2 (surface patterns without structural analysis), OR the dimension is [Strategy relevance: secondary] AND severity is HIGH/CRITICAL without explicit justification for depth gate override (depth gate violation), OR the factor is flagged [EVIDENCE IMBALANCE] (see below).
 - moderate: Key claim is partially supported but the analysis has weaknesses — severity inflation, missing counter-evidence, generic framing, or incomplete structural analysis. The underlying concern is still valid.
 - weak: Key claim is well-supported, analysis depth is appropriate for the severity level, and counter-evidence was acknowledged. The factor stands.
 
 IMPORTANT CALIBRATION:
 - MEDIUM-severity factors for capability gaps or expansion barriers are LEGITIMATE even if the primary business is profitable. Do NOT use strategy misattribution to dismiss them.
-- If a factor has more contradicting evidence than supporting evidence AND is rated MEDIUM+, that is a STRONG challenge (evidence imbalance).
 - If a factor is rated HIGH but has only 1-2 supporting evidence items, that is severity inflation → moderate challenge at minimum.
+
+**EVIDENCE IMBALANCE RULE**: Factors flagged with [EVIDENCE IMBALANCE] have been programmatically checked — their supporting evidence count is LESS THAN OR EQUAL TO their contradicting evidence count. For HIGH/CRITICAL factors with this flag, the severity is NOT justified by the evidence balance → this is a STRONG challenge. For MEDIUM factors with this flag, this is at minimum a moderate challenge. The flag is computed from the factor's own evidence citations, not your judgment — trust the flag.
 
 You MUST produce exactly one challenge for EACH risk factor. Do NOT skip any factors.
 """
 
 ADVERSARIAL_USER = """\
 Review the following risk factors and evidence. For EACH risk factor, apply the Chain of Verification (identify key claim → verify against evidence → assess depth → grade challenge).
+
+EVIDENCE STANCE OVERVIEW:
+{evidence_stance_summary}
 
 RISK FACTORS:
 {risk_factors_text}
@@ -80,6 +84,67 @@ Respond with ONLY the JSON object.
 """
 
 
+def build_evidence_stance_summary(
+    evidence: list[dict],
+    risk_factors: list[dict],
+) -> str:
+    """Build evidence stance summary with calibration guidance for the adversarial.
+
+    Highlights mismatches between overall evidence balance and severity distribution.
+    """
+    # Count stances
+    stances = {"supports_risk": 0, "contradicts_risk": 0, "neutral": 0}
+    for e in evidence:
+        s = e.get("stance", "neutral")
+        if s in stances:
+            stances[s] += 1
+
+    total = len(evidence)
+    sup = stances["supports_risk"]
+    con = stances["contradicts_risk"]
+    neu = stances["neutral"]
+
+    # Count severity distribution
+    sev_counts = {"critical": 0, "high": 0, "medium": 0, "low": 0}
+    for rf in risk_factors:
+        s = rf.get("severity", "medium").lower()
+        if s in sev_counts:
+            sev_counts[s] += 1
+
+    high_plus = sev_counts["critical"] + sev_counts["high"]
+    total_factors = len(risk_factors)
+
+    lines = [
+        f"Total evidence: {total} items",
+        f"  Supports risk: {sup} ({sup*100//total if total else 0}%)",
+        f"  Contradicts risk: {con} ({con*100//total if total else 0}%)",
+        f"  Neutral: {neu} ({neu*100//total if total else 0}%)",
+        f"Risk factor severity: {sev_counts['critical']}C + {sev_counts['high']}H + {sev_counts['medium']}M + {sev_counts['low']}L",
+        f"  HIGH+ factors: {high_plus}/{total_factors} ({high_plus*100//total_factors if total_factors else 0}%)",
+    ]
+
+    # Calibration warning if severity doesn't match evidence balance
+    if total_factors > 0 and con > 0:
+        high_ratio = high_plus / total_factors
+        sup_con_ratio = sup / con if con > 0 else 999
+        # Warn when majority HIGH factors but evidence is roughly balanced or
+        # contradicts-leaning. sup:con < 1.5 means evidence doesn't clearly
+        # favor risk; combined with 40%+ HIGH factors, suggests inflation.
+        if high_ratio >= 0.4 and sup_con_ratio < 1.5:
+            lines.append(
+                f"\n⚠ CALIBRATION CHECK: {high_plus}/{total_factors} factors "
+                f"({high_ratio:.0%}) are HIGH+, but evidence is roughly balanced "
+                f"({sup} supports vs {con} contradicts, ratio {sup_con_ratio:.1f}:1). "
+                f"When evidence does not clearly favor risk, HIGH severity requires "
+                f"especially strong supporting evidence per factor. Cross-check each "
+                f"HIGH factor: does its key claim rely on directly supporting evidence, "
+                f"or on reinterpretation of neutral sources? If the latter, consider "
+                f"upgrading the challenge to STRONG."
+            )
+
+    return "\n".join(lines)
+
+
 def format_risk_factors_for_review(
     risk_factors: list[dict],
     dimension_relevance: dict[str, str] | None = None,
@@ -93,8 +158,10 @@ def format_risk_factors_for_review(
     parts = []
     relevance_map = dimension_relevance or {}
     for rf in risk_factors:
-        evidence_str = ", ".join(rf.get("supporting_evidence", []))
-        contra_str = ", ".join(rf.get("contradicting_evidence", []))
+        supporting = rf.get("supporting_evidence", [])
+        contradicting = rf.get("contradicting_evidence", [])
+        evidence_str = ", ".join(supporting)
+        contra_str = ", ".join(contradicting)
         chain_str = " → ".join(rf.get("causal_chain", []))
         depth = rf.get("depth_of_analysis", 0)
         forces = rf.get("structural_forces", {})
@@ -102,10 +169,18 @@ def format_risk_factors_for_review(
         dim_name = rf.get("dimension", "?")
         relevance = relevance_map.get(dim_name, "primary")
 
+        # Programmatic evidence imbalance check
+        imbalance_flag = ""
+        if len(supporting) <= len(contradicting) and len(contradicting) > 0:
+            imbalance_flag = (
+                f" [EVIDENCE IMBALANCE: {len(supporting)} supporting "
+                f"vs {len(contradicting)} contradicting]"
+            )
+
         entry = (
             f"[{rf.get('factor_id', '?')}] {dim_name} | "
             f"{rf.get('severity', '?').upper()} | conf={rf.get('confidence', 0):.2f} | "
-            f"depth={depth} | [Strategy relevance: {relevance}]\n"
+            f"depth={depth} | [Strategy relevance: {relevance}]{imbalance_flag}\n"
             f"  Title: {rf.get('title', '?')}\n"
             f"  Description: {rf.get('description', '?')}\n"
             f"  Supporting evidence: {evidence_str}\n"

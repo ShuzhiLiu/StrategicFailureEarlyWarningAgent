@@ -17,6 +17,7 @@ from sfewa.tools.chat_log import log_llm_call
 from sfewa.prompts.adversarial import (
     ADVERSARIAL_SYSTEM,
     ADVERSARIAL_USER,
+    build_evidence_stance_summary,
     format_risk_factors_for_review,
 )
 from sfewa.prompts.analysis import format_evidence_for_analyst
@@ -65,6 +66,7 @@ def adversarial_review_node(state: PipelineState) -> dict:
     # Format prompt with pipeline context injection
     rf_text = format_risk_factors_for_review(risk_factors, dimension_relevance)
     evidence_text = format_evidence_for_analyst(evidence)
+    evidence_stance_summary = build_evidence_stance_summary(evidence, risk_factors)
     pipeline_context = build_pipeline_context(state)
 
     system_msg = ADVERSARIAL_SYSTEM.format(
@@ -76,6 +78,7 @@ def adversarial_review_node(state: PipelineState) -> dict:
     user_msg = ADVERSARIAL_USER.format(
         risk_factors_text=rf_text,
         evidence_text=evidence_text,
+        evidence_stance_summary=evidence_stance_summary,
     )
 
     # Call LLM with thinking mode

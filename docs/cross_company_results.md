@@ -312,11 +312,25 @@ Quality gate looped for all three companies — DuckDuckGo's recency bias means 
 | STRONG challenge count | 0 across all 9 runs | Not generating STRONGs — adversarial checks FORMAT not SUBSTANCE |
 | Evidence count | 18-59 per run | DuckDuckGo variability; rate limiting affects companies run last |
 
+### Post Iteration 32 (evidence-balance adversarial fix, 6 runs)
+
+| Round | Honda | Toyota | BYD | Ordering |
+|---|---|---|---|---|
+| R1 | 82 CRITICAL (3 STR) | 70 HIGH (1 STR) | 45 MEDIUM (0 STR) | H>T>B ✓ |
+| R2 | 79 HIGH (1 STR) | 75 HIGH (0 STR) | 53 MEDIUM (1 STR) | H>T>B ✓ |
+
+| Metric | Honda | Toyota | BYD |
+|---|---|---|---|
+| **Mean** | 80.5 | 72.5 | 49.0 |
+| **Range** | 79-82 (3) | 70-75 (5) | 45-53 (8) |
+| **STRONGs** | 1-3 | 0-1 | 0-1 |
+
+Honda range dropped from 24 to 3 points. STRONG challenges now fire (avg ~1/run).
+
 ### Known limitations
 
-- **Toyota scores HIGH (64-78) instead of expected MEDIUM**: 5-6 primary dimensions legitimately reach depth 4 (regulatory phaseout, SSB timeline, H2 infrastructure). Adversarial finds analysis well-structured and doesn't challenge.
-- **Honda range of 24 points**: Driven by occasional CRITICAL factors (2 in R2) and base score variance (77-99).
-- **Adversarial not generating STRONG challenges**: All 9 runs produced 0 strong challenges. The adversarial evaluates analytical depth/format rather than whether the severity conclusion is justified by the evidence balance.
+- **Toyota scores HIGH (70-75) instead of expected MEDIUM**: Evidence genuinely skews toward supports_risk (39-48%). The 4 HIGH primary dimensions (regulatory phaseout, SSB timeline, organizational inertia, platform leverage) are well-supported.
+- **BYD occasionally produces fewer than 10 factors**: Intermittent init_case/analyst issue (1 in 6 runs).
 
 **Demo strategy**: Pre-cached runs in `demo/` provide reliable results. Run variability is an honest discussion point — a production system would use ensemble runs (median of 3-5).
 
