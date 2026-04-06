@@ -1,7 +1,7 @@
 # liteagent Architecture
 
-A minimal agent framework: 8 modules, ~800 lines, 1 external dependency.
-Provides utilities for building LLM-powered pipelines in plain Python.
+A minimal agent framework: 10 modules, ~1000 lines, 1 external dependency.
+Provides utilities for building LLM-powered pipelines and tool-loop agents in plain Python.
 
 ---
 
@@ -52,26 +52,29 @@ Key patterns adopted from Claude Code:
 
 ```
 liteagent/
-  __init__.py       Public API (18 symbols)
-  llm.py            LLM client + provider routing
+  __init__.py       Public API (23 symbols)
+  llm.py            LLM client + provider routing + tool calling
   pipeline.py       Pipeline composition utilities
   state.py          State dict helpers
   context.py        Context window management
   observe.py        Call logging + reporter protocol
   parse.py          Structured output extraction
   errors.py         Retry + fallback strategies
+  tool.py           Tool definition + execution + parsing
+  agent.py          Tool-loop agent (while(tool_call) pattern)
 ```
 
 ### Dependency Graph
 
 ```
-parse.py -----> llm.py -----> openai (sole external dep)
-                  ^
-pipeline.py     |  (no framework deps)
-state.py        |  (stdlib only)
-context.py      |  (stdlib only)
-observe.py      |  (stdlib only)
-errors.py       |  (stdlib only)
+agent.py ----> tool.py ----> llm.py -----> openai (sole external dep)
+                               ^
+parse.py ─────────────────────┘
+pipeline.py     (no framework deps)
+state.py        (stdlib only)
+context.py      (stdlib only)
+observe.py      (stdlib only)
+errors.py       (stdlib only)
 ```
 
 Only `llm.py` and `parse.py` import `openai`. Every other module is pure stdlib Python.
@@ -295,6 +298,89 @@ def with_fallback(primary, fallback, *args, catch=(Exception,)) -> T:
     """Try primary, fall back on failure."""
 ```
 
+### 3.8 `tool.py` -- Tool Definition
+
+**Purpose**: Define tools for LLM function calling. Serialize to OpenAI format, parse tool calls from responses, execute with error handling.
+
+**Types**:
+
+```python
+@dataclass
+class Tool:
+    """A callable tool with metadata for LLM function calling."""
+    name: str
+    description: str
+    parameters: dict[str, Any]  # JSON schema
+    fn: Callable[..., Any]
+
+    def to_openai(self) -> dict: ...   # OpenAI function tool format
+    def execute(self, arguments: dict) -> str: ...  # errors returned as strings
+```
+
+**Functions**:
+
+```python
+@tool
+def web_search(query: str, max_results: int = 10) -> str:
+    """Search the web for a query."""
+    ...
+# Creates a Tool with auto-generated JSON schema from type hints
+
+def parse_tool_calls(response) -> list[dict]:
+    """Extract tool calls from LLM response. Returns [{"id", "name", "arguments"}]."""
+```
+
+**Design decisions**:
+- `Tool.execute()` catches all exceptions and returns them as strings -- "errors as data" pattern from Claude Code. The agent loop never crashes on tool failure.
+- `@tool` decorator auto-generates JSON schema from Python type hints. For complex schemas, construct `Tool()` directly.
+- `parse_tool_calls()` works with both raw OpenAI responses and `LLMResponse` objects (navigates through `.raw`).
+
+---
+
+### 3.9 `agent.py` -- Tool-Loop Agent
+
+**Purpose**: The `while(tool_call)` loop -- the simplest possible agent pattern.
+
+**Types**:
+
+```python
+@dataclass
+class AgentResult:
+    content: str              # final LLM text response
+    messages: list[dict]      # full conversation history
+    tool_call_count: int      # how many tools were called
+    iterations: int           # how many LLM calls were made
+    hit_limit: bool = False   # True if max_iterations reached
+
+class ToolLoopAgent:
+    def __init__(self, llm, tools, system_prompt, *, max_iterations=20,
+                 call_log=None, node_name="agent"): ...
+    def run(self, user_message: str) -> AgentResult: ...
+```
+
+**The core loop** (~30 lines of actual logic):
+
+```python
+def run(self, user_message):
+    messages = [system_prompt, user_message]
+    for iteration in range(max_iterations):
+        response = llm.call_with_tools(messages, tools)
+        calls = parse_tool_calls(response)
+        if not calls:
+            return AgentResult(content=response.content, ...)  # done
+        messages.append(assistant_msg_with_tool_calls)
+        for call in calls:
+            result = tools[call["name"]].execute(call["arguments"])
+            messages.append(tool_result_msg)
+    return AgentResult(hit_limit=True, ...)  # safety bound
+```
+
+**Design decisions**:
+- Uses `LLMClient.call_with_tools()` -- tool definitions are passed via the OpenAI API, not prompt-injected. This enables native function calling on supporting LLMs (vLLM, OpenAI, Anthropic).
+- `CallLog` integration: every LLM call and tool execution is recorded. Same observability as pipeline nodes.
+- `max_iterations` is a safety bound (same as `MAX_ITERATIONS` in pipeline loops). The LLM decides when to stop by sending a message without tool calls.
+- No parallel tool execution -- tools run sequentially. Fine for I/O-bound tools (web search with rate limits). Add parallel execution when needed.
+
 ---
 
 ## 4. Patterns Encoded in liteagent
@@ -383,11 +469,11 @@ items = validate_items(data["items"], required_fields=["id", "content"])
 |---|---|---|
 | Graph DSL | Plain Python is clearer and more debuggable | Never |
 | Prompt templates | Domain-specific; no generic abstraction adds value | Never |
-| Tool-loop agent | Not needed for pipeline-style agents; easy to add | When building interactive tool-calling agents |
 | Streaming | Not needed for batch pipelines | When building interactive agents |
 | Async/await | ThreadPoolExecutor suffices for I/O-bound LLM calls | When running 10+ concurrent LLM calls |
 | Checkpointing | Only needed for long-running resumable pipelines | When pipelines take hours |
 | Permission system | Only needed for user-facing agents with untrusted tools | When exposing tools to end users |
+| Parallel tool execution | Sequential is fine for rate-limited tools | When tools are independent and latency matters |
 
 ---
 

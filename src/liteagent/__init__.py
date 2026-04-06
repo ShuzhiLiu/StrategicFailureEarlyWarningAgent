@@ -10,6 +10,8 @@ from liteagent.context import truncate, TokenBudget, ContextBuilder
 from liteagent.observe import CallLog, Reporter, NullReporter
 from liteagent.parse import extract_json, parse_llm_json, strip_thinking, validate_items
 from liteagent.errors import retry, with_fallback, NodeError
+from liteagent.tool import Tool, tool, parse_tool_calls
+from liteagent.agent import ToolLoopAgent, AgentResult
 
 __all__ = [
     # LLM
@@ -26,4 +28,8 @@ __all__ = [
     "extract_json", "parse_llm_json", "strip_thinking", "validate_items",
     # Errors
     "retry", "with_fallback", "NodeError",
+    # Tools
+    "Tool", "tool", "parse_tool_calls",
+    # Agent
+    "ToolLoopAgent", "AgentResult",
 ]

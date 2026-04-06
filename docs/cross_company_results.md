@@ -327,10 +327,28 @@ Quality gate looped for all three companies — DuckDuckGo's recency bias means 
 
 Honda range dropped from 24 to 3 points. STRONG challenges now fire (avg ~1/run).
 
+### Post Iteration 33 (agentic retrieval v2, 2 rounds)
+
+Pipeline v2 replaces retrieval + quality_gate loop with a tool-loop agent. Activated via `--agentic` flag.
+
+| Round | Honda | Toyota | BYD | Ordering |
+|---|---|---|---|---|
+| R1 | 72 HIGH (0 STR) | 70 HIGH (2 STR) | 34 LOW (0 STR) | H>T>B ✓ |
+| R2 | 98 CRITICAL (0 STR) | 55 MEDIUM (2 STR) | 55 MEDIUM (0 STR) | H>T=B ~✓ |
+
+| Metric | v1 (9-run mean) | v2 (2-run mean) |
+|---|---|---|
+| Honda | 84.7 (74-98) | 85.0 (72-98) |
+| Toyota | 70.7 (64-78) | 62.5 (55-70) |
+| BYD | 52.0 (48-58) | 44.5 (34-55) |
+
+Agent search queries: 12-13 per run (vs 15-20 in v1). Agent autonomously covers company strategy, financials, competitors, regional markets, policy, and counternarrative without hardcoded 3-pass structure.
+
 ### Known limitations
 
 - **Toyota scores HIGH (70-75) instead of expected MEDIUM**: Evidence genuinely skews toward supports_risk (39-48%). The 4 HIGH primary dimensions (regulatory phaseout, SSB timeline, organizational inertia, platform leverage) are well-supported.
 - **BYD occasionally produces fewer than 10 factors**: Intermittent init_case/analyst issue (1 in 6 runs).
+- **Agentic v2 Toyota-BYD tie (R2)**: Both scored 55. Driven by BYD getting 0 STRONG challenges. Same adversarial variability as v1 — architecture doesn't change this.
 
 **Demo strategy**: Pre-cached runs in `demo/` provide reliable results. Run variability is an honest discussion point — a production system would use ensemble runs (median of 3-5).
 

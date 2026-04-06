@@ -569,10 +569,138 @@ Before the fix, Honda's score ranged 74-98 because the base score varied 77-99 w
 
 ---
 
+## Iteration 33: Hybrid Architecture — liteagent Tool-Loop Agent + Agentic Retrieval
+
+**Goal**: Add tool-loop agent capability to liteagent and build an agentic retrieval node that replaces the 4-node retrieval loop (retrieval → extraction → quality_gate → routing) with a single autonomous agent.
+
+### What we built
+
+**liteagent expansion** (2 new modules):
+
+1. **`src/liteagent/tool.py`** (~120 lines): Tool definition framework
+   - `Tool` dataclass with `to_openai()` serialization and `execute()` with error handling
+   - `@tool` decorator: converts typed Python functions into Tool objects with auto-generated JSON schema
+   - `parse_tool_calls()`: extracts tool calls from OpenAI-compatible LLM responses
+
+2. **`src/liteagent/agent.py`** (~130 lines): The `while(tool_call)` loop
+   - `ToolLoopAgent`: send messages → check for tool_calls → execute tools → append results → repeat
+   - `AgentResult` dataclass: content, messages, tool_call_count, iterations, hit_limit
+   - `max_iterations` safety bound, `CallLog` integration for observability
+   - Uses `LLMClient.call_with_tools()` (new method added to llm.py)
+
+3. **`LLMClient.call_with_tools()`**: New method on LLMClient for OpenAI function calling protocol
+
+**liteagent now exports 23 symbols** (was 18): added `Tool`, `tool`, `parse_tool_calls`, `ToolLoopAgent`, `AgentResult`.
+
+**SFEWA agentic retrieval node** (`src/sfewa/agents/agentic_retrieval.py`):
+
+- Tools: `search(query)` (DuckDuckGo text + news) and `load_edinet()` (EDINET filings)
+- Shared state via closures: tools accumulate docs into a shared list, return summaries to the LLM
+- Agent decides what to search and when to stop based on coverage criteria
+- Safety bounds: MAX_SEARCH_QUERIES=15, MAX_DOCS=150
+- Lower results per query (8 text + 6 news) forces more diverse queries
+
+**Pipeline v2** (`run_pipeline_v2()` in pipeline.py):
+```
+init_case → agentic_retrieval → evidence_extraction → fan-out → adversarial → synthesis → backtest
+```
+Replaces the 4-node evidence loop. Activated via `--agentic` CLI flag.
+
+**Evidence extraction batching** (fix for large doc sets):
+- Web docs split into chunks of 50 for LLM extraction
+- Prevents context overflow when agentic retrieval collects 100+ web docs
+
+### How the agent decides
+
+The agent receives a system prompt with:
+- Case context (company, strategy, cutoff, peers, dimensions)
+- Coverage targets (same criteria as the old quality gate)
+- Search strategy guidance (broad → specific → counternarrative)
+- Budget constraints (15 queries, 150 docs)
+
+It autonomously:
+1. Loads EDINET if available
+2. Searches broadly (company + strategy, financials)
+3. Adds competitor, regional, policy, technology queries
+4. Assesses whether results cover multiple perspectives
+5. Searches for counternarrative if results skew one way
+6. Stops when satisfied or budget exhausted
+
+Example Honda search sequence (12 queries):
+```
+[1] Honda Motor EV electrification strategy 2024 2025
+[2] Honda Motor financial results 2024 EV segment revenue profit
+[3] Honda EV sales China 2024 2025 market share
+[4] Honda EV sales North America US 2024 2025
+[5] Honda EV strategy competitors Toyota BYD Tesla comparison
+[6] Honda EV Europe sales 2024 2025 market share
+[7] Honda EV technology platform 0 Series cancellation 2024
+[8] Honda EV subsidies tariffs US China 2024 2025 policy
+[9] Honda EV strategy Southeast Asia 2024 2025 market
+[10] Honda EV analyst forecasts 2025 2026 projections
+[11] Honda EV battery technology partnerships GM Ultium
+[12] Honda EV sales Japan 2024 2025 domestic market
+```
+
+This covers all 8 quality gate criteria (company plans, financials, competitors, market trends, regions, policy, supporting + contradicting signals, forward-looking content) without needing a separate quality gate node.
+
+### Cross-company verification (Agentic v2, 2 rounds + 1 pre-fix)
+
+| Run | Honda | Toyota | BYD | Ordering |
+|-----|-------|--------|-----|----------|
+| Pre-fix R1* | 86 CRITICAL (444 docs) | — | — | — |
+| R1 | 72 HIGH | 70 HIGH | 34 LOW | H>T>B ✓ |
+| R2 | 98 CRITICAL | 55 MEDIUM | 55 MEDIUM | H>T=B ~✓ |
+
+*Pre-fix: MAX_SEARCH=25, no doc cap, no extraction batching — 444 docs overwhelmed extraction.
+
+### Comparison: v1 Pipeline vs v2 Agentic
+
+| Metric | v1 (9-run mean) | v2 (2-run mean) |
+|--------|-----------------|-----------------|
+| Honda | 84.7 (74-98) | 85.0 (72-98) |
+| Toyota | 70.7 (64-78) | 62.5 (55-70) |
+| BYD | 52.0 (48-58) | 44.5 (34-55) |
+| Ordering maintained | 9/9 (100%) | 2/2 (100%)* |
+| Evidence items | 29-59 | 33-35 |
+| Pipeline nodes | 10 (with loop) | 8 (no loop) |
+| Search queries | 15-20 (fixed 3-pass) | 12-13 (agent-decided) |
+| LLM calls for retrieval | 3 (seed + gap + counter gen) | 1 (agent loop) |
+
+*R2 Honda>Toyota=BYD; ordering is Honda>Toyota>BYD in spirit (tie, not inversion).
+
+### Key insights
+
+1. **Tool calling works on vLLM**: Qwen3.5-27B with `--enable-auto-tool-choice` supports the full OpenAI function calling round-trip. No prompt-based workarounds needed.
+
+2. **Agent search is more diverse**: The agent naturally covers regions, competitors, policy, counternarrative — without needing 3 hardcoded passes. It generates targeted queries based on what it has already found.
+
+3. **Doc count needs caps**: Without MAX_DOCS, the agent will search until budget exhausted. Each query yields ~12 unique results, so 15 queries = ~180 docs. Extraction can only process ~50 per batch, so collecting 400+ is wasteful.
+
+4. **Same variability sources**: The agentic architecture doesn't change the fundamental variability — adversarial STRONG generation and LLM synthesis adjustment remain the main factors. The architecture improves autonomy, not stability.
+
+5. **Hybrid is the right pattern**: Pipeline backbone (debuggable, deterministic routing) + agentic nodes where autonomy adds value (search decisions). Analysts, synthesis, backtest are better as single LLM calls.
+
+### What changed (file summary)
+
+| File | Change |
+|------|--------|
+| `src/liteagent/tool.py` | NEW — Tool definition + parsing |
+| `src/liteagent/agent.py` | NEW — ToolLoopAgent (while(tool_call) loop) |
+| `src/liteagent/llm.py` | Added `call_with_tools()`, `model` property |
+| `src/liteagent/__init__.py` | Export 5 new symbols (23 total) |
+| `src/sfewa/agents/agentic_retrieval.py` | NEW — Agentic retrieval node |
+| `src/sfewa/prompts/agentic_retrieval.py` | NEW — Agent system prompt |
+| `src/sfewa/agents/evidence_extraction.py` | Web doc batching (chunks of 50) |
+| `src/sfewa/graph/pipeline.py` | Added `run_pipeline_v2()` |
+| `src/sfewa/main.py` | Added `--agentic` CLI flag |
+| `src/sfewa/tools/chat_log.py` | Added `get_call_log()` accessor |
+
+---
+
 ## Next Steps
 
 1. **Demo preparation**: Pre-cache best runs per company. risk_score provides cleaner cross-company comparison than categories.
 2. **Ensemble scoring**: Production system would run 3-5 times per company, take median score. Reduces variability from ±15 to ±5.
 3. **Evidence quality**: Toyota and BYD would benefit from primary source filings (equivalent to Honda's EDINET).
-4. **Adversarial substance check**: Teach adversarial to evaluate whether HIGH severity is justified by the BALANCE of evidence, not just the depth of analysis.
-5. **liteagent expansion**: Add `tool.py` and `agent.py` modules when a consumer needs the tool-loop agent pattern.
+4. **Agentic adversarial** (future): Give the adversarial reviewer search tools to independently verify analyst claims. Currently it verifies against available evidence; with tools it could find NEW contradicting evidence.

@@ -78,6 +78,33 @@ class LLMClient:
         )
         return self._normalize(resp)
 
+    def call_with_tools(
+        self,
+        messages: list[dict],
+        tools: list[dict],
+        *,
+        sampling: SamplingParams | None = None,
+    ) -> LLMResponse:
+        """Call the LLM with tool definitions (OpenAI function calling).
+
+        The response may contain tool_calls instead of (or in addition to)
+        content. Use ``parse_tool_calls()`` from ``liteagent.tool`` to extract them.
+        """
+        p = sampling or self._sampling
+        kwargs: dict[str, Any] = {
+            "model": self._model,
+            "messages": messages,
+            "temperature": p.temperature,
+            "max_tokens": p.max_tokens,
+            "top_p": p.top_p,
+        }
+        if tools:
+            kwargs["tools"] = tools
+        if p.extra_body:
+            kwargs["extra_body"] = p.extra_body
+        resp = self._client.chat.completions.create(**kwargs)
+        return self._normalize(resp)
+
     # Backward-compatible alias used by SFEWA agents
     def invoke(self, messages: list[dict]) -> LLMResponse:
         """Alias for call() -- backward compatible with SFEWA agent nodes."""
@@ -109,6 +136,11 @@ class LLMClient:
     def client(self) -> OpenAI:
         """Escape hatch: access the raw OpenAI client."""
         return self._client
+
+    @property
+    def model(self) -> str:
+        """The model name/id."""
+        return self._model
 
 
 class LLMRouter:

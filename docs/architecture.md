@@ -160,6 +160,34 @@ def run_pipeline(state: dict) -> dict:
 
 No graph compilation, no conditional edge DSL. The entire flow is visible in one function.
 
+### Pipeline v2: Hybrid Architecture (Agentic Retrieval)
+
+Pipeline v2 replaces the 4-node evidence gathering loop with a single tool-loop agent that autonomously searches, assesses coverage, and stops when satisfied:
+
+```python
+from liteagent import merge_state, run_parallel, ToolLoopAgent
+
+def run_pipeline_v2(state: dict) -> dict:
+    state = merge_state(state, init_case_node(state), accumulate=ACC)
+
+    # Agentic retrieval (replaces retrieval + quality_gate loop)
+    state = merge_state(state, agentic_retrieval_node(state), accumulate=ACC)
+    state = merge_state(state, evidence_extraction_node(state), accumulate=ACC)
+
+    # Fan-out, adversarial, synthesis, backtest (unchanged)
+    for result in run_parallel(analysts, state, on_error=...):
+        state = merge_state(state, result, accumulate=ACC)
+    ...
+```
+
+The agentic retrieval node wraps search functions as tools and runs a `ToolLoopAgent`:
+- `search(query)`: DuckDuckGo text + news search
+- `load_edinet()`: Load EDINET regulatory filings
+
+The agent decides what to search and when to stop based on coverage criteria in its system prompt. Safety bounds: 15 queries max, 150 docs max.
+
+**Hybrid design**: Pipeline backbone stays debuggable (node-by-node execution, explicit state). Tool-loop agents are used inside specific nodes where autonomy adds value (search decisions). Both patterns coexist -- activated via `--agentic` CLI flag.
+
 ---
 
 ## 3. Node Contracts
@@ -524,9 +552,10 @@ src/sfewa/
 
   agents/
     init_case.py          Case expansion (LLM generates regions, peers, dimensions)
-    retrieval.py          3-pass agentic retrieval (DDGS + EDINET)
-    evidence_extraction.py  LLM extraction + temporal filter
-    quality_gate.py       Evidence sufficiency gate (LLM-driven)
+    retrieval.py          3-pass agentic retrieval (DDGS + EDINET) [v1]
+    agentic_retrieval.py  Tool-loop agent retrieval (ToolLoopAgent) [v2]
+    evidence_extraction.py  LLM extraction + temporal filter (batched for large inputs)
+    quality_gate.py       Evidence sufficiency gate (LLM-driven) [v1 only]
     _analyst_base.py      Shared analyst implementation (Iceberg Model validation)
     industry_analyst.py   External dimensions (dynamic or fallback)
     company_analyst.py    Internal dimensions (dynamic or fallback)
@@ -537,7 +566,8 @@ src/sfewa/
 
   prompts/
     init_case.py          Case expansion + dimension generation prompts
-    retrieval.py          Seed, gap analysis, counternarrative prompts
+    retrieval.py          Seed, gap analysis, counternarrative prompts [v1]
+    agentic_retrieval.py  Tool-loop agent system prompt + coverage criteria [v2]
     extraction.py         Evidence extraction + stance guidance
     analysis.py           Iceberg Model framework, dimension defs, scope boundaries
     adversarial.py        Chain of Verification, severity grading

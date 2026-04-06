@@ -31,6 +31,9 @@ from sfewa.graph.routing import (
     route_after_quality_gate,
 )
 
+# Lazy import for v2 pipeline -- only loaded when needed
+_agentic_retrieval_loaded = False
+
 # Fields that accumulate across nodes (extend, not overwrite)
 ACCUMULATING_FIELDS = {"evidence", "risk_factors", "adversarial_challenges", "backtest_events"}
 
@@ -91,6 +94,54 @@ def run_pipeline(state: dict) -> dict:
             state = merge_state(state, result, accumulate=ACC)
 
     # -- Final synthesis --
+    state = merge_state(state, risk_synthesis_node(state), accumulate=ACC)
+    state = merge_state(state, backtest_node(state), accumulate=ACC)
+
+    return state
+
+
+def run_pipeline_v2(state: dict) -> dict:
+    """Pipeline with agentic retrieval (hybrid architecture).
+
+    Replaces the retrieval -> extraction -> quality_gate loop with a single
+    tool-loop agent that autonomously searches and assesses coverage.
+
+    Flow:
+      init_case -> agentic_retrieval -> evidence_extraction
+        -> [industry | company | peer] analysts (parallel)
+        -> [adversarial_review]*
+        -> risk_synthesis -> backtest -> END
+    """
+    from sfewa.agents.agentic_retrieval import agentic_retrieval_node
+
+    ACC = ACCUMULATING_FIELDS
+
+    # -- Init --
+    state = merge_state(state, init_case_node(state), accumulate=ACC)
+
+    # -- Agentic retrieval (replaces retrieval + quality_gate loop) --
+    state = merge_state(state, agentic_retrieval_node(state), accumulate=ACC)
+
+    # -- Evidence extraction (unchanged — runs once on collected docs) --
+    state = merge_state(state, evidence_extraction_node(state), accumulate=ACC)
+
+    # -- Parallel analyst fan-out (unchanged) --
+    for result in _run_analysts_parallel(state):
+        state = merge_state(state, result, accumulate=ACC)
+
+    # -- Adversarial loop (unchanged) --
+    for _ in range(MAX_ADVERSARIAL_PASSES):
+        state = merge_state(state, adversarial_review_node(state), accumulate=ACC)
+
+        if after_adversarial_review(state) == "risk_synthesis":
+            break
+
+        # Reanalyze: re-extract evidence + re-run analysts
+        state = merge_state(state, evidence_extraction_node(state), accumulate=ACC)
+        for result in _run_analysts_parallel(state):
+            state = merge_state(state, result, accumulate=ACC)
+
+    # -- Final synthesis (unchanged) --
     state = merge_state(state, risk_synthesis_node(state), accumulate=ACC)
     state = merge_state(state, backtest_node(state), accumulate=ACC)
 

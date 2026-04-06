@@ -206,16 +206,30 @@ def evidence_extraction_node(state: PipelineState) -> dict:
         llm=llm,
     )
 
-    # ── Batch 2: Web search results (external signals) ──
-    web_evidence = _extract_batch(
-        web_docs,
-        batch_label="Web search results",
-        company=company,
-        theme=theme,
-        cutoff=cutoff,
-        start_id=len(edinet_evidence) + 1,
-        llm=llm,
-    )
+    # ── Batch 2+: Web search results (external signals) ──
+    # Split large web doc sets into chunks to stay within LLM context window.
+    # 50 docs ≈ 15K chars prompt — fits comfortably in 32K token context.
+    WEB_BATCH_SIZE = 50
+    web_evidence: list[dict] = []
+    for chunk_idx in range(0, max(1, len(web_docs)), WEB_BATCH_SIZE):
+        chunk = web_docs[chunk_idx : chunk_idx + WEB_BATCH_SIZE]
+        if not chunk:
+            break
+        chunk_label = (
+            f"Web search results"
+            if len(web_docs) <= WEB_BATCH_SIZE
+            else f"Web search results (batch {chunk_idx // WEB_BATCH_SIZE + 1})"
+        )
+        chunk_evidence = _extract_batch(
+            chunk,
+            batch_label=chunk_label,
+            company=company,
+            theme=theme,
+            cutoff=cutoff,
+            start_id=len(edinet_evidence) + len(web_evidence) + 1,
+            llm=llm,
+        )
+        web_evidence.extend(chunk_evidence)
 
     # ── Merge batches ──
     all_evidence = edinet_evidence + web_evidence

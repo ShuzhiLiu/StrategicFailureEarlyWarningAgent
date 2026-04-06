@@ -23,7 +23,7 @@ from rich.panel import Panel
 load_dotenv()
 
 from sfewa import reporting
-from sfewa.graph.pipeline import run_pipeline
+from sfewa.graph.pipeline import run_pipeline, run_pipeline_v2
 from sfewa.schemas.config import CaseConfig
 from sfewa.tools.artifacts import save_run_artifacts
 from sfewa.tools.chat_log import clear_log
@@ -68,6 +68,12 @@ def run(
         "--ground-truth",
         "-g",
         help="Optional YAML file with ground truth events for backtesting",
+    ),
+    agentic: bool = typer.Option(
+        False,
+        "--agentic",
+        "-a",
+        help="Use agentic retrieval (tool-loop agent for evidence gathering)",
     ),
 ) -> None:
     """Analyze strategic risk for a company.
@@ -137,7 +143,10 @@ def run(
 
     clear_log()  # Reset chat log before each run
     t0 = time.time()
-    result = run_pipeline(initial_state)
+    pipeline_fn = run_pipeline_v2 if agentic else run_pipeline
+    if agentic:
+        console.print("  Pipeline: [bold cyan]v2 (agentic retrieval)[/bold cyan]")
+    result = pipeline_fn(initial_state)
     elapsed = time.time() - t0
 
     # ── Final summary ──

@@ -38,6 +38,11 @@ def log_tool_call(
     _call_log.log_tool_call(node, tool_name, inputs, outputs, label=label)
 
 
+def get_call_log() -> CallLog:
+    """Return the module-level CallLog instance (for passing to agents)."""
+    return _call_log
+
+
 def get_log() -> list[dict]:
     """Return accumulated chat log entries as dicts."""
     return _call_log.to_dicts()
