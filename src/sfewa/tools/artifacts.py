@@ -86,7 +86,11 @@ def save_run_artifacts(state: dict) -> Path:
     # Deduplicate risk factors using liteagent utility
     deduped_factors = dedup_by_key(state.get("risk_factors", []), "dimension")
     save_artifact(run_id, "risk_factors.json", deduped_factors)
-    save_artifact(run_id, "challenges.json", state.get("adversarial_challenges", []))
+    # Deduplicate challenges: cross-pass accumulation creates duplicates
+    deduped_challenges = dedup_by_key(
+        state.get("adversarial_challenges", []), "target_factor_id"
+    )
+    save_artifact(run_id, "challenges.json", deduped_challenges)
 
     backtest_data = {
         "events": state.get("backtest_events", []),

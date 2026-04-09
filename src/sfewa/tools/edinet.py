@@ -1,7 +1,7 @@
 """EDINET API client for fetching Japanese financial filings.
 
 EDINET (Electronic Disclosure for Investors' NETwork) is Japan's FSA
-filing system. Provides access to Honda's official filings:
+filing system. Provides access to official filings for Japanese companies:
 - 有価証券報告書 (Annual Securities Report)
 - 半期報告書 (Semi-Annual Report)
 - 臨時報告書 (Extraordinary Report)
@@ -24,6 +24,10 @@ EDINET_BASE = "https://api.edinet-fsa.go.jp/api/v2"
 HONDA_EDINET_CODE = "E02529"
 HONDA_EDINET_CODE_ALT = "E02166"  # Some filings use this code
 HONDA_SEC_CODE = "72670"  # 7267 + check digit
+
+# Toyota's EDINET identifiers
+TOYOTA_EDINET_CODE = "E02144"
+TOYOTA_SEC_CODE = "72030"  # 7203 + check digit
 
 
 def _get_api_key() -> str:
@@ -75,30 +79,33 @@ def search_filings_by_date(
     return results
 
 
-def scan_honda_filings(
+def scan_company_filings(
     start_date: date,
     end_date: date,
+    edinet_codes: list[str],
+    sec_code: str,
     delay: float = 0.3,
 ) -> list[dict]:
-    """Scan a date range for Honda filings on EDINET.
+    """Scan a date range for a company's filings on EDINET.
 
     Args:
         start_date: Start of scan range (inclusive).
         end_date: End of scan range (inclusive).
+        edinet_codes: EDINET codes to filter for.
+        sec_code: Securities code (5 digits) to filter for.
         delay: Delay between API calls in seconds (be polite to gov API).
 
     Returns:
-        List of Honda filing metadata dicts.
+        List of filing metadata dicts.
     """
-    honda_codes = [HONDA_EDINET_CODE, HONDA_EDINET_CODE_ALT]
     filings = []
     d = start_date
     while d <= end_date:
         try:
             results = search_filings_by_date(
                 d,
-                edinet_codes=honda_codes,
-                sec_code=HONDA_SEC_CODE,
+                edinet_codes=edinet_codes,
+                sec_code=sec_code,
             )
             filings.extend(results)
         except Exception:
@@ -106,6 +113,20 @@ def scan_honda_filings(
         d += timedelta(days=1)
         time.sleep(delay)
     return filings
+
+
+def scan_honda_filings(
+    start_date: date,
+    end_date: date,
+    delay: float = 0.3,
+) -> list[dict]:
+    """Scan a date range for Honda filings on EDINET."""
+    return scan_company_filings(
+        start_date, end_date,
+        edinet_codes=[HONDA_EDINET_CODE, HONDA_EDINET_CODE_ALT],
+        sec_code=HONDA_SEC_CODE,
+        delay=delay,
+    )
 
 
 def download_pdf(doc_id: str, output_path: str | Path) -> Path:
@@ -154,8 +175,8 @@ def extract_text_from_pdf(pdf_path: str | Path, max_pages: int = 50) -> str:
     return "\n\n".join(pages_text)
 
 
-# ── Pre-configured Honda filing metadata ──
-# Known key filings for the Honda EV case (pre-cutoff 2025-05-19)
+# ── Pre-configured filing metadata ──
+
 HONDA_KEY_FILINGS = [
     {
         "doc_id": "S100TNE0",
@@ -185,3 +206,72 @@ HONDA_KEY_FILINGS = [
         "credibility_tier": "tier1_primary",
     },
 ]
+
+TOYOTA_KEY_FILINGS = [
+    {
+        "doc_id": "S100TR7I",
+        "filename": "toyota_annual_report_fy2023.pdf",
+        "title": "有価証券報告書 第120期 (FY2023 Annual Report)",
+        "filed_date": "2024-06-25",
+        "doc_type": "annual_report",
+        "source_type": "company_filing",
+        "credibility_tier": "tier1_primary",
+    },
+    {
+        "doc_id": "S100UP32",
+        "filename": "toyota_semiannual_report_h1_fy2024.pdf",
+        "title": "半期報告書 第121期 (H1 FY2024 Semi-Annual Report)",
+        "filed_date": "2024-11-13",
+        "doc_type": "semiannual_report",
+        "source_type": "company_filing",
+        "credibility_tier": "tier1_primary",
+    },
+    {
+        "doc_id": "S100TNT2",
+        "filename": "toyota_extraordinary_20240619.pdf",
+        "title": "臨時報告書 (Extraordinary Report - AGM results)",
+        "filed_date": "2024-06-19",
+        "doc_type": "extraordinary_report",
+        "source_type": "company_filing",
+        "credibility_tier": "tier1_primary",
+    },
+    {
+        "doc_id": "S100VPQE",
+        "filename": "toyota_extraordinary_20250508.pdf",
+        "title": "臨時報告書 (Extraordinary Report - May 2025)",
+        "filed_date": "2025-05-08",
+        "doc_type": "extraordinary_report",
+        "source_type": "company_filing",
+        "credibility_tier": "tier1_primary",
+    },
+]
+
+
+# ── Company registry for EDINET-eligible companies ──
+
+EDINET_REGISTRY: dict[str, dict] = {
+    "honda": {
+        "edinet_codes": [HONDA_EDINET_CODE, HONDA_EDINET_CODE_ALT],
+        "sec_code": HONDA_SEC_CODE,
+        "corpus_dir": "honda",
+        "filings": HONDA_KEY_FILINGS,
+    },
+    "toyota": {
+        "edinet_codes": [TOYOTA_EDINET_CODE],
+        "sec_code": TOYOTA_SEC_CODE,
+        "corpus_dir": "toyota",
+        "filings": TOYOTA_KEY_FILINGS,
+    },
+}
+
+
+def get_edinet_company(company_name: str) -> dict | None:
+    """Look up a company in the EDINET registry by name.
+
+    Returns the registry entry if the company is EDINET-eligible, else None.
+    """
+    name_lower = company_name.lower()
+    for key, entry in EDINET_REGISTRY.items():
+        if key in name_lower:
+            return entry
+    return None

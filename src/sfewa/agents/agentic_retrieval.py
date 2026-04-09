@@ -37,7 +37,7 @@ from sfewa.agents.retrieval import (
 )
 from sfewa.schemas.state import PipelineState
 from sfewa.tools.chat_log import get_call_log
-from sfewa.tools.corpus_loader import load_edinet_corpus
+from sfewa.tools.filing_discovery import discover_and_load_filings, identify_jurisdiction
 
 
 # Maximum search queries the agent is allowed to make
@@ -144,50 +144,67 @@ def _make_search_tool(
     )
 
 
-def _make_edinet_tool(
+def _make_filing_tool(
     company: str,
+    cutoff: str,
+    regions: list[str],
     all_docs: list[dict],
 ) -> Tool:
-    """Create an EDINET loading tool."""
+    """Create a regulatory filing discovery and loading tool.
 
+    The tool discovers the company's jurisdiction, finds the appropriate
+    filing system (EDINET for Japan, etc.), and loads official filings.
+    """
     loaded = [False]
 
-    def load_edinet() -> str:
-        """Load EDINET regulatory filings for the company."""
+    def load_regulatory_filings() -> str:
+        """Discover and load official regulatory filings for the company."""
         if loaded[0]:
-            return "EDINET filings already loaded."
+            return "Regulatory filings already loaded."
 
-        if "honda" not in company.lower():
-            return "No EDINET filings available for this company."
+        jurisdiction = identify_jurisdiction(company, regions)
+        if jurisdiction is None:
+            return (
+                "Could not determine filing jurisdiction for this company. "
+                "Rely on web search for evidence."
+            )
 
-        docs = load_edinet_corpus()
+        docs = discover_and_load_filings(company, cutoff, regions)
         if not docs:
-            return "No EDINET filings found."
+            return (
+                f"Jurisdiction: {jurisdiction}. "
+                f"No regulatory filings found or filing system not yet supported. "
+                f"Rely on web search."
+            )
 
         loaded[0] = True
         all_docs.extend(docs)
 
-        reporting.log_action("EDINET corpus loaded", {"docs": len(docs)})
+        reporting.log_action("Regulatory filings loaded", {
+            "jurisdiction": jurisdiction,
+            "docs": len(docs),
+        })
 
-        lines = [f"Loaded {len(docs)} EDINET filing chunks:"]
+        lines = [f"Loaded {len(docs)} regulatory filing chunks ({jurisdiction.upper()} filings):"]
         for d in docs[:5]:
             lines.append(f"- {d.get('title', 'N/A')[:80]}")
         if len(docs) > 5:
             lines.append(f"  ... and {len(docs) - 5} more chunks")
         lines.append(
-            "\nThese are official regulatory filings — primary sources. "
+            "\nThese are official regulatory filings — Tier 1 primary sources. "
             "Now search the web for external perspectives."
         )
         return "\n".join(lines)
 
     return Tool(
-        name="load_edinet",
+        name="load_regulatory_filings",
         description=(
-            "Load EDINET regulatory filings for the company (if available). "
+            "Discover and load official regulatory filings for the company. "
+            "Automatically detects jurisdiction (Japan → EDINET, etc.). "
             "Call once at the start for primary source data."
         ),
         parameters={"type": "object", "properties": {}},
-        fn=load_edinet,
+        fn=load_regulatory_filings,
     )
 
 
@@ -239,7 +256,7 @@ def agentic_retrieval_node(state: PipelineState) -> dict:
 
     # Build tools
     search_tool = _make_search_tool(seen_links, all_docs)
-    edinet_tool = _make_edinet_tool(company, all_docs)
+    filing_tool = _make_filing_tool(company, cutoff, regions, all_docs)
 
     # Format case context for the prompt
     peer_names = ", ".join(
@@ -253,12 +270,12 @@ def agentic_retrieval_node(state: PipelineState) -> dict:
     cutoff_year = int(cutoff[:4])
     prior_year = cutoff_year - 1
 
-    has_edinet = "honda" in company.lower()
-    edinet_note = (
-        "EDINET filings are available for this company. "
-        "Call load_edinet() FIRST to get primary source data."
-        if has_edinet
-        else "No EDINET filings available — rely on web search."
+    jurisdiction = identify_jurisdiction(company, regions)
+    filing_note = (
+        f"Regulatory filings may be available ({jurisdiction.upper()} jurisdiction). "
+        f"Call load_regulatory_filings() FIRST to get primary source data."
+        if jurisdiction
+        else "No known regulatory filing system — rely on web search."
     )
 
     system_prompt = AGENTIC_RETRIEVAL_SYSTEM.format(
@@ -270,7 +287,7 @@ def agentic_retrieval_node(state: PipelineState) -> dict:
         regions=region_str,
         peers=peer_names,
         dimensions=dims_str,
-        edinet_note=edinet_note,
+        edinet_note=filing_note,
         max_queries=MAX_SEARCH_QUERIES,
     )
     user_msg = AGENTIC_RETRIEVAL_USER.format(
@@ -283,7 +300,7 @@ def agentic_retrieval_node(state: PipelineState) -> dict:
     llm = get_llm_for_role("retrieval")
     agent = ToolLoopAgent(
         llm=llm,
-        tools=[search_tool, edinet_tool],
+        tools=[search_tool, filing_tool],
         system_prompt=system_prompt,
         max_iterations=MAX_SEARCH_QUERIES + 5,  # some headroom for non-search turns
         call_log=get_call_log(),
@@ -294,8 +311,8 @@ def agentic_retrieval_node(state: PipelineState) -> dict:
     result = agent.run(user_msg)
 
     # Count doc sources
-    edinet_count = sum(1 for d in all_docs if d.get("source") == "edinet")
-    web_count = len(all_docs) - edinet_count
+    filing_count = sum(1 for d in all_docs if d.get("source") in ("edinet", "cninfo"))
+    web_count = len(all_docs) - filing_count
 
     reporting.log_action("Agent finished", {
         "tool_calls": result.tool_call_count,
@@ -311,7 +328,7 @@ def agentic_retrieval_node(state: PipelineState) -> dict:
 
     reporting.exit_node("agentic_retrieval", {
         "total_docs": len(all_docs),
-        "edinet": edinet_count,
+        "filings": filing_count,
         "web": web_count,
         "search_queries": result.tool_call_count,
     }, next_node="evidence_extraction")

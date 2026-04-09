@@ -84,6 +84,101 @@ Respond with ONLY the JSON object.
 """
 
 
+# ── Phase 2: Independent Verification Search ──
+
+VERIFICATION_SYSTEM = """\
+You are an independent verification agent for strategic risk analysis of \
+{company}'s {strategy_theme}.
+
+Your mission: search the web for evidence that CONTRADICTS the key claims \
+listed below. The risk analysts already found supporting evidence — you are \
+the adversarial check, looking specifically for COUNTER-EVIDENCE.
+
+## CLAIMS TO VERIFY
+
+{claims_text}
+
+## SEARCH STRATEGY
+
+For each claim:
+1. Search with specific queries targeting contradicting evidence
+2. Include year constraints ({prior_year}-{cutoff_year}) for temporal relevance
+3. Look for: company rebuttals, positive financial metrics, alternative data, \
+analyst upgrades, or anything that weakens the claim
+4. Try 1-2 search queries per claim
+
+TEMPORAL RULE: Ignore any information published after {cutoff_date}.
+
+Search budget: {max_queries} queries maximum.
+
+After all searches, provide a STRUCTURED SUMMARY of findings. For each claim:
+- The claim you verified (quote it)
+- What you searched for
+- What you found (key titles and snippets)
+- Verdict: "contradicted" (clear counter-evidence), "weakened" (partial), \
+or "not contradicted" (nothing found)
+"""
+
+VERIFICATION_USER = """\
+Begin searching for counter-evidence to the claims listed above. \
+After completing your searches, provide your structured findings summary.\
+"""
+
+
+# ── Phase 3: Challenge Refinement ──
+
+REFINEMENT_SYSTEM = """\
+You are refining adversarial challenges for {company}'s {strategy_theme} \
+risk analysis after independent web verification.\
+"""
+
+REFINEMENT_USER = """\
+ORIGINAL CHALLENGES (from preliminary review):
+{original_challenges_json}
+
+ORIGINAL RECOMMENDATION:
+{original_recommendation_json}
+
+INDEPENDENT VERIFICATION FINDINGS:
+{verification_findings}
+
+## REFINEMENT RULES
+
+1. For each challenge where verification found CONTRADICTING evidence:
+   - Append " [Independently verified: <key finding>]" to challenge_text
+   - If the contradiction is clear and specific → upgrade severity to "strong"
+   - Update verification_result to note the independent finding
+
+2. For challenges where verification found NO contradicting evidence:
+   - Severity stays the same
+
+3. For challenges NOT covered by verification (LOW/MEDIUM factors):
+   - Keep completely unchanged
+
+4. Re-evaluate recommendation:
+   - Count total STRONG challenges after refinement
+   - If > 50% STRONG → change action to "reanalyze"
+   - Otherwise → keep original recommendation
+
+Return the COMPLETE JSON object with "challenges" and "recommendation" fields.
+Include ALL challenges (verified and unverified). Same field structure as original.
+Respond with ONLY the JSON object.
+"""
+
+
+def format_claims_for_verification(claims: list[dict]) -> str:
+    """Format extracted claims into text for the verification agent prompt."""
+    lines = []
+    for i, c in enumerate(claims, 1):
+        lines.append(
+            f"{i}. [{c['challenge_id']}] Factor {c['factor_id']} "
+            f"(rated {c['factor_severity'].upper()}, "
+            f"challenge: {c['current_severity']}):\n"
+            f'   "{c["claim"]}"'
+        )
+    return "\n\n".join(lines)
+
+
 def build_evidence_stance_summary(
     evidence: list[dict],
     risk_factors: list[dict],

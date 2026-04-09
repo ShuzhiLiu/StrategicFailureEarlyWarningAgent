@@ -1,41 +1,314 @@
 """Adversarial Reviewer agent node.
 
-Challenges risk factors by finding contradicting evidence and checking biases.
-Uses thinking mode for deep multi-step reasoning.
+Three-phase adversarial review with independent verification:
+  Phase 1: Chain of Verification (thinking mode) — standard adversarial review
+  Phase 2: Independent verification search (ToolLoopAgent) — searches for
+           counter-evidence to HIGH/CRITICAL claims with non-STRONG challenges
+  Phase 3: Challenge refinement (thinking mode) — upgrades challenge severities
+           when verification finds contradicting evidence
+
+Phase 2+3 only run when Phase 1 identifies verifiable claims. If all challenges
+are already STRONG, the node behaves exactly as before.
 """
 
 from __future__ import annotations
 
 import json
+import time
 
-from liteagent import dedup_by_key, extract_json, strip_thinking
+from liteagent import Tool, ToolLoopAgent, dedup_by_key, extract_json, strip_thinking
+
+try:
+    from ddgs import DDGS
+except ImportError:
+    from duckduckgo_search import DDGS  # type: ignore[no-redef]
 
 from sfewa import reporting
 from sfewa.context import build_pipeline_context
-from sfewa.llm import get_llm_for_role
-from sfewa.tools.chat_log import log_llm_call
+from sfewa.llm import get_llm, get_llm_for_role
+from sfewa.tools.chat_log import get_call_log, log_llm_call
 from sfewa.prompts.adversarial import (
     ADVERSARIAL_SYSTEM,
     ADVERSARIAL_USER,
+    REFINEMENT_SYSTEM,
+    REFINEMENT_USER,
+    VERIFICATION_SYSTEM,
+    VERIFICATION_USER,
     build_evidence_stance_summary,
+    format_claims_for_verification,
     format_risk_factors_for_review,
 )
 from sfewa.prompts.analysis import format_evidence_for_analyst
+from sfewa.agents.retrieval import _search_web, _search_news
 from sfewa.schemas.state import PipelineState
 
 
-def adversarial_review_node(state: PipelineState) -> dict:
-    """Challenge the current risk assessment with adversarial analysis.
+# ── Constants ──
 
-    Uses thinking mode (CoT reasoning) to:
-    1. For each risk factor, find contradicting evidence
-    2. Check for selection bias, industry-vs-company confusion, temporal bias
-    3. Rate each challenge as strong/moderate/weak
+MAX_VERIFICATION_QUERIES = 8
+
+
+# ── Phase 2 helpers ──
+
+
+def _extract_claims_to_verify(
+    challenges: list[dict],
+    risk_factors: list[dict],
+    max_claims: int = 5,
+) -> list[dict]:
+    """Extract key claims from HIGH/CRITICAL factors with non-STRONG challenges.
+
+    These are the claims most worth independently verifying — Phase 1 found
+    them only moderately or weakly challengeable from available evidence,
+    but external search might find stronger counter-evidence.
+    """
+    factor_severity = {
+        rf.get("factor_id", ""): rf.get("severity", "medium").lower()
+        for rf in risk_factors
+    }
+
+    claims = []
+    for c in challenges:
+        target_id = c.get("target_factor_id", "")
+        factor_sev = factor_severity.get(target_id, "medium")
+        challenge_sev = c.get("severity", "weak").lower()
+        key_claim = c.get("key_claim_tested", "")
+
+        # Only verify HIGH/CRITICAL factors with non-STRONG challenges
+        if factor_sev in ("high", "critical") and challenge_sev != "strong" and key_claim:
+            claims.append({
+                "challenge_id": c.get("challenge_id", "?"),
+                "factor_id": target_id,
+                "claim": key_claim,
+                "current_severity": challenge_sev,
+                "factor_severity": factor_sev,
+            })
+
+    # Prioritize: critical before high, weak before moderate
+    sev_order = {"critical": 0, "high": 1}
+    chal_order = {"weak": 0, "moderate": 1}
+    claims.sort(key=lambda x: (
+        sev_order.get(x["factor_severity"], 2),
+        chal_order.get(x["current_severity"], 2),
+    ))
+
+    return claims[:max_claims]
+
+
+def _make_verification_search_tool() -> Tool:
+    """Create a search tool for adversarial verification.
+
+    Simpler than the retrieval search tool — no doc accumulation for
+    downstream extraction, just returns snippets for the LLM to interpret.
+    """
+    ddgs = DDGS()
+    call_count = [0]
+    seen_links: set[str] = set()
+
+    def search(query: str) -> str:
+        """Search the web for counter-evidence to a claim."""
+        call_count[0] += 1
+        if call_count[0] > MAX_VERIFICATION_QUERIES:
+            return (
+                f"Search budget exhausted ({MAX_VERIFICATION_QUERIES} queries). "
+                f"Summarize your findings now."
+            )
+
+        if call_count[0] > 1:
+            time.sleep(3)
+
+        results: list[dict] = []
+        try:
+            web = _search_web(query, max_results=5, ddgs_instance=ddgs)
+            results.extend(web)
+        except Exception:
+            pass
+
+        time.sleep(2)
+
+        try:
+            news = _search_news(query, max_results=3, ddgs_instance=ddgs)
+            results.extend(news)
+        except Exception:
+            pass
+
+        # Deduplicate by link
+        unique: list[dict] = []
+        for r in results:
+            link = r.get("href") or r.get("url") or r.get("link") or ""
+            if link and link not in seen_links:
+                seen_links.add(link)
+                unique.append(r)
+
+        reporting.log_action(f"Verification [{call_count[0]}]: {query[:60]}", {
+            "results": len(unique),
+        })
+
+        if not unique:
+            return f"No results found for: {query}"
+
+        lines = [f"Found {len(unique)} results:"]
+        for r in unique[:6]:
+            title = (r.get("title") or "")[:80]
+            body = (r.get("body") or "")[:200]
+            lines.append(f"- {title}")
+            if body:
+                lines.append(f"  {body}")
+
+        return "\n".join(lines)
+
+    return Tool(
+        name="search",
+        description=(
+            "Search the web for counter-evidence to a specific claim. "
+            "Use targeted queries that seek CONTRADICTING evidence."
+        ),
+        parameters={
+            "type": "object",
+            "properties": {
+                "query": {
+                    "type": "string",
+                    "description": "Search query targeting counter-evidence",
+                },
+            },
+            "required": ["query"],
+        },
+        fn=search,
+    )
+
+
+def _run_verification_search(
+    claims: list[dict],
+    company: str,
+    theme: str,
+    cutoff: str,
+) -> str:
+    """Phase 2: Run independent verification search agent.
+
+    Returns the agent's findings summary (free-form text).
+    """
+    cutoff_year = int(cutoff[:4])
+    prior_year = cutoff_year - 1
+
+    claims_text = format_claims_for_verification(claims)
+    system_prompt = VERIFICATION_SYSTEM.format(
+        company=company,
+        strategy_theme=theme,
+        claims_text=claims_text,
+        prior_year=prior_year,
+        cutoff_year=cutoff_year,
+        cutoff_date=cutoff,
+        max_queries=MAX_VERIFICATION_QUERIES,
+    )
+
+    llm = get_llm(thinking=False)  # non-thinking for tool calling
+    search_tool = _make_verification_search_tool()
+
+    agent = ToolLoopAgent(
+        llm=llm,
+        tools=[search_tool],
+        system_prompt=system_prompt,
+        max_iterations=MAX_VERIFICATION_QUERIES + 3,
+        call_log=get_call_log(),
+        node_name="adversarial_verification",
+    )
+
+    reporting.log_action("Starting verification search", {
+        "claims": len(claims),
+        "budget": MAX_VERIFICATION_QUERIES,
+    })
+
+    result = agent.run(VERIFICATION_USER)
+
+    reporting.log_action("Verification search complete", {
+        "queries": result.tool_call_count,
+        "iterations": result.iterations,
+        "hit_limit": result.hit_limit,
+    })
+
+    return result.content
+
+
+# ── Phase 3 helper ──
+
+
+def _refine_challenges(
+    challenges: list[dict],
+    recommendation: dict,
+    findings: str,
+    company: str,
+    theme: str,
+) -> tuple[list[dict], str]:
+    """Phase 3: Refine challenges based on verification findings.
+
+    Returns (refined_challenges, refined_recommendation_action).
+    """
+    system_msg = REFINEMENT_SYSTEM.format(
+        company=company,
+        strategy_theme=theme,
+    )
+
+    original_challenges_json = json.dumps(challenges, indent=2, ensure_ascii=False)
+    original_recommendation_json = json.dumps(recommendation, indent=2, ensure_ascii=False)
+
+    user_msg = REFINEMENT_USER.format(
+        original_challenges_json=original_challenges_json,
+        original_recommendation_json=original_recommendation_json,
+        verification_findings=findings,
+    )
+
+    llm = get_llm(thinking=True)  # thinking mode for refinement
+
+    try:
+        messages = [
+            {"role": "system", "content": system_msg},
+            {"role": "user", "content": user_msg},
+        ]
+        response = llm.invoke(messages)
+        log_llm_call("adversarial_review", messages, response, label="refinement")
+        raw_text = strip_thinking(response.content)
+
+        parsed = extract_json(raw_text)
+
+        if isinstance(parsed, dict):
+            refined_challenges = parsed.get("challenges", challenges)
+            rec = parsed.get("recommendation", recommendation)
+            if isinstance(rec, dict):
+                return refined_challenges, rec.get("action", "proceed")
+            return refined_challenges, "proceed"
+        elif isinstance(parsed, list):
+            return parsed, "proceed"
+
+    except Exception as e:
+        reporting.log_action("Refinement parse failed — using Phase 1 results", {
+            "error": str(e)[:200],
+        })
+
+    # Fallback: return originals
+    rec_action = recommendation.get("action", "proceed") if isinstance(recommendation, dict) else "proceed"
+    return challenges, rec_action
+
+
+# ── Main node ──
+
+
+def adversarial_review_node(state: PipelineState) -> dict:
+    """Three-phase adversarial review with independent verification.
+
+    Phase 1: Standard Chain of Verification (thinking mode)
+      Produces preliminary challenges + recommendation.
+    Phase 2: Independent verification search (non-thinking, ToolLoopAgent)
+      Searches for counter-evidence to HIGH/CRITICAL claims.
+      Only runs when Phase 1 has verifiable claims.
+    Phase 3: Challenge refinement (thinking mode)
+      Upgrades challenge severities based on verification findings.
+      Only runs when Phase 2 finds relevant evidence.
     """
     raw_risk_factors = state.get("risk_factors", [])
     evidence = state.get("evidence", [])
     company = state["company"]
     theme = state["strategy_theme"]
+    cutoff = state["cutoff_date"]
     pass_count = state.get("adversarial_pass_count", 0) + 1
 
     # Deduplicate: keep latest factor per dimension (handles multi-pass accumulation)
@@ -56,14 +329,16 @@ def adversarial_review_node(state: PipelineState) -> dict:
             "current_stage": "adversarial_review",
         }
 
-    # Extract dimension_relevance from analysis_dimensions for depth gate check
+    # Extract dimension_relevance for depth gate check
     dimension_relevance: dict[str, str] = {}
     analysis_dims = state.get("analysis_dimensions", {})
     for group in analysis_dims.values():
         if isinstance(group, dict) and "dimension_relevance" in group:
             dimension_relevance.update(group["dimension_relevance"])
 
-    # Format prompt with pipeline context injection
+    # ── Phase 1: Standard Chain of Verification (thinking mode) ──
+    reporting.log_action("Phase 1: Chain of Verification (thinking mode)")
+
     rf_text = format_risk_factors_for_review(risk_factors, dimension_relevance)
     evidence_text = format_evidence_for_analyst(evidence)
     evidence_stance_summary = build_evidence_stance_summary(evidence, risk_factors)
@@ -81,19 +356,19 @@ def adversarial_review_node(state: PipelineState) -> dict:
         evidence_stance_summary=evidence_stance_summary,
     )
 
-    # Call LLM with thinking mode
     llm = get_llm_for_role("adversarial")
-    reporting.log_action("Calling LLM (thinking mode) for adversarial review")
 
     challenges: list[dict] = []
-    adversarial_recommendation = "proceed"  # default: proceed to synthesis
+    adversarial_recommendation = "proceed"
+    recommendation_obj: dict = {"action": "proceed", "reasoning": ""}
+
     try:
         messages = [
             {"role": "system", "content": system_msg},
             {"role": "user", "content": user_msg},
         ]
         response = llm.invoke(messages)
-        log_llm_call("adversarial_review", messages, response, label="adversarial")
+        log_llm_call("adversarial_review", messages, response, label="phase1")
         raw_text = strip_thinking(response.content)
 
         try:
@@ -102,23 +377,21 @@ def adversarial_review_node(state: PipelineState) -> dict:
             parsed = {}
 
         if isinstance(parsed, dict):
-            # Object format -- new output with recommendation
             if isinstance(parsed.get("challenges"), list):
                 challenges = parsed["challenges"]
             rec = parsed.get("recommendation", {})
             if isinstance(rec, dict):
+                recommendation_obj = rec
                 adversarial_recommendation = rec.get("action", "proceed")
-                rec_reasoning = rec.get("reasoning", "")
-                reporting.log_action("Adversarial recommendation", {
+                reporting.log_action("Phase 1 recommendation", {
                     "action": adversarial_recommendation.upper(),
-                    "reasoning": rec_reasoning[:120],
+                    "reasoning": rec.get("reasoning", "")[:120],
                 })
         elif isinstance(parsed, list):
-            # Fallback: array format (old output)
             challenges = parsed
 
     except Exception as e:
-        reporting.log_action("LLM call failed", {"error": str(e)[:200]})
+        reporting.log_action("Phase 1 LLM call failed", {"error": str(e)[:200]})
         return {
             "adversarial_challenges": [],
             "adversarial_pass_count": pass_count,
@@ -126,25 +399,92 @@ def adversarial_review_node(state: PipelineState) -> dict:
             "current_stage": "adversarial_review",
         }
 
-    # Validate challenges
+    # Validate Phase 1 challenges
     valid_challenges: list[dict] = []
     for c in challenges:
         required = ["challenge_id", "target_factor_id", "challenge_text", "severity"]
         if all(c.get(f) for f in required):
+            # Normalize target_factor_id: LLM often outputs "[COM001]" but
+            # risk factors use "COM001". Strip brackets for consistent matching.
+            raw_tid = c["target_factor_id"]
+            c["target_factor_id"] = raw_tid.strip("[]")
             if not isinstance(c.get("counter_evidence"), list):
                 c["counter_evidence"] = []
             if "resolution" not in c:
                 c["resolution"] = None
             valid_challenges.append(c)
 
-    # Count severity distribution
+    phase1_severity = {"strong": 0, "moderate": 0, "weak": 0}
+    for c in valid_challenges:
+        sev = c.get("severity", "weak")
+        if sev in phase1_severity:
+            phase1_severity[sev] += 1
+
+    reporting.log_action("Phase 1 challenges", phase1_severity)
+
+    # ── Phase 2: Independent verification search ──
+    claims = _extract_claims_to_verify(valid_challenges, risk_factors)
+    phases_run = "1"
+
+    if claims:
+        reporting.log_action("Phase 2: Independent verification search", {
+            "claims_to_verify": len(claims),
+            "factors": [c["factor_id"] for c in claims],
+        })
+        findings = _run_verification_search(claims, company, theme, cutoff)
+        phases_run = "1+2"
+
+        # ── Phase 3: Challenge refinement ──
+        if findings and findings.strip():
+            reporting.log_action("Phase 3: Challenge refinement (thinking mode)")
+            refined_challenges, refined_rec = _refine_challenges(
+                valid_challenges, recommendation_obj, findings, company, theme,
+            )
+            phases_run = "1+2+3"
+
+            # Validate refined challenges
+            final_challenges: list[dict] = []
+            for c in refined_challenges:
+                required = ["challenge_id", "target_factor_id", "challenge_text", "severity"]
+                if all(c.get(f) for f in required):
+                    raw_tid = c["target_factor_id"]
+                    c["target_factor_id"] = raw_tid.strip("[]")
+                    if not isinstance(c.get("counter_evidence"), list):
+                        c["counter_evidence"] = []
+                    if "resolution" not in c:
+                        c["resolution"] = None
+                    final_challenges.append(c)
+
+            if final_challenges:
+                valid_challenges = final_challenges
+                adversarial_recommendation = refined_rec
+            else:
+                reporting.log_action("Refinement produced invalid output — using Phase 1")
+        else:
+            reporting.log_action("Phase 2 found nothing — skipping refinement")
+    else:
+        reporting.log_action("No claims to verify — skipping Phase 2+3")
+
+    # ── Dedup challenges by target_factor_id ──
+    # Phase 3 refinement can sometimes return duplicates (both original + refined).
+    # Keep the LAST challenge per target factor (the refined version).
+    valid_challenges = dedup_by_key(valid_challenges, "target_factor_id")
+
+    # ── Final severity counts ──
     severity_counts = {"strong": 0, "moderate": 0, "weak": 0}
     for c in valid_challenges:
         sev = c.get("severity", "weak")
         if sev in severity_counts:
             severity_counts[sev] += 1
 
-    reporting.log_action("Challenges generated", severity_counts)
+    # Log severity changes from verification
+    if phases_run == "1+2+3" and phase1_severity != severity_counts:
+        reporting.log_action("Verification changed severities", {
+            "phase1": phase1_severity,
+            "final": severity_counts,
+        })
+
+    reporting.log_action("Final challenges", severity_counts)
     for c in valid_challenges:
         reporting.log_challenge(
             c["challenge_id"],
@@ -153,21 +493,23 @@ def adversarial_review_node(state: PipelineState) -> dict:
             c["challenge_text"][:80],
         )
 
-    # Report routing decision -- now LLM-driven
-    strong_count = severity_counts["strong"]
-
     # Validate recommendation: override to "proceed" if max passes reached
     if pass_count >= 2 and adversarial_recommendation == "reanalyze":
         adversarial_recommendation = "proceed"
-        reporting.log_action("Max adversarial passes -- overriding to proceed")
+        reporting.log_action("Max adversarial passes — overriding to proceed")
 
-    next_node = "risk_synthesis" if adversarial_recommendation == "proceed" else "evidence_extraction (reanalyze)"
+    next_node = (
+        "risk_synthesis"
+        if adversarial_recommendation == "proceed"
+        else "evidence_extraction (reanalyze)"
+    )
 
     reporting.exit_node("adversarial_review", {
         "challenges": len(valid_challenges),
-        "strong": strong_count,
+        "strong": severity_counts["strong"],
         "moderate": severity_counts["moderate"],
         "weak": severity_counts["weak"],
+        "phases": phases_run,
         "llm_recommendation": adversarial_recommendation,
     }, next_node=next_node)
 

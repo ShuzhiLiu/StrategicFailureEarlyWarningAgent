@@ -75,7 +75,7 @@ def risk_synthesis_node(state: PipelineState) -> dict:
     4. Generate structured risk memo
     """
     raw_risk_factors = state.get("risk_factors", [])
-    challenges = state.get("adversarial_challenges", [])
+    raw_challenges = state.get("adversarial_challenges", [])
     evidence = state.get("evidence", [])
     company = state["company"]
     theme = state["strategy_theme"]
@@ -83,6 +83,8 @@ def risk_synthesis_node(state: PipelineState) -> dict:
     # Deduplicate risk factors: if multiple passes produced factors for the
     # same dimension, keep only the LATEST one (last in list = most recent pass)
     risk_factors = dedup_by_key(raw_risk_factors, "dimension")
+    # Deduplicate challenges: cross-pass accumulation creates duplicates
+    challenges = dedup_by_key(raw_challenges, "target_factor_id")
 
     reporting.enter_node("risk_synthesis", {
         "risk_factors_raw": len(raw_risk_factors),

@@ -3,9 +3,11 @@
 Loads EDINET filings and other pre-downloaded documents, extracts text,
 filters for relevant sections, and returns them as retrieved_docs.
 
-EDINET filings provide Tier 1 primary evidence (Honda's own disclosures)
+EDINET filings provide Tier 1 primary evidence (official disclosures)
 with known, verified publication dates — solving the DuckDuckGo date
 ambiguity problem for company-specific data.
+
+Supports multiple companies via the EDINET registry in edinet.py.
 """
 
 from __future__ import annotations
@@ -13,7 +15,11 @@ from __future__ import annotations
 from pathlib import Path
 
 from sfewa import reporting
-from sfewa.tools.edinet import HONDA_KEY_FILINGS, extract_text_from_pdf
+from sfewa.tools.edinet import (
+    HONDA_KEY_FILINGS,
+    extract_text_from_pdf,
+    get_edinet_company,
+)
 
 CORPUS_BASE = Path(__file__).resolve().parents[3] / "data" / "corpus"
 
@@ -62,22 +68,37 @@ def _extract_relevant_pages(
     return "\n\n".join(relevant)
 
 
-def load_edinet_corpus() -> list[dict]:
-    """Load EDINET Honda filings as retrieved_docs.
+def load_edinet_corpus(company: str = "honda") -> list[dict]:
+    """Load EDINET filings as retrieved_docs for any registered company.
 
     For annual reports (200+ pages): extracts only EV-relevant pages.
     For smaller reports: extracts full text.
     Results are chunked into manageable pieces for the extraction LLM.
+
+    Args:
+        company: Company name (matched against EDINET registry).
 
     Returns:
         List of document dicts compatible with retrieved_docs format.
         Each has: title, snippet, link, source, source_type,
                   credibility_tier, published_at.
     """
+    entry = get_edinet_company(company)
+    if entry is None:
+        # Fallback for backward compat: if called with "honda" directly
+        if "honda" in company.lower():
+            filings = HONDA_KEY_FILINGS
+            corpus_dir = "honda"
+        else:
+            return []
+    else:
+        filings = entry["filings"]
+        corpus_dir = entry["corpus_dir"]
+
     docs: list[dict] = []
 
-    for filing in HONDA_KEY_FILINGS:
-        pdf_path = CORPUS_BASE / "honda" / "edinet" / filing["filename"]
+    for filing in filings:
+        pdf_path = CORPUS_BASE / corpus_dir / "edinet" / filing["filename"]
         if not pdf_path.exists():
             reporting.log_action(f"EDINET PDF missing: {filing['filename']}")
             continue

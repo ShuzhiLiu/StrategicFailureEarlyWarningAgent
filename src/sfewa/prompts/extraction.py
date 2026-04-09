@@ -16,9 +16,10 @@ CRITICAL RULES:
 5. For financial_metric claims, ALWAYS include the fiscal year or reporting period in the claim_text (e.g., "FY2024 net profit was 40.25 billion yuan" not just "net profit was 40.25 billion yuan"). This prevents confusion when comparing metrics across different periods.
 
 CLAIM TYPES (pick the most specific one):
-- target_statement: Quantitative targets set by the company (e.g., "30% EV by 2030")
-- investment_commitment: Capital allocation plans (e.g., "10 trillion yen in EV")
+- target_statement: Quantitative targets set by the company (e.g., "30% market share by 2030")
+- investment_commitment: Capital allocation plans (e.g., "10 trillion yen committed to strategy")
 - product_launch_plan: Specific product/model timelines
+- technology_capability: Proprietary technology, patents, vertical integration, in-house supply chain, R&D achievements, technology partnerships/supply relationships (e.g., "company's proprietary X technology", "company supplies key platform/components to competitor", "vertical integration covers core value chain from A to B")
 - market_outlook: Market size, adoption rates, demand trends
 - risk_disclosure: Acknowledged risks or challenges
 - competitive_positioning: Competitor actions, market share, relative standing
@@ -26,12 +27,12 @@ CLAIM TYPES (pick the most specific one):
 - policy_change: Government/regulatory changes affecting strategy
 - financial_metric: Revenue, profit, sales volumes, writedowns
 
-STANCE (relative to {company}'s EV strategy risk):
+STANCE (relative to {company}'s {strategy_theme} risk):
 - supports_risk: This claim suggests the strategy faces problems. Includes: declining sales, competitor advantages, execution delays, market headwinds, risk disclosures by the company itself, overly ambitious targets with unclear execution path, large capital commitments with uncertain returns.
 - contradicts_risk: This claim suggests the strategy is on track and sound. Includes: strong sales growth, successful launches, healthy financials that support the investment, partnerships on schedule.
 - neutral: Factual claim that could go either way, or purely descriptive statements about plans without clear risk signal.
 
-NOTE: A company's OWN risk disclosure (e.g., "we face challenges in...") should be classified as supports_risk — the company itself is acknowledging the problem. Similarly, very ambitious targets (e.g., "100% EV by 2040") should be neutral or supports_risk if there is no evidence the company can achieve them, not contradicts_risk just because the company stated them confidently.
+NOTE: A company's OWN risk disclosure (e.g., "we face challenges in...") should be classified as supports_risk — the company itself is acknowledging the problem. Similarly, very ambitious targets should be neutral or supports_risk if there is no evidence the company can achieve them, not contradicts_risk just because the company stated them confidently.
 
 SOURCE TYPE:
 - company_filing: Official SEC/regulatory filings

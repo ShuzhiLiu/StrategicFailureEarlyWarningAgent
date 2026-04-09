@@ -16,12 +16,11 @@ SFEWA is a Planner-Generator-Evaluator system for strategic failure early warnin
 │                                                                  │
 │  PLANNER: Autonomous Information Gathering                       │
 │    init_case (LLM generates dimensions, regions, peers)          │
-│    retrieval (3-pass) -> extraction -> quality_gate (LLM loop)   │
-│    Generates own queries. Evaluates own coverage. Loops until    │
-│    satisfied. Temporal filter prevents information leakage.      │
-│                                                                  │
-│                    evidence_sufficient?                          │
-│                     (LLM decides)                                │
+│    agentic_retrieval (ToolLoopAgent: search + filings)           │
+│    → evidence_extraction (batched, temporal-filtered)            │
+│    Agent decides what to search, when to stop. Derives search   │
+│    queries from analysis dimensions. Temporal filter prevents    │
+│    information leakage.                                          │
 │                                                                  │
 │  GENERATOR: Multi-Expert Risk Analysis (Iceberg Model)           │
 │    industry | company | peer (parallel, scope-bounded)           │
@@ -29,8 +28,10 @@ SFEWA is a Planner-Generator-Evaluator system for strategic failure early warnin
 │    4-Layer Progressive Deepening per dimension.                  │
 │    9-12 risk factors across dynamically generated dimensions.    │
 │                                                                  │
-│  EVALUATOR: Independent Adversarial Review (Chain of Verif.)     │
-│    Thinking mode. 4-step verification. Grades challenges.        │
+│  EVALUATOR: Independent Adversarial Review (3-Phase)             │
+│    Phase 1: Chain of Verification (thinking mode)                │
+│    Phase 2: Independent verification search (ToolLoopAgent)      │
+│    Phase 3: Challenge refinement (thinking mode)                 │
 │    Can route back for reanalysis if factors fundamentally weak.  │
 │                                                                  │
 │  SYNTHESIZER + VALIDATOR                                         │
@@ -46,7 +47,7 @@ SFEWA is a Planner-Generator-Evaluator system for strategic failure early warnin
 
 | P-G-E Role | Claude Code (General) | SFEWA (Domain-Specific) |
 |---|---|---|
-| **Planner** | Expands prompts into specs; decides scope | init_case (LLM generates dimensions) + retrieval (3-pass agentic search) + quality_gate (LLM decides evidence sufficiency) |
+| **Planner** | Expands prompts into specs; decides scope | init_case (LLM generates dimensions) + agentic_retrieval (ToolLoopAgent with dimension-driven search) + evidence_extraction |
 | **Generator** | Implements code in sprints | 3 parallel analysts with Iceberg Model framework produce risk factors with progressive depth analysis |
 | **Evaluator** | Playwright E2E tests + separate agent grading | Adversarial reviewer (thinking mode, Chain of Verification, 3-level severity) |
 | **Sprint contracts** | Generator+Evaluator negotiate criteria | LLM-generated dimensions with structural hints and critical assumptions |
@@ -72,80 +73,73 @@ SFEWA is a Planner-Generator-Evaluator system for strategic failure early warnin
                          └──────┬───────┘
                                 ▼
                          ┌──────────────┐
-                    ┌────│  init_case   │ LLM expands regions + peers
-                    │    │              │ + generates analysis dimensions
-                    │    └──────┬───────┘
-                    │           ▼
-                    │    ┌──────────────┐    ┌────────────────────────────┐
-                    │    │  retrieval   │◄───│ 3-pass agentic search:     │
-                    │    │  (3-pass)    │    │ seed -> gap-fill -> counter│
-                    │    └──────┬───────┘    └────────────────────────────┘
-                    │           ▼
-                    │    ┌──────────────┐
-                    │    │  evidence    │
-                    │    │  extraction  │
-                    │    └──────┬───────┘
-                    │           ▼
-  LLM-driven   ─────┤    ┌──────────────┐
-  Loop 1            │    │ quality_gate │── LLM decides: sufficient?
-  (evidence         │    └──────┬───────┘     │
-   sufficiency)     │      sufficient         insufficient
-                    │           │              └──> back to retrieval
-                    │           ▼                   with targeted queries
-                    │    ┌──────────────────────────────────────┐
-                    │    │  Parallel fan-out (ThreadPoolExecutor)│
-                    │    │  Iceberg Model: 4-Layer Progressive  │
-                    │    │  Deepening per dimension              │
-                    │    ├──────────────┬───────────┬───────────┤
-                    │    │  industry    │  company  │  peer     │
-                    │    │  analyst     │  analyst  │  analyst  │
-                    │    └──────┬───────┘─────┬─────┘─────┬─────┘
-                    │           └─────────────┼───────────┘
-                    │                         ▼
-  LLM-driven   ─────┤    ┌─────────────────────────────┐
-  Loop 2            │    │   adversarial_review        │── LLM decides: proceed?
-  (adversarial      │    │   Chain of Verification     │     │
-   challenge)       │    └──────────────┬──────────────┘     reanalyze
-                    │            proceed                      └──> back to extraction
-                    │                   ▼
-                    │    ┌──────────────┐
-                    │    │   synthesis  │  Programmatic base score
-                    │    │              │  + causal loop analysis
-                    │    │              │  + pre-mortem check
-                    │    └──────┬───────┘
-                    │           ▼
-                    │    ┌──────────────┐
-                    └────│   backtest   │
+                         │  init_case   │ LLM expands regions + peers
+                         │              │ + generates analysis dimensions
+                         └──────┬───────┘
+                                ▼
+                         ┌──────────────────────────────────────┐
+                         │  agentic_retrieval (ToolLoopAgent)   │
+                         │  Tools: search() + load_filings()    │
+                         │  Agent decides queries from dims,    │
+                         │  assesses coverage, stops when ready │
+                         └──────┬───────────────────────────────┘
+                                ▼
+                         ┌──────────────┐
+                         │  evidence    │  Batched extraction
+                         │  extraction  │  + temporal filter
+                         └──────┬───────┘
+                                ▼
+                         ┌──────────────────────────────────────┐
+                         │  Parallel fan-out (ThreadPoolExecutor)│
+                         │  Iceberg Model: 4-Layer Progressive  │
+                         │  Deepening per dimension              │
+                         ├──────────────┬───────────┬───────────┤
+                         │  industry    │  company  │  peer     │
+                         │  analyst     │  analyst  │  analyst  │
+                         └──────┬───────┘─────┬─────┘─────┬─────┘
+                                └─────────────┼───────────┘
+                                              ▼
+  LLM-driven   ──────    ┌─────────────────────────────┐
+  Loop                   │   adversarial_review        │── LLM decides: proceed?
+  (adversarial           │   3-Phase: CoVe + search    │     │
+   challenge)            │   + refinement              │     reanalyze
+                         └──────────────┬──────────────┘     └──> back to extraction
+                                 proceed
+                                        ▼
+                         ┌──────────────┐
+                         │   synthesis  │  Programmatic base score
+                         │              │  + causal loop analysis
+                         │              │  + pre-mortem check
+                         └──────┬───────┘
+                                ▼
+                         ┌──────────────┐
+                         │   backtest   │
                          └──────────────┘
 ```
 
-**10 nodes. 2 LLM-driven routing decisions. 1 fan-out parallelism point.**
+**8 nodes. 1 LLM-driven routing decision. 1 fan-out parallelism point. 2 ToolLoopAgents (retrieval + adversarial Phase 2).**
 
 ### Pipeline Executor
 
 The pipeline is a plain Python function (`sfewa/graph/pipeline.py`) using liteagent utilities:
 
 ```python
-from liteagent import merge_state, run_parallel
+from liteagent import merge_state, run_parallel, ToolLoopAgent
 
 ACC = {"evidence", "risk_factors", "adversarial_challenges", "backtest_events"}
 
-def run_pipeline(state: dict) -> dict:
+def run_pipeline_v2(state: dict) -> dict:
     state = merge_state(state, init_case_node(state), accumulate=ACC)
 
-    # Evidence gathering loop (quality gate drives)
-    for _ in range(MAX_ITERATIONS):
-        state = merge_state(state, retrieval_node(state), accumulate=ACC)
-        state = merge_state(state, evidence_extraction_node(state), accumulate=ACC)
-        state = merge_state(state, quality_gate_node(state), accumulate=ACC)
-        if route_after_quality_gate(state) == "fan_out":
-            break
+    # Agentic retrieval (ToolLoopAgent decides what to search)
+    state = merge_state(state, agentic_retrieval_node(state), accumulate=ACC)
+    state = merge_state(state, evidence_extraction_node(state), accumulate=ACC)
 
     # Parallel analyst fan-out
     for result in run_parallel(analysts, state, on_error=...):
         state = merge_state(state, result, accumulate=ACC)
 
-    # Adversarial loop
+    # Adversarial loop (3-phase: CoVe + verification search + refinement)
     for _ in range(MAX_ADVERSARIAL_PASSES):
         state = merge_state(state, adversarial_review_node(state), accumulate=ACC)
         if after_adversarial_review(state) == "risk_synthesis":
@@ -160,33 +154,15 @@ def run_pipeline(state: dict) -> dict:
 
 No graph compilation, no conditional edge DSL. The entire flow is visible in one function.
 
-### Pipeline v2: Hybrid Architecture (Agentic Retrieval)
-
-Pipeline v2 replaces the 4-node evidence gathering loop with a single tool-loop agent that autonomously searches, assesses coverage, and stops when satisfied:
-
-```python
-from liteagent import merge_state, run_parallel, ToolLoopAgent
-
-def run_pipeline_v2(state: dict) -> dict:
-    state = merge_state(state, init_case_node(state), accumulate=ACC)
-
-    # Agentic retrieval (replaces retrieval + quality_gate loop)
-    state = merge_state(state, agentic_retrieval_node(state), accumulate=ACC)
-    state = merge_state(state, evidence_extraction_node(state), accumulate=ACC)
-
-    # Fan-out, adversarial, synthesis, backtest (unchanged)
-    for result in run_parallel(analysts, state, on_error=...):
-        state = merge_state(state, result, accumulate=ACC)
-    ...
-```
-
 The agentic retrieval node wraps search functions as tools and runs a `ToolLoopAgent`:
 - `search(query)`: DuckDuckGo text + news search
-- `load_edinet()`: Load EDINET regulatory filings
+- `load_regulatory_filings()`: Discover jurisdiction and load official filings (EDINET for Japan, CNINFO for China)
 
-The agent decides what to search and when to stop based on coverage criteria in its system prompt. Safety bounds: 15 queries max, 150 docs max.
+The agent derives search queries from analysis dimensions (e.g., a dimension named `blade_battery_technology_moat` triggers searches for "Blade Battery technology" and industry benchmarks). It also searches for technology supply relationships between companies and their competitors, and gathers industry-level comparative data so analysts can assess whether a company is leading, keeping pace, or falling behind.
 
-**Hybrid design**: Pipeline backbone stays debuggable (node-by-node execution, explicit state). Tool-loop agents are used inside specific nodes where autonomy adds value (search decisions). Both patterns coexist -- activated via `--agentic` CLI flag.
+Safety bounds: 15 queries max, 150 docs max.
+
+**Hybrid design**: Pipeline backbone stays debuggable (node-by-node execution, explicit state). Tool-loop agents are used inside specific nodes where autonomy adds value (search decisions in retrieval, verification search in adversarial). Both v1 (3-pass retrieval + quality gate loop) and v2 (agentic retrieval) coexist -- activated via `--agentic` CLI flag.
 
 ---
 
@@ -206,17 +182,18 @@ Nodes never mutate the input state directly. They return a dict of updates, whic
 | Node | Role | Mode | Key Inputs | Key Outputs |
 |---|---|---|---|---|
 | `init_case` | Planner | Non-thinking | Case config (3 fields) | Expanded regions, peers, case_id, **analysis_dimensions** |
-| `retrieval` | Planner | Non-thinking | Seed queries or follow-up queries | retrieved_docs (100-140 per run) |
-| `evidence_extraction` | Planner | Non-thinking | retrieved_docs | evidence items (temporal-filtered) |
-| `quality_gate` | Planner | Non-thinking | evidence | evidence_sufficient, follow_up_queries |
+| `agentic_retrieval` | Planner | Non-thinking (ToolLoopAgent) | Case context, **dimensions** | retrieved_docs (80-150 per run) |
+| `evidence_extraction` | Planner | Non-thinking | retrieved_docs | evidence items (temporal-filtered, batched) |
 | `industry_analyst` | Generator | Non-thinking | evidence, **dimensions** | risk_factors (LLM-generated external dimensions) |
 | `company_analyst` | Generator | Non-thinking | evidence, **dimensions** | risk_factors (LLM-generated internal dimensions) |
 | `peer_analyst` | Generator | Non-thinking | evidence, **dimensions** | risk_factors (LLM-generated comparative dimensions) |
-| `adversarial_review` | Evaluator | Thinking | risk_factors, evidence | adversarial_challenges, adversarial_recommendation |
+| `adversarial_review` | Evaluator | Thinking + Tool-loop | risk_factors, evidence | adversarial_challenges, adversarial_recommendation |
 | `risk_synthesis` | Synthesizer | Thinking | risk_factors, challenges, evidence | risk_score, risk_level, confidence, memo |
 | `backtest` | Validator | Non-thinking | risk_factors, ground_truth_events | backtest_events |
 
-**Thinking/non-thinking mode split**: Analysts need speed and clean JSON (non-thinking). Adversarial reviewer and synthesis need deep reasoning chains (thinking mode via `enable_thinking=True`).
+**v1 additional nodes** (activated without `--agentic` flag): `retrieval` (3-pass), `quality_gate` (LLM-driven sufficiency check). These form a 4-node evidence loop that v2's agentic retrieval replaces.
+
+**Thinking/non-thinking mode split**: Analysts need speed and clean JSON (non-thinking). Adversarial reviewer (Phase 1+3) and synthesis need deep reasoning chains (thinking mode). Phase 2 verification uses non-thinking mode for tool calling compatibility.
 
 ---
 
@@ -304,22 +281,47 @@ Honda's analysts found concerning patterns at EVERY dimension. Toyota's were mix
 
 ---
 
-## 5. The Independent Evaluator
+## 5. The Independent Evaluator (Three-Phase Adversarial Review)
 
 ### Why Separation Matters
 
-The most important architectural insight from Claude Code: **agents cannot reliably self-evaluate their own output.** SFEWA implements this through a structurally separated adversarial reviewer:
+The most important architectural insight from Claude Code: **agents cannot reliably self-evaluate their own output.** SFEWA implements this through a structurally separated adversarial reviewer with three phases:
 
 | Principle | Implementation |
 |---|---|
 | Structural separation | Separate node, thinking mode, different prompt |
 | Never sees generator reasoning | Only sees risk factors + evidence, not analyst prompts |
 | Objective criteria | Chain of Verification (4-step), 3-level severity grading |
+| **Independent verification** | **Phase 2 searches the web for NEW counter-evidence** |
 | Feedback loop | "reanalyze" -> back to extraction/analysts |
-| Access to independent data | Sees ALL evidence, not just what analysts cited |
+| Access to independent data | Sees ALL evidence + can find MORE via search |
 | Depth-aware | HIGH factor with shallow analysis (no structural forces) → STRONG challenge |
 
-### Chain of Verification (CoVe)
+### Three-Phase Architecture
+
+```
+Phase 1: Chain of Verification (thinking mode)
+  Standard adversarial review — identify key claims, verify against
+  available evidence, assess depth, grade challenges.
+  Produces preliminary challenges + recommendation.
+
+Phase 2: Independent Verification Search (ToolLoopAgent, non-thinking)
+  Extracts key claims from HIGH/CRITICAL factors with non-STRONG
+  challenges — the claims most worth independently verifying.
+  ToolLoopAgent searches the web for COUNTER-EVIDENCE.
+  Budget: 8 queries max. Runs text + news search per query.
+  Only triggers when Phase 1 has verifiable claims.
+
+Phase 3: Challenge Refinement (thinking mode)
+  Reviews verification findings against Phase 1 challenges.
+  Upgrades challenge severity to "strong" when web search found
+  clear contradicting evidence. Keeps unverified challenges unchanged.
+  Only triggers when Phase 2 finds relevant evidence.
+```
+
+**Conditional execution**: Phase 2+3 only run when Phase 1 identifies HIGH/CRITICAL factors with non-STRONG challenges. If all challenges are already STRONG (or all factors are LOW/MEDIUM), the node behaves exactly as the single-phase version.
+
+### Phase 1: Chain of Verification (CoVe)
 
 For EACH risk factor, the adversarial reviewer performs:
 
@@ -327,6 +329,33 @@ For EACH risk factor, the adversarial reviewer performs:
 2. **VERIFY** against ALL available evidence independently
 3. **ASSESS** analytical depth (did analyst go deep enough for the severity assigned?)
 4. **GRADE** the challenge (strong / moderate / weak)
+
+### Phase 2: Independent Verification Search
+
+The verification agent is a `ToolLoopAgent` with a single `search()` tool. It receives the key claims from Phase 1 and autonomously searches for contradicting evidence:
+
+```python
+claims = _extract_claims_to_verify(challenges, risk_factors, max_claims=5)
+# Selects: HIGH/CRITICAL factors with non-STRONG challenges
+# Prioritizes: critical before high, weak before moderate
+
+agent = ToolLoopAgent(
+    llm=llm,                    # non-thinking for tool calling
+    tools=[search_tool],        # DuckDuckGo text + news
+    system_prompt=...,          # "search for COUNTER-EVIDENCE"
+    max_iterations=11,          # 8 queries + headroom
+)
+findings = agent.run("Begin searching...")
+```
+
+The search tool reuses `_search_web()` and `_search_news()` from the retrieval module, with its own DDGS instance and deduplication state.
+
+### Phase 3: Challenge Refinement
+
+A thinking-mode LLM receives the original challenges plus verification findings. Refinement rules:
+- Verification found **contradicting** evidence → append finding to `challenge_text`, upgrade severity to `"strong"`
+- Verification found **nothing** → severity unchanged
+- Challenges **not covered** by verification (LOW/MEDIUM factors) → kept as-is
 
 ### The Downgrade Rule
 
@@ -336,13 +365,15 @@ STRONG challenges are applied programmatically in `risk_synthesis` (deterministi
 
 ### How It Behaves Per Company
 
-Same 10 challenges for every company, but severity distribution differs:
+Same 10 challenges for every company, but STRONG distribution differs due to independent verification:
 
-| Company | Strong Challenges | Effect |
-|---|---|---|
-| Honda | 0 | No downgrades → HIGH preserved |
-| Toyota | 1 | 1 downgrade → MEDIUM confirmed |
-| BYD | 3 | 3 downgrades → LOW enabled |
+| Company | STRONGs/run | Phases Run | Effect |
+|---|---|---|---|
+| Honda | 1-3 | 1+2+3 | Few downgrades → HIGH preserved |
+| Toyota | 2-4 | 1+2+3 | Moderate downgrades → MEDIUM confirmed |
+| BYD | 4-5 | 1+2+3 | Many downgrades → LOW enabled |
+
+The verification search is the key differentiator: BYD's analyst claims (e.g., "domestic price war is unsustainable") are easily contradicted by web evidence of 34% profit growth. Honda's structural risks (e.g., $4.48B EV losses) are harder to contradict.
 
 ---
 
@@ -372,16 +403,48 @@ Analysts fall back to hardcoded EV dimensions if dynamic dimensions are not avai
 
 ---
 
-## 7. Three-Pass Agentic Retrieval
+## 7. Evidence Retrieval
 
-The retrieval agent (`sfewa/agents/retrieval.py`) performs autonomous multi-pass information gathering:
+### Regulatory Filing Discovery
+
+Before web search begins, the pipeline discovers and loads official regulatory filings based on the company's jurisdiction (`sfewa/tools/filing_discovery.py`):
+
+```
+1. Identify jurisdiction from company name + case regions
+   Honda Motor Co. → Japan, BYD Company Limited → China
+
+2. Search the filing system for the company
+   Japan → EDINET API (scan filing dates, match by filer name)
+   China → CNINFO API (discover orgId from stock list, search by category)
+
+3. Find key filings before cutoff
+   Annual report, semi-annual report, extraordinary reports
+
+4. Download PDFs to local cache (data/corpus/{company}/{system}/)
+   Cached files are reused across runs — download only once
+
+5. Extract text, filter for strategy-relevant pages, chunk
+   Annual reports (200+ pages): keyword-filtered for relevant sections
+   Smaller reports: full text extraction
+```
+
+**Jurisdiction support**:
+- **Japan → EDINET** (FSA Electronic Disclosure): Scan filing dates in June/November windows, match by Japanese filer name, download via document API. Supports Honda, Toyota, and other Japanese companies.
+- **China → CNINFO** (巨潮资讯网, Shenzhen Securities Information): Discover company orgId from stock list (matches by Chinese name or pinyin), search annual + semi-annual reports by category, download PDFs. Supports BYD and other A-share companies.
+
+**Fully agentic discovery**: No company codes are hardcoded. Given only a company name, the system identifies jurisdiction from name patterns, discovers the company's identifier via the filing system's API, finds key filings before cutoff, and loads them. The same `discover_and_load_filings()` function works for any supported jurisdiction.
+
+**Caching**: Downloaded PDFs persist in `data/corpus/{company}/{system}/` (e.g., `data/corpus/honda/edinet/`, `data/corpus/byd/cninfo/`). On subsequent runs, cached files are loaded directly without API calls. This makes demo runs fast while keeping the discovery process fully agentic for new companies.
+
+### Three-Pass Retrieval (v1)
+
+The v1 retrieval agent (`sfewa/agents/retrieval.py`) performs autonomous multi-pass information gathering:
 
 ```
 Pass 1: Seed Search
+  Regulatory filings loaded via filing discovery (if jurisdiction supported)
   LLM generates up to 15 search queries from case context
   + site-specific archival queries (Reuters, Bloomberg, FT, etc.)
-  EDINET corpus loaded (currently Honda only; extends to any
-  company with locally stored filings)
   DuckDuckGo text + news search (both run per query)
 
 Pass 2: Gap Analysis
@@ -396,6 +459,23 @@ Pass 3: Counternarrative
 ```
 
 **Follow-up mode**: When the quality gate routes back to retrieval, the three-pass flow is skipped entirely. Only the gate's `follow_up_queries` are run as direct web searches to fill specific gaps.
+
+### Agentic Retrieval (v2)
+
+The v2 agentic retrieval agent has `load_regulatory_filings()` as a tool alongside `search()`. The agent decides when to call each tool based on its assessment of evidence coverage.
+
+**Coverage targets** (9 criteria the agent self-evaluates against):
+1. Company strategic plans + financial results
+2. Financial performance indicators
+3. Competitive landscape (2+ named competitors)
+4. Market/industry trends
+5. Regional data (2+ geographic markets)
+6. Policy/regulatory environment
+7. Technology capability + competitive positioning (proprietary tech, vertical integration, industry benchmarks — is the company leading, keeping pace, or falling behind?)
+8. Both supporting AND contradicting signals
+9. Forward-looking content (forecasts, roadmaps)
+
+**Dimension-driven search**: The agent derives search queries from its analysis dimensions. For technology-related dimensions, it searches for both the company's own capabilities AND industry benchmarks/comparative data. This is domain-agnostic — the same mechanism works for EV battery technology, cloud infrastructure, pharmaceutical R&D pipelines, or any other strategy.
 
 **Temporal integrity**: All prompts include `Do NOT use knowledge about events after {cutoff_date}`. The temporal filter hard-rejects documents published after the cutoff.
 
@@ -503,13 +583,15 @@ This enables synthesis to adjust confidence based on evidence quality, and adver
 
 ### LLM-Driven Routing
 
-Both routing decisions are made by the LLM, not hardcoded thresholds:
+Routing decisions are made by the LLM, not hardcoded thresholds:
 
-**Quality gate** (`route_after_quality_gate`): LLM evaluates evidence sufficiency (count, stance balance, source diversity, dimension coverage). Sets `evidence_sufficient` in state. Routing function reads it and returns `"fan_out"` or `"retrieval"`.
+**Agentic retrieval** (v2): The ToolLoopAgent self-assesses evidence coverage against 9 criteria and stops when satisfied. No separate quality gate needed — the agent's stop decision replaces the v1 quality gate loop.
+
+**Quality gate** (v1 only, `route_after_quality_gate`): LLM evaluates evidence sufficiency (count, stance balance, source diversity, dimension coverage). Sets `evidence_sufficient` in state. Routing function reads it and returns `"fan_out"` or `"retrieval"`.
 
 **Adversarial review** (`after_adversarial_review`): LLM recommends `"proceed"` or `"reanalyze"`. Routing function reads `adversarial_recommendation` from state.
 
-Dead-loop counters (`MAX_ITERATIONS=3`, `MAX_ADVERSARIAL_PASSES=2`) are safety bounds only -- the LLM makes the actual decision.
+Dead-loop counters (`MAX_ADVERSARIAL_PASSES=2`) are safety bounds only -- the LLM makes the actual decision.
 
 ### Observability
 
@@ -524,16 +606,17 @@ Dead-loop counters (`MAX_ITERATIONS=3`, `MAX_ADVERSARIAL_PASSES=2`) are safety b
 | Dimension | Static Pipeline | SFEWA (Agentic) |
 |---|---|---|
 | Analysis dimensions | Hardcoded ontology | LLM generates dimensions from case context |
-| Search queries | Config-defined topics | LLM generates queries from case context |
-| Evidence sufficiency | Fixed threshold (e.g., >10 items) | LLM evaluates coverage, balance, diversity |
-| Routing after quality gate | Always proceed | LLM decides: sufficient -> proceed, insufficient -> loop |
+| Filing sources | Hardcoded per company | Jurisdiction discovery: company → country → filing system → company ID → filings |
+| Search queries | Config-defined topics | Agent derives queries from dimensions + case context |
+| Technology coverage | No tech-specific search | Agent reads dimension names, searches for company tech + industry benchmarks + competitive positioning |
+| Evidence sufficiency | Fixed threshold (e.g., >10 items) | Agent self-assesses coverage against 9 criteria, stops when satisfied |
 | **Analysis depth** | **Same depth for every dimension** | **Iceberg Model: LLM decides depth (2-4 layers) per dimension** |
-| Adversarial routing | Hardcoded % threshold | LLM recommends: proceed or reanalyze |
+| Adversarial verification | Review available evidence only | Phase 2 ToolLoopAgent independently searches web for counter-evidence |
 | Severity calibration | Fixed rules | Emerges from analytical depth + structural forces |
 | Risk scoring | Categorical labels | Programmatic base + LLM causal loop analysis (0-100) |
 | Context awareness | Each node isolated | Pipeline context injected -- downstream knows upstream history |
 
-8+ autonomous decisions per run that alter behavior. Different companies trigger different paths and different analytical depths through the same architecture.
+10+ autonomous decisions per run that alter behavior. Different companies trigger different paths and different analytical depths through the same architecture.
 
 ---
 
@@ -581,8 +664,10 @@ src/sfewa/
   tools/
     chat_log.py           Wrapper around liteagent.CallLog
     artifacts.py          File-based artifact saving
-    corpus_loader.py      EDINET PDF loader
-    edinet.py             EDINET API client
+    filing_discovery.py   Jurisdiction detection + filing discovery + loading
+    cninfo.py             CNINFO API client (China A-share filings)
+    corpus_loader.py      Legacy EDINET PDF loader (used by filing_discovery)
+    edinet.py             EDINET API client (Japan FSA filings)
     temporal_filter.py    Date comparison utilities
 ```
 
@@ -614,7 +699,7 @@ SFEWA depends on `liteagent` for generic agent patterns and adds domain-specific
 | Event Wants | SFEWA Delivers | Strength |
 |---|---|---|
 | **LLM orchestration** | Plain Python pipeline, 10 nodes, parallel fan-out, 2 LLM-driven loops | STRONG |
-| **Tool-calling** | DuckDuckGo + EDINET + temporal filter | ADEQUATE |
+| **Tool-calling** | DuckDuckGo + EDINET + CNINFO + temporal filter | STRONG |
 | **State management** | `merge_state()` with explicit accumulation, `dedup_by_key()` | STRONG |
 | **Multi-step reasoning loops** | Quality gate + adversarial loop (both LLM-driven) | STRONG |
 | **Analytical framework** | Iceberg Model with 4-layer progressive deepening + Chain of Verification | STRONG |
@@ -628,9 +713,9 @@ SFEWA depends on `liteagent` for generic agent patterns and adds domain-specific
 
 **Min 1-4**: Architecture -- Show `run_pipeline()` function. "No framework, no graph DSL. Planner decides what to search, Generator runs 3 parallel analysts with the Iceberg Model, Evaluator challenges every conclusion via Chain of Verification."
 
-**Min 4-6**: Live trace -- Quality gate looping, analysts producing depth profiles (Layer 2-4), adversarial reviewer finding 0 strong challenges for Honda.
+**Min 4-6**: Live trace -- Agentic retrieval deriving queries from dimensions, analysts producing depth profiles (Layer 2-4), adversarial reviewer Phase 2 searching for counter-evidence.
 
-**Min 6-8**: Cross-company proof -- Same pipeline, same model: Honda 78/100 (HIGH), Toyota 50/100 (MEDIUM), BYD 36/100 (LOW). Show depth distributions.
+**Min 6-8**: Cross-company proof -- Same pipeline, same model: Honda ~90/100 (CRITICAL), Toyota ~58/100 (MEDIUM), BYD ~42/100 (MEDIUM-LOW). Show depth distributions and STRONG challenge counts.
 
 **Min 8-9**: Backtest -- Honda 3x STRONG matches on target revision, EV cancellation, and Afeela restructuring.
 

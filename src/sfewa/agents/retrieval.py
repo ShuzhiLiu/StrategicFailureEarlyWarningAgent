@@ -44,7 +44,7 @@ from sfewa.prompts.retrieval import (
 )
 from sfewa.schemas.state import PipelineState
 from sfewa.tools.chat_log import log_llm_call, log_tool_call
-from sfewa.tools.corpus_loader import load_edinet_corpus
+from sfewa.tools.filing_discovery import discover_and_load_filings
 
 
 def _is_english(text: str, threshold: float = 0.6) -> bool:
@@ -402,14 +402,13 @@ def retrieval_node(state: PipelineState) -> dict:
 
     # ── Pass 1: Seed retrieval ──
 
-    # Load EDINET corpus if available for this company (currently Honda only)
-    edinet_docs: list[dict] = []
-    if "honda" in company.lower():
-        reporting.log_action("Loading EDINET corpus (Honda official filings)")
-        edinet_docs = load_edinet_corpus()
-        reporting.log_action("EDINET corpus loaded", {"docs": len(edinet_docs)})
+    # Discover and load regulatory filings for this company
+    regions = state.get("regions", [])
+    edinet_docs = discover_and_load_filings(company, cutoff, regions)
+    if edinet_docs:
+        reporting.log_action("Regulatory filings loaded", {"docs": len(edinet_docs)})
     else:
-        reporting.log_action("No EDINET corpus for this company — using web search only")
+        reporting.log_action("No regulatory filings available — using web search only")
 
     # Generate seed queries autonomously from case context
     peers = state.get("peers", [])

@@ -25,20 +25,34 @@ A sufficient evidence base must cover:
 4. Market/industry trends relevant to the strategy
 5. Regional data (at least 2 geographic markets)
 6. Policy/regulatory environment (subsidies, tariffs, mandates)
-7. Both SUPPORTING and CONTRADICTING signals — a one-sided evidence base produces biased analysis
-8. Forward-looking content (forecasts, analyst projections, technology roadmaps)
+7. Technology capability and competitive positioning (proprietary tech, patents, vertical integration, \
+supply chain control, R&D achievements, technology partnerships/supply relationships with competitors). \
+Include BOTH the company's own capabilities AND the industry technology landscape — \
+is the company leading, keeping pace, or falling behind? What are industry benchmarks?
+8. Both SUPPORTING and CONTRADICTING signals — a one-sided evidence base produces biased analysis
+9. Forward-looking content (forecasts, analyst projections, technology roadmaps)
 
 ## SEARCH STRATEGY
 
-1. **EDINET first** (if available): Load regulatory filings for primary source data
+1. **Regulatory filings first** (if available): Load regulatory filings for primary source data
 2. **Broad seed**: Company + strategy, company + financial results, company + industry trends
-3. **Competitor queries**: Search for specific named competitors' results and comparisons
-4. **Regional queries**: Country-specific market data with year hints (e.g., "EV sales China {prior_year}")
-5. **Industry queries**: Market trends, regulatory changes, technology shifts
-6. **Archival sources**: Use site:reuters.com, site:bloomberg.com, site:ft.com for quality journalism
-7. **Counternarrative**: After accumulating results, check if they skew one way. \
-If most results support risk, search for the company's STRENGTHS (financial performance, market gains). \
-If most results contradict risk, search for CHALLENGES (competitor advantages, analyst concerns).
+3. **Dimension-driven queries**: Review the analysis dimensions below. For EACH dimension that involves \
+technology, capability, or differentiation, derive search queries from the dimension name and description. \
+Example: if a dimension is "blade_battery_technology_moat", search "{company} Blade Battery technology". \
+If a dimension is "cloud_infrastructure_scalability", search "{company} cloud infrastructure architecture". \
+The dimensions tell you WHAT technologies matter for this company's strategy — search for each one. \
+For technology dimensions, also search for INDUSTRY BENCHMARKS and COMPARATIVE data \
+(e.g., "industry leaders in [technology area]", "[technology] market share ranking") \
+so downstream analysts can assess whether the company is leading, keeping pace, or falling behind.
+4. **Competitor queries**: Search for specific named competitors' results and comparisons. \
+Also search for TECHNOLOGY SUPPLY RELATIONSHIPS between {company} and its competitors \
+(e.g., one company supplying key technology, platforms, or components to another).
+5. **Regional queries**: Country-specific market data with year hints (e.g., "{strategy_theme} {regions} {prior_year}")
+6. **Industry queries**: Market trends, regulatory changes, technology shifts
+7. **Archival sources**: Use site:reuters.com, site:bloomberg.com, site:ft.com for quality journalism
+8. **Counternarrative**: After accumulating results, check if they skew one way. \
+If most results support risk, search for the company's STRENGTHS (financial performance, market gains, technology leadership). \
+If most results contradict risk, search for CHALLENGES (competitor advantages, analyst concerns, execution failures).
 
 ## STOP CONDITIONS
 
