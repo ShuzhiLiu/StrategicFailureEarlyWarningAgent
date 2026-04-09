@@ -595,8 +595,9 @@ Dead-loop counters (`MAX_ADVERSARIAL_PASSES=2`) are safety bounds only -- the LL
 
 ### Observability
 
-- **Runtime reporting**: Rich console output via `sfewa/reporting.py` (enter/log/exit per node)
-- **Call logging**: All LLM and tool calls recorded via `liteagent.CallLog`, saved as `llm_history.jsonl`
+- **Runtime reporting**: Rich console output via `sfewa/reporting.py` (enter/log/exit per node). Dual-write: all events also persisted to CallLog.
+- **Call logging**: All LLM calls, tool calls, and pipeline events recorded via `liteagent.CallLog`, saved as `llm_history.jsonl`
+- **Pipeline events**: `PipelineEventRecord` captures node entry/exit, routing decisions, parallel fan-out, and actions. ~80 events per run interleaved with LLM/tool records. Enables flow graph reconstruction.
 - **Artifacts**: Evidence, risk factors, challenges, backtest, memo, and run summary saved to `outputs/{case_id}_{timestamp}/`
 
 ---

@@ -38,6 +38,15 @@ def log_tool_call(
     _call_log.log_tool_call(node, tool_name, inputs, outputs, label=label)
 
 
+def log_event(
+    event_type: str,
+    node: str,
+    data: dict | None = None,
+) -> None:
+    """Record a pipeline event (node entry/exit, routing, action)."""
+    _call_log.log_event(event_type, node, data)
+
+
 def get_call_log() -> CallLog:
     """Return the module-level CallLog instance (for passing to agents)."""
     return _call_log

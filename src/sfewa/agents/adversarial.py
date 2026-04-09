@@ -14,6 +14,7 @@ are already STRONG, the node behaves exactly as before.
 from __future__ import annotations
 
 import json
+import re
 import time
 
 from liteagent import Tool, ToolLoopAgent, dedup_by_key, extract_json, strip_thinking
@@ -46,6 +47,18 @@ from sfewa.schemas.state import PipelineState
 # ── Constants ──
 
 MAX_VERIFICATION_QUERIES = 8
+
+# Pattern to extract factor IDs (IND001, COM002, PEER003) from LLM output
+_FACTOR_ID_RE = re.compile(r"((?:IND|COM|PEER)\d{3})")
+
+
+def _normalize_factor_id(raw: str) -> str:
+    """Extract clean factor ID from LLM output.
+
+    Handles: "[COM001]", "IND001] dimension_name", "PEER002", "COM003".
+    """
+    m = _FACTOR_ID_RE.search(raw)
+    return m.group(1) if m else raw.strip("[]")
 
 
 # ── Phase 2 helpers ──
@@ -404,10 +417,11 @@ def adversarial_review_node(state: PipelineState) -> dict:
     for c in challenges:
         required = ["challenge_id", "target_factor_id", "challenge_text", "severity"]
         if all(c.get(f) for f in required):
-            # Normalize target_factor_id: LLM often outputs "[COM001]" but
-            # risk factors use "COM001". Strip brackets for consistent matching.
+            # Normalize target_factor_id: LLM outputs varied formats like
+            # "[COM001]", "IND001] dimension_name", "PEER002". Extract the
+            # factor ID prefix (IND/COM/PEER + digits) for consistent matching.
             raw_tid = c["target_factor_id"]
-            c["target_factor_id"] = raw_tid.strip("[]")
+            c["target_factor_id"] = _normalize_factor_id(raw_tid)
             if not isinstance(c.get("counter_evidence"), list):
                 c["counter_evidence"] = []
             if "resolution" not in c:
@@ -448,7 +462,7 @@ def adversarial_review_node(state: PipelineState) -> dict:
                 required = ["challenge_id", "target_factor_id", "challenge_text", "severity"]
                 if all(c.get(f) for f in required):
                     raw_tid = c["target_factor_id"]
-                    c["target_factor_id"] = raw_tid.strip("[]")
+                    c["target_factor_id"] = _normalize_factor_id(raw_tid)
                     if not isinstance(c.get("counter_evidence"), list):
                         c["counter_evidence"] = []
                     if "resolution" not in c:

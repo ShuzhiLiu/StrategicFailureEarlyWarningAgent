@@ -14,6 +14,7 @@ from __future__ import annotations
 from liteagent import merge_state, run_parallel
 
 from sfewa import reporting
+from sfewa.tools.chat_log import log_event
 from sfewa.agents.adversarial import adversarial_review_node
 from sfewa.agents.backtest import backtest_node
 from sfewa.agents.company_analyst import company_analyst_node
@@ -69,23 +70,37 @@ def run_pipeline(state: dict) -> dict:
     state = merge_state(state, init_case_node(state), accumulate=ACC)
 
     # -- Evidence gathering loop (quality gate drives) --
-    for _ in range(MAX_ITERATIONS):
+    for iteration in range(MAX_ITERATIONS):
         state = merge_state(state, retrieval_node(state), accumulate=ACC)
         state = merge_state(state, evidence_extraction_node(state), accumulate=ACC)
         state = merge_state(state, quality_gate_node(state), accumulate=ACC)
 
-        if route_after_quality_gate(state) == "fan_out":
+        route = route_after_quality_gate(state)
+        log_event("routing", "quality_gate", {
+            "decision": route,
+            "iteration": iteration + 1,
+            "max_iterations": MAX_ITERATIONS,
+        })
+        if route == "fan_out":
             break
 
     # -- Parallel analyst fan-out --
+    log_event("parallel_start", "fan_out", {"nodes": ["industry_analyst", "company_analyst", "peer_analyst"]})
     for result in _run_analysts_parallel(state):
         state = merge_state(state, result, accumulate=ACC)
+    log_event("parallel_end", "fan_out", {"nodes": ["industry_analyst", "company_analyst", "peer_analyst"]})
 
     # -- Adversarial loop --
-    for _ in range(MAX_ADVERSARIAL_PASSES):
+    for adv_pass in range(MAX_ADVERSARIAL_PASSES):
         state = merge_state(state, adversarial_review_node(state), accumulate=ACC)
 
-        if after_adversarial_review(state) == "risk_synthesis":
+        route = after_adversarial_review(state)
+        log_event("routing", "adversarial_review", {
+            "decision": route,
+            "pass": adv_pass + 1,
+            "max_passes": MAX_ADVERSARIAL_PASSES,
+        })
+        if route == "risk_synthesis":
             break
 
         # Reanalyze: re-extract evidence + re-run analysts
@@ -126,14 +141,22 @@ def run_pipeline_v2(state: dict) -> dict:
     state = merge_state(state, evidence_extraction_node(state), accumulate=ACC)
 
     # -- Parallel analyst fan-out (unchanged) --
+    log_event("parallel_start", "fan_out", {"nodes": ["industry_analyst", "company_analyst", "peer_analyst"]})
     for result in _run_analysts_parallel(state):
         state = merge_state(state, result, accumulate=ACC)
+    log_event("parallel_end", "fan_out", {"nodes": ["industry_analyst", "company_analyst", "peer_analyst"]})
 
     # -- Adversarial loop (unchanged) --
-    for _ in range(MAX_ADVERSARIAL_PASSES):
+    for adv_pass in range(MAX_ADVERSARIAL_PASSES):
         state = merge_state(state, adversarial_review_node(state), accumulate=ACC)
 
-        if after_adversarial_review(state) == "risk_synthesis":
+        route = after_adversarial_review(state)
+        log_event("routing", "adversarial_review", {
+            "decision": route,
+            "pass": adv_pass + 1,
+            "max_passes": MAX_ADVERSARIAL_PASSES,
+        })
+        if route == "risk_synthesis":
             break
 
         # Reanalyze: re-extract evidence + re-run analysts

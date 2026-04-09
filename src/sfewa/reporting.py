@@ -17,8 +17,11 @@ from rich.console import Console
 from rich.table import Table
 from rich.text import Text
 
+from sfewa.tools.chat_log import log_event
+
 # ── Singleton console ──
 _console = Console()
+_current_node: str | None = None
 
 # Node order for display (step numbering)
 NODE_ORDER = [
@@ -60,6 +63,10 @@ def enter_node(node_name: str, summary: dict[str, Any] | None = None) -> None:
         summary: Optional dict of key input metrics, e.g.
                  {"documents": 22, "cutoff_date": "2025-05-19"}
     """
+    global _current_node
+    _current_node = node_name
+    log_event("node_enter", node_name, summary)
+
     label = _step_label(node_name)
     _console.print()
     _console.rule(f"[bold cyan]{label}[/bold cyan]", style="cyan")
@@ -77,6 +84,8 @@ def log_action(action: str, details: dict[str, Any] | None = None) -> None:
         details: Optional key-value pairs, e.g.
                  {"accepted": 22, "rejected": 3}
     """
+    log_event("action", _current_node or "unknown", {"action": action, **(details or {})})
+
     _console.print(f"  [bold]{action}[/bold]")
     if details:
         for key, value in details.items():
@@ -172,6 +181,15 @@ def exit_node(
         next_node: Where the pipeline routes next.
         reason: Why this routing decision was made.
     """
+    event_data: dict[str, Any] = {}
+    if output_summary:
+        event_data.update(output_summary)
+    if next_node:
+        event_data["next_node"] = next_node
+    if reason:
+        event_data["reason"] = reason
+    log_event("node_exit", node_name, event_data)
+
     if output_summary:
         _console.print(f"  [dim]Output:[/dim]")
         for key, value in output_summary.items():

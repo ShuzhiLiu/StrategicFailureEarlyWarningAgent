@@ -7,7 +7,7 @@ from liteagent.llm import LLMClient, LLMRouter, LLMResponse, SamplingParams, Tok
 from liteagent.pipeline import merge_state, run_parallel, loop_until, run_with_retry_loop
 from liteagent.state import dedup_by_key, count_by, snapshot
 from liteagent.context import truncate, TokenBudget, ContextBuilder
-from liteagent.observe import CallLog, Reporter, NullReporter
+from liteagent.observe import CallLog, PipelineEventRecord, Reporter, NullReporter
 from liteagent.parse import extract_json, parse_llm_json, strip_thinking, validate_items
 from liteagent.errors import retry, with_fallback, NodeError
 from liteagent.tool import Tool, tool, parse_tool_calls
@@ -23,7 +23,7 @@ __all__ = [
     # Context
     "truncate", "TokenBudget", "ContextBuilder",
     # Observation
-    "CallLog", "Reporter", "NullReporter",
+    "CallLog", "PipelineEventRecord", "Reporter", "NullReporter",
     # Parsing
     "extract_json", "parse_llm_json", "strip_thinking", "validate_items",
     # Errors

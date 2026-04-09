@@ -40,6 +40,18 @@ class ToolCallRecord:
     timestamp: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
 
 
+@dataclass
+class PipelineEventRecord:
+    """Pipeline-level event (node entry/exit, routing, loop iteration).
+
+    Enables reconstruction of the full pipeline action flow from llm_history.jsonl.
+    """
+    event_type: str  # "node_enter", "node_exit", "routing", "action"
+    node: str
+    data: dict = field(default_factory=dict)
+    timestamp: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+
+
 class CallLog:
     """Accumulates LLM and tool call records for a pipeline run.
 
@@ -47,7 +59,7 @@ class CallLog:
     """
 
     def __init__(self) -> None:
-        self._records: list[LLMCallRecord | ToolCallRecord] = []
+        self._records: list[LLMCallRecord | ToolCallRecord | PipelineEventRecord] = []
 
     def log_llm_call(
         self,
@@ -112,6 +124,19 @@ class CallLog:
             inputs=inputs if isinstance(inputs, dict) else {"raw": str(inputs)},
             output=out_str,
             label=label,
+        ))
+
+    def log_event(
+        self,
+        event_type: str,
+        node: str,
+        data: dict[str, Any] | None = None,
+    ) -> None:
+        """Record a pipeline event (node entry/exit, routing, action)."""
+        self._records.append(PipelineEventRecord(
+            event_type=event_type,
+            node=node,
+            data=data or {},
         ))
 
     @property
