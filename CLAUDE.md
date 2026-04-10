@@ -4,13 +4,13 @@
 A time-bounded multi-agent system (Planner-Generator-Evaluator) for strategic failure early warning on public companies. Built on `liteagent` (a minimal agent framework -- utilities, not a runtime) with Qwen3.5-27B on local vLLM for reasoning, and evidence-driven analysis with temporal integrity.
 
 **Case studies** (all cutoff 2025-05-19):
-- **Honda** → HIGH risk (ground truth: May 2025 target revision + March 2026 writedown)
-- **Toyota** → MEDIUM risk (control: weak BEV execution but strong hybrid position)
-- **BYD** → LOW risk (control: world's largest NEV maker, strategy succeeding)
+- **Honda** → CRITICAL risk, mean 89.3 (ground truth: May 2025 target revision + March 2026 writedown)
+- **Toyota** → HIGH risk, mean 67.7 (control: weak BEV execution but strong hybrid position)
+- **BYD** → LOW risk, mean 30.3 (control: world's largest NEV maker, strategy succeeding)
 
 **Demo**: AI Tinkerers HK at AWS, April 29, 2026. Pre-cached runs in `demo/`.
 
-**Status**: Phase A (pipeline flow) and Phase B (prompt quality) complete. All 10 nodes produce valid structured output. Cross-company discrimination achieved through evidence-driven reasoning, not config tuning.
+**Status**: 38 iterations complete. Pipeline v2 (agentic retrieval + 3-phase adversarial) is the primary path (`--agentic` flag). Cross-company ordering H>T>B maintained in 100% of stability runs (9/9).
 
 ## Tech Stack
 - **Agent framework**: `liteagent` (in-house, ~800 lines, plain Python + OpenAI SDK)
@@ -32,7 +32,16 @@ A time-bounded multi-agent system (Planner-Generator-Evaluator) for strategic fa
 
 ## Architecture Rules
 
-### Pipeline (10 nodes, 2 LLM-driven routing decisions)
+### Pipeline v2 (8 nodes, 1 LLM-driven routing decision) — activated via `--agentic`
+```
+init_case → agentic_retrieval (ToolLoopAgent) → evidence_extraction
+  → [industry|company|peer]_analyst (parallel fan-out)
+  → adversarial_review (3-phase: CoVe + verification search + refinement)
+    ──(LLM: proceed)──→ risk_synthesis → backtest → END
+    ──(LLM: reanalyze)──→ evidence_extraction (rare)
+```
+
+### Pipeline v1 (10 nodes, 2 LLM-driven routing decisions) — without `--agentic`
 ```
 init_case → retrieval (3-pass) → evidence_extraction → quality_gate
   ──(LLM: sufficient)──→ [industry|company|peer]_analyst (parallel fan-out)
@@ -65,6 +74,14 @@ init_case → retrieval (3-pass) → evidence_extraction → quality_gate
 - Uses thinking mode for deep reasoning (analysts use non-thinking mode)
 - Sees ALL evidence, not just what analysts cited
 - Only STRONG challenges trigger severity downgrades in synthesis
+- **Three-phase architecture** (v2): Phase 1 Chain of Verification (thinking) → Phase 2 independent web verification search (ToolLoopAgent, conditional) → Phase 3 challenge refinement (thinking, conditional)
+- Phase 2+3 only trigger when Phase 1 identifies HIGH/CRITICAL factors with non-STRONG challenges
+
+### Filing discovery
+- `discover_and_load_filings()` identifies jurisdiction from company name, discovers company ID via filing system API, downloads and caches PDFs
+- Japan → EDINET (Honda, Toyota); China → CNINFO (BYD)
+- Cached in `data/corpus/{company}/{system}/` — download once, reuse across runs
+- Tier 1 primary source filings dramatically reduce score variability
 
 ### Pipeline context injection
 - Downstream nodes receive a summary of upstream pipeline history via `build_pipeline_context()`
@@ -99,16 +116,6 @@ When agent output quality is poor, add or strengthen an independent evaluator �
 - Quality gate evaluates evidence → separate from the extraction agent that produced it
 - If a new quality problem emerges, consider whether a new evaluation node is the right fix
 
-### Cross-company discrimination as design validation
-Run all three cases after significant changes. Expected: Honda → HIGH, Toyota → MEDIUM, BYD → LOW.
-
-If companies cluster at the same risk level, the problem is **architectural**, not prompt-level:
-- All HIGH → evaluator too weak (not generating strong challenges for weak factors)
-- All MEDIUM → analysts lack a reasoning framework to distinguish severity levels
-- All LOW → evidence gathering insufficient (quality gate not looping enough)
-
-The fix is always a design improvement that generalizes, never a rule that targets one company.
-
 ### Evidence-driven, not knowledge-driven
 The system's conclusions must emerge from retrieved evidence, not LLM world knowledge:
 - Retrieval generates its own search queries from case context (no hand-tuned topics)
@@ -124,11 +131,115 @@ Qwen3.5 may break Pydantic schemas. Each LLM-calling node should:
 2. On parse failure, retry once with the validation error appended
 3. On second failure, log the error, set `state["error"]`, and return partial results rather than crashing
 
-### Debugging
-- `docs/cross_company_results.md` is a **reference**, not a spec — actual output will differ
-- **Structural checks**: Did quality gate route correctly? Did analysts cover expected dimensions? Did adversarial generate meaningful (not rubber-stamp) challenges? Did routing decisions reflect evidence state?
-- **Temporal integrity is the hardest bug**: If results look too good, check for post-cutoff information leakage
-- **Runtime reporting** (`sfewa.reporting`) prints structured progress from every node — compare against cross-company results to spot divergence
+## Stability Testing Protocol
+
+After any significant change, run the **full cross-company stability test**: 3 rounds × 3 companies (9 runs total). This is the primary validation method — not unit tests, not single runs.
+
+### How to run
+
+Run companies **sequentially** (DuckDuckGo rate limits cause evidence loss when companies run concurrently):
+```bash
+# Round 1
+python -m sfewa.main --case configs/cases/honda_ev_strategy.yaml --agentic
+python -m sfewa.main --case configs/cases/toyota_ev_strategy.yaml --agentic
+python -m sfewa.main --case configs/cases/byd_ev_strategy.yaml --agentic
+# Repeat for rounds 2 and 3
+```
+
+### Expected baselines (post iteration 38)
+
+| Metric | Honda | Toyota | BYD |
+|--------|-------|--------|-----|
+| **Mean** | ~89 | ~68 | ~30 |
+| **Level** | CRITICAL | HIGH | LOW |
+| **Range** | 83-100 | 63-77 | 27-36 |
+| **STRONGs/run** | 0-1 | 1-2 | 1-3 |
+| **Adv. phases** | P1+2+3 | P1+2+3 | P1 only |
+
+**Pass criteria**: H>T>B ordering in ALL 3 rounds. A single inversion means the change introduced a regression.
+
+### What to check in raw outputs
+
+After each run completes, **always inspect raw output files** — don't just look at the final score. Each run saves artifacts to `outputs/{case_id}_{timestamp}/`:
+
+**1. `run_summary.json`** — Score, level, confidence, evidence count, adversarial pass count
+```bash
+# Quick cross-run comparison
+for dir in outputs/*/; do python3 -c "
+import json; s=json.load(open('${dir}run_summary.json'))
+print(f\"{s['company']:30s} score={s['risk_score']:3d} {s['overall_risk_level']:8s} ev={s['evidence_count']} passes={s['adversarial_pass_count']}\")
+"; done
+```
+
+**2. `challenges.json`** — Check STRONG count, target_factor_id format, severity distribution
+```bash
+python3 -c "
+import json; c=json.load(open('outputs/DIRNAME/challenges.json'))
+for x in c: print(f\"{x.get('challenge_id','')} -> {x.get('target_factor_id','')} severity={x.get('severity','?')}\")
+"
+```
+- **Look for**: Malformed `target_factor_id` (brackets, trailing text) — these prevent STRONG downgrades from firing
+- **Look for**: Duplicate challenges (same target_factor_id appearing twice) — dedup may have failed
+- **Look for**: STRONG count vs score — if STRONGs are high but score is also high, downgrades may not be matching
+
+**3. `risk_factors.json`** — Check factor count (should be 10), severity distribution, depth_of_analysis
+```bash
+python3 -c "
+import json; f=json.load(open('outputs/DIRNAME/risk_factors.json'))
+print(f'Factors: {len(f)}')
+for x in f: print(f\"{x.get('factor_id','')} {x.get('dimension',''):40s} {x.get('severity',''):8s} depth={x.get('depth_of_analysis','?')}\")
+"
+```
+- **Look for**: Factor count != 10 — init_case dimension generation intermittent issue
+- **Look for**: Depth distribution — Honda should have more depth-4, BYD more depth-2
+
+**4. `llm_history.jsonl`** — Pipeline events, LLM calls, tool calls (interleaved timeline)
+```bash
+# Count pipeline events
+python3 -c "
+import json
+log = [json.loads(l) for l in open('outputs/DIRNAME/llm_history.jsonl')]
+events = [r for r in log if r.get('event_type')]
+print(f'Events: {len(events)}')
+for e in events:
+    if e['event_type'] in ('routing','parallel_start','parallel_end'):
+        print(f\"  {e['event_type']:16s} {e['node']:20s} {e.get('data',{})}\")
+"
+```
+- **Look for**: Routing decisions (proceed vs reanalyze)
+- **Look for**: Adversarial phase actions (Phase 1/2/3 triggers, "No claims to verify — skipping P2+3")
+
+### Diagnosing common failures
+
+**Ordering inversion (e.g., Toyota < BYD)**:
+1. Check base_score in terminal output — if base scores are correct but final scores inverted, the problem is LLM synthesis adjustment
+2. Check challenge counts — inflated challenge counts (>10) from dedup failure distort the synthesis LLM
+3. Check `target_factor_id` format in challenges.json — malformed IDs prevent STRONG downgrades
+
+**Score too high for BYD (>40)**:
+1. Check STRONG count — should be 1-3. If 0, check if Phase 2+3 triggered or if factor IDs are malformed
+2. Check evidence stance distribution — BYD should have high contradicts_risk ratio
+3. Check if `technology_capability` claims are present — if 0, retrieval missed tech evidence
+
+**Score too low for Honda (<75)**:
+1. Check STRONG count — should be 0-1. If >2, adversarial is being too aggressive
+2. Check if EDINET filings were loaded — Honda's own disclosures drive the CRITICAL signal
+3. Check factor severity distribution — Honda should have 5+ HIGH/CRITICAL factors
+
+**All companies clustering at same level**:
+- All HIGH → evaluator too weak (not generating STRONG challenges for weak factors)
+- All MEDIUM → analysts lack reasoning framework to distinguish severity (check Iceberg Model depth)
+- All LOW → evidence gathering insufficient (check evidence counts and stance balance)
+
+The fix is always a **design improvement that generalizes** (structural fix > reasoning framework > prompt tuning), never a rule that targets one company.
+
+### Recording iterations
+
+After confirming stability, update `docs/iteration_log.md`:
+1. Add a row to the summary table (iter number, title, key change, result)
+2. Add the full iteration entry at the bottom (goal, what changed, pre/post stability tables, key insights, file summary)
+3. Update the "Stability state entering Iteration N" table with new baselines
+4. Commit with a descriptive message summarizing the change
 
 ## Git Workflow
 - Branch naming: `feature/*`, `fix/*`, `docs/*`
