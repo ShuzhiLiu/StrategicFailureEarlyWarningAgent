@@ -184,9 +184,9 @@ Nodes never mutate the input state directly. They return a dict of updates, whic
 | `init_case` | Planner | Non-thinking | Case config (3 fields) | Expanded regions, peers, case_id, **analysis_dimensions** |
 | `agentic_retrieval` | Planner | Non-thinking (ToolLoopAgent) | Case context, **dimensions** | retrieved_docs (80-150 per run) |
 | `evidence_extraction` | Planner | Non-thinking | retrieved_docs | evidence items (temporal-filtered, batched) |
-| `industry_analyst` | Generator | Non-thinking | evidence, **dimensions** | risk_factors (LLM-generated external dimensions) |
-| `company_analyst` | Generator | Non-thinking | evidence, **dimensions** | risk_factors (LLM-generated internal dimensions) |
-| `peer_analyst` | Generator | Non-thinking | evidence, **dimensions** | risk_factors (LLM-generated comparative dimensions) |
+| `industry_analyst` | Generator | Non-thinking (N=3 self-consistency) | evidence, **dimensions** | risk_factors (LLM-generated external dimensions, Toulmin-structured) |
+| `company_analyst` | Generator | Non-thinking (N=3 self-consistency) | evidence, **dimensions** | risk_factors (LLM-generated internal dimensions, Toulmin-structured) |
+| `peer_analyst` | Generator | Non-thinking (N=3 self-consistency) | evidence, **dimensions** | risk_factors (LLM-generated comparative dimensions, Toulmin-structured) |
 | `adversarial_review` | Evaluator | Thinking + Tool-loop | risk_factors, evidence | adversarial_challenges, adversarial_recommendation |
 | `risk_synthesis` | Synthesizer | Thinking | risk_factors, challenges, evidence | risk_score, risk_level, confidence, memo |
 | `backtest` | Validator | Non-thinking | risk_factors, ground_truth_events | backtest_events |
@@ -255,6 +255,51 @@ Prevents false HIGH ratings for companies being judged against strategies they d
 - Hybrid-first company losing HYBRID market share → PRIMARY risk → Layer 3-4
 - BEV-committed company with mounting EV losses → PRIMARY risk → Layer 3-4
 
+### Programmatic Depth-Severity Enforcement
+
+The Iceberg Model is prompt-driven (analysts decide depth), but depth-severity consistency is verified programmatically via `check_depth_consistency()` in `_analyst_base.py`. Violations are injected as flags into the adversarial review prompt:
+
+| Check | Flag | Trigger |
+|---|---|---|
+| Depth ≤ 2 but severity HIGH/CRITICAL | `[DEPTH_SEVERITY_MISMATCH]` | Layer 2 analysis should not produce HIGH+ |
+| Depth ≥ 4 but no `key_assumption_at_risk` | `[MISSING_ASSUMPTION]` | Layer 4 requires pre-mortem assumption challenge |
+| Depth ≥ 3 but no structural forces | `[MISSING_FORCES]` | Layer 3 requires reinforcing/balancing loop identification |
+
+These flags are **STRONG challenge triggers** for the adversarial reviewer -- they bypass qualitative judgment and ensure the Iceberg Model's invariants are enforced even when the LLM doesn't follow instructions perfectly.
+
+### Toulmin-Structured Output
+
+Analysts produce structured argumentation fields for each risk factor (Toulmin model):
+
+| Field | Purpose | Consumed By |
+|---|---|---|
+| `claim` | The KEY factual claim that determines severity (testable statement) | Adversarial Phase 1 uses it directly as the key claim to verify |
+| `warrant` | WHY does the evidence support the claim? The reasoning bridge. | Adversarial checks if the warrant's logic holds |
+| `strongest_counter` | The BEST counter-argument against this risk factor | Adversarial uses it as a starting point for challenges |
+
+This replaces the previous pattern where adversarial had to extract claims from free-form `description` text. Structured claims enable more precise verification and reduce adversarial reviewer hallucination.
+
+### Self-Consistency Sampling
+
+Each analyst runs N=3 independent LLM calls (same prompt, different sampling). Consensus is computed per dimension:
+
+```
+Sample 1: market_timing=HIGH (depth=4), capital_allocation=MEDIUM (depth=3)
+Sample 2: market_timing=HIGH (depth=3), capital_allocation=HIGH (depth=4)
+Sample 3: market_timing=HIGH (depth=4), capital_allocation=MEDIUM (depth=3)
+
+Consensus: market_timing=HIGH (modal sev, median depth=4)
+           capital_allocation=MEDIUM (modal sev, median depth=3)
+```
+
+**Dynamic early-stop**: If the first 2 samples agree on severity for ALL dimensions, the 3rd sample is skipped. This saves ~33% of analyst LLM calls when the model is confident.
+
+**Implementation** (`_analyst_base.py`):
+- `_consensus_factors()`: groups factors by dimension, computes modal severity + median depth, selects the sample factor closest to consensus values
+- `ANALYST_SAMPLES = 3`: configurable constant (set to 1 to disable)
+
+Expected effect: 40-60% reduction in score range (based on self-consistency literature). Honda range 83-100 (17pts) should compress significantly.
+
 ### Composite Frameworks
 
 The Iceberg Model integrates techniques from multiple domains:
@@ -266,6 +311,8 @@ The Iceberg Model integrates techniques from multiple domains:
 | Causal Loop Analysis | Systems Thinking | Layer 3 (reinforcing vs balancing loops) |
 | Pre-Mortem Analysis | Gary Klein (CIA) | Layer 4 (imagine failure, trace cause) |
 | Chain of Verification | Meta AI, ACL 2024 | Adversarial review (4-step verification) |
+| Toulmin Argumentation | Stephen Toulmin 1958 | Analyst output (claim → warrant → rebuttal) |
+| Self-Consistency | Wang et al., ICLR 2023 | Analyst sampling (N=3, modal severity) |
 
 ### Depth as Cross-Company Differentiator
 
@@ -321,14 +368,36 @@ Phase 3: Challenge Refinement (thinking mode)
 
 **Conditional execution**: Phase 2+3 only run when Phase 1 identifies HIGH/CRITICAL factors with non-STRONG challenges. If all challenges are already STRONG (or all factors are LOW/MEDIUM), the node behaves exactly as the single-phase version.
 
+### Programmatic Flags (Pre-Adversarial Validation)
+
+Before the adversarial reviewer sees risk factors, programmatic checks inject flags that serve as objective STRONG challenge triggers. The adversarial reviewer is instructed to trust these flags -- they are deterministic checks, not judgment calls.
+
+**Depth-severity flags** (`check_depth_consistency()`):
+- `[DEPTH_SEVERITY_MISMATCH]`: depth ≤ 2 but severity HIGH/CRITICAL → STRONG challenge
+- `[MISSING_FORCES]`: depth ≥ 3 but no structural forces identified → minimum moderate
+- `[MISSING_ASSUMPTION]`: depth = 4 but no key assumption articulated → minimum moderate
+
+**Citation cross-validation flags** (`validate_citations()`):
+- `[PHANTOM_CITATION]`: cited evidence_id does not exist in evidence base → STRONG challenge
+- `[STANCE_MISMATCH]`: evidence cited as supporting actually has `contradicts_risk` stance → STRONG challenge
+- `[THIN_EVIDENCE]`: HIGH/CRITICAL severity with < 2 supporting citations → minimum moderate
+
+**Evidence balance flag** (existing, in `format_risk_factors_for_review()`):
+- `[EVIDENCE IMBALANCE]`: supporting count ≤ contradicting count for HIGH/CRITICAL → STRONG challenge
+
+These flags are computed in `_analyst_base.py` and injected into the adversarial prompt by `format_risk_factors_for_review()`. The adversarial reviewer sees them inline with each factor, e.g.:
+```
+[COM001] capital_allocation | HIGH | conf=0.85 | depth=2 | [DEPTH_SEVERITY_MISMATCH: depth=2 but severity=high]
+```
+
 ### Phase 1: Chain of Verification (CoVe)
 
 For EACH risk factor, the adversarial reviewer performs:
 
-1. **IDENTIFY** the key claim that determines severity
+1. **IDENTIFY** the key claim (uses the Toulmin `claim` field directly when available)
 2. **VERIFY** against ALL available evidence independently
 3. **ASSESS** analytical depth (did analyst go deep enough for the severity assigned?)
-4. **GRADE** the challenge (strong / moderate / weak)
+4. **GRADE** the challenge (strong / moderate / weak) — programmatic flags override grading for flagged factors
 
 ### Phase 2: Independent Verification Search
 
@@ -357,23 +426,25 @@ A thinking-mode LLM receives the original challenges plus verification findings.
 - Verification found **nothing** → severity unchanged
 - Challenges **not covered** by verification (LOW/MEDIUM factors) → kept as-is
 
-### The Downgrade Rule
+### The Evidence-Gated Downgrade Rule
 
-> **Only downgrade a factor's severity if it received a STRONG adversarial challenge.** Moderate and weak challenges are noted but do NOT change severity.
+> **STRONG challenges only downgrade factors with WEAK evidence support.** Well-supported factors (≥3 valid supporting citations) resist downgrades — the challenge is noted in the memo but does not mechanically reduce severity.
 
-STRONG challenges are applied programmatically in `risk_synthesis` (deterministic), not by LLM (non-deterministic). This ensures consistent downgrade behavior across runs.
+A "valid" supporting citation must: (1) exist in the evidence base (not phantom), and (2) not have `contradicts_risk` stance (not stance-mismatched). This reuses the citation validation from `validate_citations()`.
+
+STRONG downgrades are applied programmatically in `risk_synthesis` (deterministic), not by LLM (non-deterministic). The evidence gate prevents Toulmin-driven STRONG inflation from over-penalizing companies with genuinely strong evidence.
 
 ### How It Behaves Per Company
 
-Same 10 challenges for every company, but STRONG distribution differs due to independent verification:
+Same 10 challenges for every company. STRONG counts are high for all companies (Toulmin makes adversarial more precise), but **evidence quality** determines which downgrades fire:
 
-| Company | STRONGs/run | Phases Run | Effect |
+| Company | STRONGs/run | Resisted/run | Effect |
 |---|---|---|---|
-| Honda | 1-3 | 1+2+3 | Few downgrades → HIGH preserved |
-| Toyota | 2-4 | 1+2+3 | Moderate downgrades → MEDIUM confirmed |
-| BYD | 4-5 | 1+2+3 | Many downgrades → LOW enabled |
+| Honda | 4-6 | 4-6 (all) | EDINET evidence has 0 mismatches → all resist → HIGH/CRITICAL preserved |
+| Toyota | 1-4 | 0-3 (partial) | Mixed evidence quality → some resist, some downgrade → MEDIUM |
+| BYD | 4-7 | 0-2 (few) | 40-50% stance mismatches → most downgrades fire → lowest scores |
 
-The verification search is the key differentiator: BYD's analyst claims (e.g., "domestic price war is unsustainable") are easily contradicted by web evidence of 34% profit growth. Honda's structural risks (e.g., $4.48B EV losses) are harder to contradict.
+The evidence gate is the key differentiator: Honda's EDINET filings provide high-quality supporting evidence with zero stance mismatches. BYD's analysts frequently cite `contradicts_risk` evidence as "supporting" (e.g., citing BYD's profit growth as supporting a domestic price war risk). After filtering mismatched citations, BYD factors have too few valid citations to resist.
 
 ---
 
@@ -487,15 +558,29 @@ The v2 agentic retrieval agent has `load_regulatory_filings()` as a tool alongsi
 
 Replaces discrete HIGH/MEDIUM/LOW to eliminate boundary effects. Two-stage computation:
 
-**Stage 1 -- Programmatic base score** (deterministic):
+**Stage 1 -- Evidence-gated programmatic base score** (deterministic):
 ```python
 SEVERITY_POINTS = {"critical": 25, "high": 15, "medium": 8, "low": 2}
-# STRONG adversarial challenges downgrade severity one level
 DOWNGRADE = {"critical": "high", "high": "medium", "medium": "low", "low": "low"}
 
-# Apply downgrades, compute points, normalize against HIGH (15) as denominator
+# Evidence-gated downgrades: STRONG challenges only downgrade factors
+# with WEAK evidence support. Well-supported factors resist.
+for each STRONG-challenged factor:
+    valid_sup = count citations that (exist in evidence AND stance != contradicts_risk)
+    if valid_sup >= 3:  # well-supported → resist downgrade
+        keep original severity
+    else:               # weak evidence → downgrade fires
+        severity = DOWNGRADE[severity]
+
 base_score = round(total_points / (15 * num_factors) * 100)
 ```
+
+**Evidence gate rationale**: Toulmin-structured output makes the adversarial reviewer more precise, increasing STRONG challenge counts across ALL companies (4-7 per run). Without gating, binary downgrades over-penalize companies with strong evidence (Honda: EDINET filings, 0 citation mismatches). The gate uses citation quality as the discriminator:
+- **Honda**: 0 stance mismatches → valid_sup = total_sup (4-8) → all factors resist → HIGH/CRITICAL preserved
+- **Toyota**: mixed quality → some factors resist, some don't → partial downgrades → MEDIUM
+- **BYD**: 40-50% stance mismatches → valid_sup drops below 3 → most downgrades fire → lowest scores
+
+The `valid_sup` count excludes phantom citations (evidence_id not in evidence base) and stance-mismatched citations (cited as supporting but evidence has `contradicts_risk` stance). This reuses the same citation validation logic from `validate_citations()` in `_analyst_base.py`.
 
 **Stage 2 -- LLM qualitative adjustment** (thinking mode):
 - Causal loop analysis: count reinforcing vs balancing loops across all factors
@@ -505,6 +590,16 @@ base_score = round(total_points / (15 * num_factors) * 100)
 - Strategy-relative assessment (is the company being judged against a strategy it didn't adopt?)
 - Executed mitigations (current revenue/profit) vs announced plans (future products)
 - Pre-mortem check: "if this assessment is completely wrong, what's the blind spot?"
+
+**Stage 3 -- Analyst agreement confidence calibration** (empirical signal):
+
+After the parallel fan-out, `_compute_analyst_agreement()` in `pipeline.py` computes cross-analyst consistency metrics and injects them into the synthesis prompt:
+
+- **Severity concentration** (Herfindahl index, 0-1): 1.0 = all analysts rated same severity, 0.0 = uniform spread. High concentration (≥0.7) increases confidence; low concentration (<0.5) decreases it.
+- **Ordinal range**: max severity ordinal − min. Range ≤ 1 = tight agreement; range ≥ 2 = analysts disagree on risk magnitude → synthesis MUST lower confidence below 0.7.
+- **Depth spread**: max depth − min depth across all factors.
+
+This replaces verbalized confidence (analysts self-rating their certainty) with an empirical signal. The synthesis LLM is instructed: "This is an empirical signal — do NOT override it with narrative reasoning."
 
 **Score bands** (derived from score, not vice versa):
 - 80-100: CRITICAL
@@ -530,9 +625,12 @@ State flows as a plain `dict` through the pipeline. `PipelineState` (TypedDict) 
 
 **Accumulating fields** (grow across nodes via `merge_state(accumulate=...)`):
 - `evidence` -- list of evidence item dicts
-- `risk_factors` -- list of risk factor dicts (includes `depth_of_analysis`, `structural_forces`, `key_assumption_at_risk`)
+- `risk_factors` -- list of risk factor dicts (includes `depth_of_analysis`, `structural_forces`, `key_assumption_at_risk`, Toulmin fields: `claim`, `warrant`, `strongest_counter`)
 - `adversarial_challenges` -- list of challenge dicts (includes `key_claim_tested`, `verification_result`)
 - `backtest_events` -- list of backtest match dicts
+
+**Computed fields** (set by pipeline after fan-out):
+- `analyst_agreement` -- cross-analyst consistency metrics (severity concentration, ordinal range, depth spread, summary text)
 
 **Overwriting fields** (latest value wins):
 - `retrieved_docs`, `risk_score`, `overall_risk_level`, `overall_confidence`, `risk_memo`, `backtest_summary`
@@ -613,7 +711,10 @@ Dead-loop counters (`MAX_ADVERSARIAL_PASSES=2`) are safety bounds only -- the LL
 | Evidence sufficiency | Fixed threshold (e.g., >10 items) | Agent self-assesses coverage against 9 criteria, stops when satisfied |
 | **Analysis depth** | **Same depth for every dimension** | **Iceberg Model: LLM decides depth (2-4 layers) per dimension** |
 | Adversarial verification | Review available evidence only | Phase 2 ToolLoopAgent independently searches web for counter-evidence |
-| Severity calibration | Fixed rules | Emerges from analytical depth + structural forces |
+| Severity calibration | Fixed rules | Emerges from analytical depth + structural forces + programmatic consistency flags |
+| Analyst reliability | Single LLM call per analyst | Self-consistency sampling (N=3, modal severity, dynamic early-stop) |
+| Citation integrity | Trust analyst citations | Programmatic cross-validation (phantom detection, stance mismatch) |
+| Confidence calibration | Verbalized confidence | Empirical analyst agreement (HHI concentration, ordinal range) |
 | Risk scoring | Categorical labels | Programmatic base + LLM causal loop analysis (0-100) |
 | Context awareness | Each node isolated | Pipeline context injected -- downstream knows upstream history |
 

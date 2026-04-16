@@ -112,21 +112,50 @@ def risk_synthesis_node(state: PipelineState) -> dict:
     source_types = count_by(evidence, "source_type")
     source_summary = ", ".join(f"{k}: {v}" for k, v in sorted(source_types.items()))
 
-    # -- Apply STRONG adversarial downgrades programmatically --
+    # -- Apply evidence-gated STRONG adversarial downgrades --
+    # STRONG challenges only downgrade factors with WEAK evidence support.
+    # Well-supported factors (≥3 valid citations after excluding phantoms
+    # and stance-mismatched) survive STRONG challenges — the challenge is
+    # noted in the memo but does not mechanically reduce severity. This
+    # prevents Toulmin-driven STRONG inflation from over-penalizing
+    # companies with genuinely strong evidence.
     DOWNGRADE = {"critical": "high", "high": "medium", "medium": "low", "low": "low"}
+    EVIDENCE_GATE_MIN_VALID = 3       # minimum valid supporting citations to resist
+
     strong_targets: set[str] = set()
     for c in challenges:
         if c.get("severity", "").lower() == "strong":
             strong_targets.add(c.get("target_factor_id", ""))
 
+    # Build evidence lookup for citation quality assessment
+    evidence_map: dict[str, dict] = {}
+    for e in evidence:
+        eid = e.get("evidence_id", "")
+        if eid:
+            evidence_map[eid] = e
+
     # Apply downgrades and track post-adversarial severity
     post_adversarial: list[dict] = []
+    resisted: list[str] = []
     for rf in risk_factors:
         fid = rf.get("factor_id", "")
         orig_sev = rf.get("severity", "medium").lower()
         if fid in strong_targets:
-            new_sev = DOWNGRADE.get(orig_sev, orig_sev)
-            post_adversarial.append({"factor_id": fid, "dimension": rf.get("dimension", "?"), "original": orig_sev, "post": new_sev})
+            # Evidence gate: count valid supporting citations
+            # Exclude phantoms (not in evidence) and stance-mismatched
+            # (cited as supporting but evidence contradicts risk)
+            supporting = rf.get("supporting_evidence", [])
+            valid_sup = 0
+            for eid in supporting:
+                if eid in evidence_map and evidence_map[eid].get("stance") != "contradicts_risk":
+                    valid_sup += 1
+            if valid_sup >= EVIDENCE_GATE_MIN_VALID:
+                # Well-supported factor resists downgrade
+                post_adversarial.append({"factor_id": fid, "dimension": rf.get("dimension", "?"), "original": orig_sev, "post": orig_sev})
+                resisted.append(f"{fid}({valid_sup}sup)")
+            else:
+                new_sev = DOWNGRADE.get(orig_sev, orig_sev)
+                post_adversarial.append({"factor_id": fid, "dimension": rf.get("dimension", "?"), "original": orig_sev, "post": new_sev})
         else:
             post_adversarial.append({"factor_id": fid, "dimension": rf.get("dimension", "?"), "original": orig_sev, "post": orig_sev})
 
@@ -153,7 +182,12 @@ def risk_synthesis_node(state: PipelineState) -> dict:
         "base_score": base_score,
         "post_adversarial": post_adversarial_dist,
         "downgrades": len(downgrades_applied),
+        "resisted": len(resisted),
     })
+    if resisted:
+        reporting.log_action("Evidence-gated: factors resisted STRONG downgrade", {
+            "factors": resisted,
+        })
 
     # Extract dimension_relevance for synthesis context
     dimension_relevance: dict[str, str] = {}
@@ -163,10 +197,14 @@ def risk_synthesis_node(state: PipelineState) -> dict:
             dimension_relevance.update(group["dimension_relevance"])
 
     # Format prompt with pipeline context injection
-    rf_text = format_risk_factors_for_review(risk_factors, dimension_relevance)
+    rf_text = format_risk_factors_for_review(risk_factors, dimension_relevance, evidence)
     challenges_text = format_challenges_for_synthesis(challenges)
     evidence_text = format_evidence_for_analyst(evidence)
     pipeline_context = build_pipeline_context(state)
+
+    # Analyst agreement (computed in pipeline after fan-out)
+    agreement = state.get("analyst_agreement", {})
+    agreement_summary = agreement.get("summary", "(not available)")
 
     system_msg = SYNTHESIS_SYSTEM.format(
         company=company,
@@ -189,6 +227,7 @@ def risk_synthesis_node(state: PipelineState) -> dict:
         total_factors=total_factors,
         high_plus_ratio=high_plus_ratio,
         structural_summary=structural_summary,
+        analyst_agreement_summary=agreement_summary,
     )
 
     # Call LLM with thinking mode

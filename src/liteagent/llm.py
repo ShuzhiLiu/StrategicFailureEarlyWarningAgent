@@ -116,7 +116,12 @@ class LLMClient:
         content = choice.message.content or ""
 
         # vLLM with --reasoning-parser puts thinking in .reasoning_content
+        # or .reasoning (vLLM 0.19+), or in model_extra dict
         thinking = getattr(choice.message, "reasoning_content", None)
+        if thinking is None:
+            thinking = getattr(choice.message, "reasoning", None)
+        if thinking is None and hasattr(choice.message, "model_extra"):
+            thinking = (choice.message.model_extra or {}).get("reasoning")
 
         usage = resp.usage
         token_usage = TokenUsage(

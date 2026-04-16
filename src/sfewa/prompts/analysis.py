@@ -110,6 +110,9 @@ Return a JSON array of risk factor objects. Each object must have:
 - severity: string ("critical", "high", "medium", or "low")
 - confidence: float (0.0-1.0)
 - depth_of_analysis: integer (2, 3, or 4 — which layer you reached)
+- claim: string (the KEY FACTUAL CLAIM that determines severity — a single, specific, testable statement. Example: "Honda's EV segment losses of $4.48B exceed segment revenue, creating unsustainable capital drain." NOT a vague summary.)
+- warrant: string (WHY does the evidence support the claim? The reasoning bridge from data to conclusion. Example: "EDINET filings show cumulative losses while 10T yen commitment remains, indicating investment exceeds returns with no break-even timeline.")
+- strongest_counter: string (the BEST counter-argument against this risk factor. What would a skeptic say? Example: "77% consolidated profit growth means Honda can absorb EV losses indefinitely as a strategic investment.")
 - description: string (multi-layer analysis: start with Layer 1 findings, then Layer 2 pattern, then Layer 3 structural forces if reached, then Layer 4 assumption challenge if reached. 4-8 sentences showing the progressive deepening.)
 - structural_forces: object with "reinforcing_loops" (list of strings) and "balancing_loops" (list of strings). Empty lists if analysis stopped at Layer 2.
 - key_assumption_at_risk: string or null (the critical assumption from Layer 4, null if analysis stopped before Layer 4)

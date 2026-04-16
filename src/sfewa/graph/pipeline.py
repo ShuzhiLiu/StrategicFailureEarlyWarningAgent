@@ -11,6 +11,8 @@ KEY DESIGN: LLM-driven routing makes this an AGENTIC system, not just a pipeline
 
 from __future__ import annotations
 
+from collections import Counter
+
 from liteagent import merge_state, run_parallel
 
 from sfewa import reporting
@@ -39,6 +41,68 @@ _agentic_retrieval_loaded = False
 ACCUMULATING_FIELDS = {"evidence", "risk_factors", "adversarial_challenges", "backtest_events"}
 
 _ANALYSTS = [industry_analyst_node, company_analyst_node, peer_analyst_node]
+
+# Severity ordinal for spread computation
+_SEV_ORD = {"low": 0, "medium": 1, "high": 2, "critical": 3}
+
+
+def _compute_analyst_agreement(risk_factors: list[dict]) -> dict:
+    """Compute cross-analyst agreement metrics after parallel fan-out.
+
+    Returns a dict with:
+      - severity_concentration: float 0-1 (1 = all same severity, 0 = uniform)
+      - depth_spread: int (max depth - min depth across all factors)
+      - high_plus_agreement: int (number of HIGH+ factors)
+      - summary: str (human-readable for injection into synthesis prompt)
+    """
+    if not risk_factors:
+        return {"severity_concentration": 0.0, "depth_spread": 0, "high_plus_agreement": 0, "summary": "(no factors)"}
+
+    severities = [f.get("severity", "medium").lower() for f in risk_factors]
+    depths = [f.get("depth_of_analysis", 0) for f in risk_factors]
+
+    # Severity concentration: Herfindahl index (sum of squared shares)
+    n = len(severities)
+    sev_counts = Counter(severities)
+    hhi = sum((c / n) ** 2 for c in sev_counts.values())
+    # Normalize: min HHI = 1/k (uniform), max = 1.0 (all same)
+    # Map to 0-1 where 1 = perfect agreement
+    k = len(sev_counts)
+    if k <= 1:
+        concentration = 1.0
+    else:
+        min_hhi = 1.0 / k
+        concentration = (hhi - min_hhi) / (1.0 - min_hhi) if min_hhi < 1.0 else 1.0
+
+    depth_spread = max(depths) - min(depths) if depths else 0
+    high_plus = sum(1 for s in severities if s in ("high", "critical"))
+
+    # Severity ordinal spread (how far apart are the ratings?)
+    ordinals = [_SEV_ORD.get(s, 1) for s in severities]
+    ordinal_range = max(ordinals) - min(ordinals) if ordinals else 0
+
+    # Build summary
+    sev_dist = ", ".join(f"{s.upper()}: {c}" for s, c in sorted(sev_counts.items(), key=lambda x: _SEV_ORD.get(x[0], 0), reverse=True))
+    lines = [
+        f"Severity distribution: {sev_dist}",
+        f"Severity concentration: {concentration:.2f} (1.0 = all same, 0.0 = uniform spread)",
+        f"Severity ordinal range: {ordinal_range} ({'tight' if ordinal_range <= 1 else 'wide — analysts disagree on risk magnitude'})",
+        f"Depth range: {min(depths)}-{max(depths)} (spread={depth_spread})",
+    ]
+
+    if ordinal_range >= 2:
+        lines.append(
+            "⚠ ANALYST DISAGREEMENT: Severity ratings span 2+ levels. "
+            "Confidence should reflect this uncertainty."
+        )
+
+    return {
+        "severity_concentration": round(concentration, 3),
+        "depth_spread": depth_spread,
+        "ordinal_range": ordinal_range,
+        "high_plus_agreement": high_plus,
+        "summary": "\n".join(lines),
+    }
 
 
 def _run_analysts_parallel(state: dict) -> list[dict]:
@@ -90,6 +154,10 @@ def run_pipeline(state: dict) -> dict:
         state = merge_state(state, result, accumulate=ACC)
     log_event("parallel_end", "fan_out", {"nodes": ["industry_analyst", "company_analyst", "peer_analyst"]})
 
+    # -- Analyst agreement (confidence calibration signal) --
+    agreement = _compute_analyst_agreement(state.get("risk_factors", []))
+    state["analyst_agreement"] = agreement
+
     # -- Adversarial loop --
     for adv_pass in range(MAX_ADVERSARIAL_PASSES):
         state = merge_state(state, adversarial_review_node(state), accumulate=ACC)
@@ -140,13 +208,17 @@ def run_pipeline_v2(state: dict) -> dict:
     # -- Evidence extraction (unchanged — runs once on collected docs) --
     state = merge_state(state, evidence_extraction_node(state), accumulate=ACC)
 
-    # -- Parallel analyst fan-out (unchanged) --
+    # -- Parallel analyst fan-out --
     log_event("parallel_start", "fan_out", {"nodes": ["industry_analyst", "company_analyst", "peer_analyst"]})
     for result in _run_analysts_parallel(state):
         state = merge_state(state, result, accumulate=ACC)
     log_event("parallel_end", "fan_out", {"nodes": ["industry_analyst", "company_analyst", "peer_analyst"]})
 
-    # -- Adversarial loop (unchanged) --
+    # -- Analyst agreement (confidence calibration signal) --
+    agreement = _compute_analyst_agreement(state.get("risk_factors", []))
+    state["analyst_agreement"] = agreement
+
+    # -- Adversarial loop --
     for adv_pass in range(MAX_ADVERSARIAL_PASSES):
         state = merge_state(state, adversarial_review_node(state), accumulate=ACC)
 

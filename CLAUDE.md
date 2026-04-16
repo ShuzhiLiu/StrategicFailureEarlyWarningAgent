@@ -4,13 +4,13 @@
 A time-bounded multi-agent system (Planner-Generator-Evaluator) for strategic failure early warning on public companies. Built on `liteagent` (a minimal agent framework -- utilities, not a runtime) with Qwen3.5-27B on local vLLM for reasoning, and evidence-driven analysis with temporal integrity.
 
 **Case studies** (all cutoff 2025-05-19):
-- **Honda** → CRITICAL risk, mean 89.3 (ground truth: May 2025 target revision + March 2026 writedown)
-- **Toyota** → HIGH risk, mean 67.7 (control: weak BEV execution but strong hybrid position)
-- **BYD** → LOW risk, mean 30.3 (control: world's largest NEV maker, strategy succeeding)
+- **Honda** → HIGH-CRITICAL risk, mean 76.7 (ground truth: May 2025 target revision + March 2026 writedown)
+- **Toyota** → MEDIUM-HIGH risk, mean 56.0 (control: weak BEV execution but strong hybrid position)
+- **BYD** → MEDIUM risk, mean 44.7 (control: world's largest NEV maker, strategy succeeding)
 
 **Demo**: AI Tinkerers HK at AWS, April 29, 2026. Pre-cached runs in `demo/`.
 
-**Status**: 38 iterations complete. Pipeline v2 (agentic retrieval + 3-phase adversarial) is the primary path (`--agentic` flag). Cross-company ordering H>T>B maintained in 100% of stability runs (9/9).
+**Status**: 39 iterations complete. Pipeline v2 (agentic retrieval + 3-phase adversarial) is the primary path (`--agentic` flag). Iter 39 adds self-consistency sampling (N=3), Toulmin-structured output, programmatic depth-severity + citation flags, analyst agreement confidence, and evidence-gated downgrades. Cross-company ordering H>T>B maintained in 100% of stability runs (9/9 post iter 39).
 
 ## Tech Stack
 - **Agent framework**: `liteagent` (in-house, ~800 lines, plain Python + OpenAI SDK)
@@ -35,7 +35,8 @@ A time-bounded multi-agent system (Planner-Generator-Evaluator) for strategic fa
 ### Pipeline v2 (8 nodes, 1 LLM-driven routing decision) — activated via `--agentic`
 ```
 init_case → agentic_retrieval (ToolLoopAgent) → evidence_extraction
-  → [industry|company|peer]_analyst (parallel fan-out)
+  → [industry|company|peer]_analyst (parallel fan-out, N=3 self-consistency, Toulmin output)
+  → analyst_agreement computation → programmatic depth-severity + citation flags
   → adversarial_review (3-phase: CoVe + verification search + refinement)
     ──(LLM: proceed)──→ risk_synthesis → backtest → END
     ──(LLM: reanalyze)──→ evidence_extraction (rare)
@@ -73,9 +74,17 @@ init_case → retrieval (3-pass) → evidence_extraction → quality_gate
 - Adversarial reviewer is structurally separated from analysts
 - Uses thinking mode for deep reasoning (analysts use non-thinking mode)
 - Sees ALL evidence, not just what analysts cited
-- Only STRONG challenges trigger severity downgrades in synthesis
+- Only STRONG challenges trigger severity downgrades in synthesis, gated by evidence quality (≥3 valid supporting citations resist)
 - **Three-phase architecture** (v2): Phase 1 Chain of Verification (thinking) → Phase 2 independent web verification search (ToolLoopAgent, conditional) → Phase 3 challenge refinement (thinking, conditional)
 - Phase 2+3 only trigger when Phase 1 identifies HIGH/CRITICAL factors with non-STRONG challenges
+- **Programmatic flags** (iter 39): 7 flag types ([DEPTH_SEVERITY_MISMATCH], [MISSING_FORCES], [MISSING_ASSUMPTION], [PHANTOM_CITATION], [STANCE_MISMATCH], [THIN_EVIDENCE], [EVIDENCE IMBALANCE]) injected into adversarial prompt as STRONG challenge triggers
+- **Toulmin-structured input**: Analysts provide `claim`, `warrant`, `strongest_counter` per factor — adversarial uses claim field directly instead of extracting from description
+
+### Self-consistency sampling + analyst agreement
+- Analysts run N=3 independent LLM calls per node, consensus via modal severity + median depth
+- Dynamic early-stop when first 2 samples agree on all dimensions (saves ~33% calls)
+- `_compute_analyst_agreement()` after fan-out: HHI concentration, ordinal range, summary text
+- Agreement signal injected into synthesis prompt to calibrate confidence empirically
 
 ### Filing discovery
 - `discover_and_load_filings()` identifies jurisdiction from company name, discovers company ID via filing system API, downloads and caches PDFs
@@ -146,15 +155,16 @@ python -m sfewa.main --case configs/cases/byd_ev_strategy.yaml --agentic
 # Repeat for rounds 2 and 3
 ```
 
-### Expected baselines (post iteration 38)
+### Expected baselines (post iteration 39)
 
 | Metric | Honda | Toyota | BYD |
 |--------|-------|--------|-----|
-| **Mean** | ~89 | ~68 | ~30 |
-| **Level** | CRITICAL | HIGH | LOW |
-| **Range** | 83-100 | 63-77 | 27-36 |
-| **STRONGs/run** | 0-1 | 1-2 | 1-3 |
-| **Adv. phases** | P1+2+3 | P1+2+3 | P1 only |
+| **Mean** | ~77 | ~56 | ~45 |
+| **Level** | HIGH-CRITICAL | MEDIUM-HIGH | MEDIUM |
+| **Range** | 64-88 | 50-68 | 43-46 |
+| **STRONGs/run** | 4-6 | 1-4 | 4-7 |
+| **Resisted/run** | 4-6 | 0-3 | 0-2 |
+| **Adv. phases** | P1+2+3 | P1+2+3 | P1+2+3 |
 
 **Pass criteria**: H>T>B ordering in ALL 3 rounds. A single inversion means the change introduced a regression.
 

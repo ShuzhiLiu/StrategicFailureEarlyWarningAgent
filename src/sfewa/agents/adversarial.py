@@ -352,7 +352,7 @@ def adversarial_review_node(state: PipelineState) -> dict:
     # ── Phase 1: Standard Chain of Verification (thinking mode) ──
     reporting.log_action("Phase 1: Chain of Verification (thinking mode)")
 
-    rf_text = format_risk_factors_for_review(risk_factors, dimension_relevance)
+    rf_text = format_risk_factors_for_review(risk_factors, dimension_relevance, evidence)
     evidence_text = format_evidence_for_analyst(evidence)
     evidence_stance_summary = build_evidence_stance_summary(evidence, risk_factors)
     pipeline_context = build_pipeline_context(state)

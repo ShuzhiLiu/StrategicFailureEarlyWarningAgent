@@ -61,6 +61,12 @@ EVIDENCE SUFFICIENCY CALIBRATION:
 - If evidence is overwhelmingly one-sided (only supports_risk OR only contradicts_risk), flag this as a bias concern — real risk assessments need BOTH confirming and contradicting evidence
 - If most evidence comes from a single source type, note this as a coverage gap
 - A strong evidence base has 15+ items with mix of supports/contradicts/neutral from diverse sources
+
+ANALYST AGREEMENT CALIBRATION:
+- The ANALYST AGREEMENT section shows how much the three independent analysts agreed on risk severity and depth. Use this as a confidence signal:
+- High concentration (≥0.7) + tight ordinal range (≤1): Analysts agree → higher confidence in the assessment
+- Low concentration (<0.5) + wide ordinal range (≥2): Analysts disagree significantly → LOWER confidence to reflect genuine uncertainty. The true risk may be at either end of the range.
+- This is an empirical signal — do NOT override it with narrative reasoning. If analysts disagree, confidence should be below 0.7 regardless of how compelling the evidence seems.
 """
 
 SYNTHESIS_USER = """\
@@ -80,6 +86,9 @@ PRE-COMPUTED BASE SCORE (from post-adversarial severity distribution):
 
 STRUCTURAL ANALYSIS SUMMARY:
 {structural_summary}
+
+ANALYST AGREEMENT (cross-analyst consistency signal):
+{analyst_agreement_summary}
 
 BEFORE determining the final risk_score, you MUST perform these steps in order:
 

@@ -1,10 +1,11 @@
-"""LLM provider factory for Qwen3.5 on vLLM with thinking mode control.
+"""LLM provider factory with thinking mode control.
 
-Qwen3.5 has two modes (NOT two models):
-  - Thinking mode (enable_thinking=True): generates <think>...</think> chain-of-thought
-    before the answer. Use for adversarial review, risk synthesis.
-  - Non-thinking mode (enable_thinking=False): direct answer, faster.
-    Use for extraction, retrieval, analysis.
+Both Qwen3.5 and Gemma 4 use the same chat_template_kwargs interface:
+  - Thinking mode: enable_thinking=True → chain-of-thought in reasoning_content
+  - Non-thinking mode: enable_thinking=False → direct answer
+
+vLLM extracts thinking into reasoning_content via --reasoning-parser (qwen3/gemma4).
+LLMClient._normalize() reads it from choice.message.reasoning_content.
 
 Thin wrapper over liteagent.LLMClient and liteagent.LLMRouter.
 """
@@ -34,21 +35,65 @@ ROLE_TO_MODE: dict[str, ThinkingMode] = {
     "synthesis": "thinking",
 }
 
-# Recommended sampling params per Qwen3.5 docs
-SAMPLING_PARAMS: dict[ThinkingMode, SamplingParams] = {
-    "thinking": SamplingParams(
-        temperature=1.0,
-        top_p=0.95,
-        max_tokens=81920,
-        extra_body={"chat_template_kwargs": {"enable_thinking": True}},
-    ),
-    "non_thinking": SamplingParams(
-        temperature=0.7,
-        top_p=0.8,
-        max_tokens=32768,
-        extra_body={"chat_template_kwargs": {"enable_thinking": False}},
-    ),
-}
+def _build_sampling_params() -> dict[ThinkingMode, SamplingParams]:
+    """Build sampling params based on model name."""
+    model = os.environ.get("DEFAULT_LLM_MODEL", "")
+    model_lower = model.lower()
+
+    if "qwen" in model_lower:
+        # Qwen3.5: use chat_template_kwargs for thinking mode
+        return {
+            "thinking": SamplingParams(
+                temperature=1.0,
+                top_p=0.95,
+                max_tokens=81920,
+                extra_body={"chat_template_kwargs": {"enable_thinking": True}},
+            ),
+            "non_thinking": SamplingParams(
+                temperature=0.7,
+                top_p=0.8,
+                max_tokens=32768,
+                extra_body={"chat_template_kwargs": {"enable_thinking": False}},
+            ),
+        }
+    elif "gemma" in model_lower:
+        # Gemma 4: same enable_thinking interface, vLLM --reasoning-parser gemma4
+        # Thinking blocks use <|channel>thought\n...<channel|> delimiters
+        # skip_special_tokens=false required for parser to see channel delimiters
+        return {
+            "thinking": SamplingParams(
+                temperature=1.0,
+                top_p=0.95,
+                max_tokens=16384,
+                extra_body={
+                    "chat_template_kwargs": {"enable_thinking": True},
+                    "skip_special_tokens": False,
+                },
+            ),
+            "non_thinking": SamplingParams(
+                temperature=0.7,
+                top_p=0.9,
+                max_tokens=8192,
+                extra_body={"chat_template_kwargs": {"enable_thinking": False}},
+            ),
+        }
+    else:
+        # Generic: no thinking mode, conservative tokens
+        return {
+            "thinking": SamplingParams(
+                temperature=0.7,
+                top_p=0.9,
+                max_tokens=16384,
+            ),
+            "non_thinking": SamplingParams(
+                temperature=0.7,
+                top_p=0.9,
+                max_tokens=8192,
+            ),
+        }
+
+
+SAMPLING_PARAMS: dict[ThinkingMode, SamplingParams] = _build_sampling_params()
 
 
 def get_base_url() -> str:

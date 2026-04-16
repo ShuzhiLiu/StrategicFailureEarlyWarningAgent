@@ -14,8 +14,9 @@ Your job: VERIFY and CHALLENGE each risk factor using the Chain of Verification 
 ## CHAIN OF VERIFICATION — For EACH risk factor, perform these steps:
 
 ### Step 1: IDENTIFY the key claim
-What is the single most important factual claim that determines this factor's severity? Extract it as a testable statement.
+If the factor includes a "Key claim" field, use it directly. Otherwise, extract the single most important factual claim that determines this factor's severity as a testable statement.
 Example: "Honda's EV segment losses of $4.48B threaten capital allocation" → Key claim: "Honda has $4.48B in EV losses."
+If the factor includes a "Warrant" field, verify the warrant's reasoning: does the evidence actually imply the claim through the stated mechanism?
 
 ### Step 2: VERIFY against evidence
 Check the key claim against ALL available evidence independently:
@@ -37,7 +38,7 @@ A well-supported HIGH factor with deep structural analysis is HARDER to challeng
 ### Step 4: GRADE the challenge
 
 CHALLENGE SEVERITY:
-- strong: Key claim is CONTRADICTED by evidence, OR claim is fabricated/hallucinated, OR there is a data category error or time period confusion, OR the severity is HIGH+ but analysis depth is only Layer 2 (surface patterns without structural analysis), OR the dimension is [Strategy relevance: secondary] AND severity is HIGH/CRITICAL without explicit justification for depth gate override (depth gate violation), OR the factor is flagged [EVIDENCE IMBALANCE] (see below).
+- strong: Key claim is CONTRADICTED by evidence, OR claim is fabricated/hallucinated, OR there is a data category error or time period confusion, OR the severity is HIGH+ but analysis depth is only Layer 2 (surface patterns without structural analysis), OR the dimension is [Strategy relevance: secondary] AND severity is HIGH/CRITICAL without explicit justification for depth gate override (depth gate violation), OR the factor is flagged [EVIDENCE IMBALANCE], OR the factor is flagged [DEPTH_SEVERITY_MISMATCH], [PHANTOM_CITATION], or [STANCE_MISMATCH] (see programmatic flags below).
 - moderate: Key claim is partially supported but the analysis has weaknesses — severity inflation, missing counter-evidence, generic framing, or incomplete structural analysis. The underlying concern is still valid.
 - weak: Key claim is well-supported, analysis depth is appropriate for the severity level, and counter-evidence was acknowledged. The factor stands.
 
@@ -45,7 +46,16 @@ IMPORTANT CALIBRATION:
 - MEDIUM-severity factors for capability gaps or expansion barriers are LEGITIMATE even if the primary business is profitable. Do NOT use strategy misattribution to dismiss them.
 - If a factor is rated HIGH but has only 1-2 supporting evidence items, that is severity inflation → moderate challenge at minimum.
 
-**EVIDENCE IMBALANCE RULE**: Factors flagged with [EVIDENCE IMBALANCE] have been programmatically checked — their supporting evidence count is LESS THAN OR EQUAL TO their contradicting evidence count. For HIGH/CRITICAL factors with this flag, the severity is NOT justified by the evidence balance → this is a STRONG challenge. For MEDIUM factors with this flag, this is at minimum a moderate challenge. The flag is computed from the factor's own evidence citations, not your judgment — trust the flag.
+**PROGRAMMATIC FLAG RULES**: Factors may carry programmatic flags computed from their own data. Trust these flags — they are deterministic checks, not judgment calls.
+
+- [EVIDENCE IMBALANCE]: Supporting evidence count ≤ contradicting evidence count. For HIGH/CRITICAL factors → STRONG challenge (severity not justified). For MEDIUM → minimum moderate.
+- [DEPTH_SEVERITY_MISMATCH]: Analysis depth is inconsistent with severity (e.g., depth=2 but severity=HIGH). → STRONG challenge.
+- [MISSING_FORCES]: Depth ≥ 3 but no structural forces identified. → minimum moderate challenge.
+- [MISSING_ASSUMPTION]: Depth = 4 but no key assumption articulated. → minimum moderate challenge.
+- [PHANTOM_CITATION]: Cited evidence_id does not exist in the evidence base. → STRONG challenge (fabricated citation).
+- [STANCE_MISMATCH]: MAJORITY (>50%) of supporting citations have contradicts_risk stance. → STRONG challenge (fundamental citation error — the factor's evidence base contradicts its own claim).
+- [MINOR_STANCE_MISMATCH]: Multiple supporting citations have contradicts_risk stance but are a minority. → minimum moderate challenge (notable error but factor may still be valid based on remaining citations).
+- [THIN_EVIDENCE]: HIGH/CRITICAL severity with fewer than 2 supporting citations. → minimum moderate challenge.
 
 You MUST produce exactly one challenge for EACH risk factor. Do NOT skip any factors.
 """
@@ -243,13 +253,25 @@ def build_evidence_stance_summary(
 def format_risk_factors_for_review(
     risk_factors: list[dict],
     dimension_relevance: dict[str, str] | None = None,
+    evidence: list[dict] | None = None,
 ) -> str:
     """Format risk factors for the adversarial reviewer prompt.
 
     Args:
         risk_factors: List of risk factor dicts.
         dimension_relevance: Optional mapping of dimension name to "primary"/"secondary".
+        evidence: Optional evidence list for citation cross-validation.
     """
+    from sfewa.agents._analyst_base import check_depth_consistency, validate_citations
+
+    # Build evidence lookup for citation validation
+    evidence_map: dict[str, dict] = {}
+    if evidence:
+        for e in evidence:
+            eid = e.get("evidence_id", "")
+            if eid:
+                evidence_map[eid] = e
+
     parts = []
     relevance_map = dimension_relevance or {}
     for rf in risk_factors:
@@ -264,20 +286,49 @@ def format_risk_factors_for_review(
         dim_name = rf.get("dimension", "?")
         relevance = relevance_map.get(dim_name, "primary")
 
-        # Programmatic evidence imbalance check
-        imbalance_flag = ""
+        # -- Programmatic flags (injected for adversarial review) --
+        flags: list[str] = []
+
+        # Evidence imbalance check (existing)
         if len(supporting) <= len(contradicting) and len(contradicting) > 0:
-            imbalance_flag = (
-                f" [EVIDENCE IMBALANCE: {len(supporting)} supporting "
-                f"vs {len(contradicting)} contradicting]"
+            flags.append(
+                f"EVIDENCE IMBALANCE: {len(supporting)} supporting "
+                f"vs {len(contradicting)} contradicting"
             )
+
+        # Depth-severity consistency check (iter 39)
+        for v in check_depth_consistency(rf):
+            flags.append(v)
+
+        # Citation cross-validation (iter 39)
+        if evidence_map:
+            for v in validate_citations(rf, evidence_map):
+                flags.append(v)
+
+        flags_str = ""
+        if flags:
+            flags_str = " " + " ".join(f"[{f}]" for f in flags)
+
+        # Toulmin fields (iter 39)
+        claim = rf.get("claim", "")
+        warrant = rf.get("warrant", "")
+        strongest_counter = rf.get("strongest_counter", "")
 
         entry = (
             f"[{rf.get('factor_id', '?')}] {dim_name} | "
             f"{rf.get('severity', '?').upper()} | conf={rf.get('confidence', 0):.2f} | "
-            f"depth={depth} | [Strategy relevance: {relevance}]{imbalance_flag}\n"
-            f"  Title: {rf.get('title', '?')}\n"
-            f"  Description: {rf.get('description', '?')}\n"
+            f"depth={depth} | [Strategy relevance: {relevance}]{flags_str}\n"
+            f"  Title: {rf.get('title', '?')}"
+        )
+        # Include Toulmin fields when available
+        if claim:
+            entry += f"\n  Key claim: {claim}"
+        if warrant:
+            entry += f"\n  Warrant: {warrant}"
+        if strongest_counter:
+            entry += f"\n  Strongest counter: {strongest_counter}"
+        entry += (
+            f"\n  Description: {rf.get('description', '?')}\n"
             f"  Supporting evidence: {evidence_str}\n"
             f"  Contradicting evidence: {contra_str or 'none'}\n"
             f"  Causal chain: {chain_str}\n"
