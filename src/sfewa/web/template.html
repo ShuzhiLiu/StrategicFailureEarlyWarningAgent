@@ -1,0 +1,1305 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SFEWA Report</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: { mono: ['JetBrains Mono', 'Fira Code', 'monospace'] },
+        }
+      }
+    }
+  </script>
+  <style>
+    [x-cloak] { display: none !important; }
+
+    /* Score ring */
+    .score-ring {
+      width: 80px; height: 80px; border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 28px; font-weight: 700; color: #111827;
+    }
+
+    /* Severity left bar */
+    .severity-bar-critical { border-left: 4px solid #dc2626; }
+    .severity-bar-high { border-left: 4px solid #ea580c; }
+    .severity-bar-medium { border-left: 4px solid #ca8a04; }
+    .severity-bar-low { border-left: 4px solid #16a34a; }
+
+    /* Slide-out panel */
+    .slide-out {
+      position: fixed; top: 0; right: 0; height: 100vh;
+      width: 50%; max-width: 720px;
+      transform: translateX(100%);
+      transition: transform 0.2s ease-out;
+      z-index: 50;
+    }
+    .slide-out.open { transform: translateX(0); }
+
+    /* Timeline connector */
+    .timeline-line { border-left: 2px solid #e5e7eb; margin-left: 11px; }
+    .timeline-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; margin-top: 6px; }
+
+    /* Scrollbar tuning */
+    .slide-out-content::-webkit-scrollbar { width: 6px; }
+    .slide-out-content::-webkit-scrollbar-thumb { background: #d1d5db; border-radius: 3px; }
+
+    /* Evidence row highlight */
+    .evidence-highlight { animation: highlight-fade 2s ease-out; }
+    @keyframes highlight-fade {
+      0% { background-color: #fef3c7; }
+      100% { background-color: transparent; }
+    }
+
+    /* Subtle alternating rows */
+    .evidence-row:nth-child(even) > td > div:first-child { background-color: #fafafa; }
+
+    /* Card hover lift */
+    .factor-card { transition: border-color 0.15s, box-shadow 0.15s; }
+    .factor-card:hover { box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+
+    /* Prose for memo */
+    .memo-prose h1 { font-size: 1.25rem; font-weight: 700; margin: 1rem 0 0.5rem; }
+    .memo-prose h2 { font-size: 1.1rem; font-weight: 600; margin: 0.75rem 0 0.25rem; }
+    .memo-prose p { margin: 0.25rem 0; line-height: 1.6; }
+    .memo-prose ul { list-style: disc; margin-left: 1.5rem; }
+    .memo-prose li { margin: 0.15rem 0; }
+    .memo-prose strong { font-weight: 600; }
+  </style>
+</head>
+
+<body class="bg-gray-50 text-gray-900 text-sm" x-data="sfewa()" x-cloak
+      @keydown.escape.window="selectedFactor = null; selectedLLMCall = null">
+
+  <!-- ============================================ -->
+  <!--  HEADER: Company Overview Strip              -->
+  <!-- ============================================ -->
+  <header class="bg-white border-b border-gray-200 px-6 py-5 shadow-sm">
+    <div class="max-w-[1600px] mx-auto flex items-start gap-6">
+      <!-- Score Ring -->
+      <div class="score-ring flex-shrink-0"
+           :style="`background: conic-gradient(${levelColor(summary.overall_risk_level)} ${summary.risk_score * 3.6}deg, #f3f4f6 0deg)`">
+        <div class="bg-white rounded-full w-[62px] h-[62px] flex items-center justify-center">
+          <span x-text="summary.risk_score"></span>
+        </div>
+      </div>
+
+      <!-- Company info -->
+      <div class="flex-1 min-w-0">
+        <div class="flex items-center gap-3 mb-1">
+          <h1 class="text-xl font-semibold truncate" x-text="summary.company"></h1>
+          <span class="px-2.5 py-0.5 rounded-full text-xs font-semibold uppercase tracking-wide"
+                :class="levelBadgeClass(summary.overall_risk_level)"
+                x-text="summary.overall_risk_level"></span>
+        </div>
+        <p class="text-gray-500" x-text="summary.strategy_theme"></p>
+        <p class="text-gray-400 text-xs mt-1">
+          Cutoff: <span x-text="summary.cutoff_date"></span>
+          &middot; Confidence: <span x-text="summary.overall_confidence"></span>
+        </p>
+      </div>
+
+      <!-- Stats -->
+      <div class="flex gap-6 text-xs text-gray-500 flex-shrink-0 pt-1">
+        <div class="text-center">
+          <div class="text-lg font-semibold text-gray-900" x-text="summary.evidence_count"></div>
+          <div>evidence</div>
+        </div>
+        <div class="text-center">
+          <div class="text-lg font-semibold text-gray-900" x-text="summary.risk_factor_count"></div>
+          <div>factors</div>
+        </div>
+        <div class="text-center">
+          <div class="text-lg font-semibold text-gray-900" x-text="summary.challenge_count"></div>
+          <div>challenges</div>
+        </div>
+        <div class="text-center">
+          <div class="text-lg font-semibold text-gray-900" x-text="summary.backtest_events"></div>
+          <div>backtest</div>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- ============================================ -->
+  <!--  TAB BAR                                     -->
+  <!-- ============================================ -->
+  <nav class="bg-white border-b border-gray-200 px-6">
+    <div class="max-w-[1600px] mx-auto flex gap-6">
+      <button @click="tab = 'results'"
+              :class="tab === 'results' ? 'border-gray-900 text-gray-900 font-semibold' : 'border-transparent text-gray-500 hover:text-gray-700'"
+              class="py-3 text-sm font-medium border-b-2 transition-colors">
+        Results
+      </button>
+      <button @click="tab = 'flow'"
+              :class="tab === 'flow' ? 'border-gray-900 text-gray-900 font-semibold' : 'border-transparent text-gray-500 hover:text-gray-700'"
+              class="py-3 text-sm font-medium border-b-2 transition-colors">
+        Agent Flow
+      </button>
+    </div>
+  </nav>
+
+  <!-- ============================================ -->
+  <!--  MAIN CONTENT                                -->
+  <!-- ============================================ -->
+  <main class="max-w-[1600px] mx-auto px-6 py-6">
+
+    <!-- ========== RESULTS TAB ========== -->
+    <div x-show="tab === 'results'">
+
+      <!-- SECTION: Risk Factors -->
+      <section class="mb-8">
+        <h2 class="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-3">
+          Risk Factors
+          <span class="text-gray-300 font-normal normal-case tracking-normal" x-text="'(' + (DATA.risk_factors || []).length + ')'"></span>
+        </h2>
+        <div class="grid grid-cols-2 xl:grid-cols-3 gap-3">
+          <template x-for="factor in riskFactors" :key="factor.factor_id">
+            <div @click="selectedFactor = factor"
+                 :id="'factor-' + factor.factor_id"
+                 :class="'severity-bar-' + factor.severity"
+                 class="factor-card bg-white rounded-lg border border-gray-200 p-4 cursor-pointer hover:border-gray-300">
+              <!-- Top row: severity + id + depth -->
+              <div class="flex items-center justify-between mb-2">
+                <div class="flex items-center gap-2">
+                  <span class="text-xs font-semibold uppercase tracking-wide"
+                        :class="levelTextClass(factor.severity)"
+                        x-text="factor.severity"></span>
+                  <span class="text-[10px] text-gray-300 font-mono" x-text="factor.factor_id"></span>
+                </div>
+                <span class="text-xs text-gray-400 font-mono" x-text="depthDots(factor.depth_of_analysis || 0)"></span>
+              </div>
+              <!-- Title -->
+              <div class="font-medium text-gray-900 text-sm mb-1 leading-snug" x-text="factor.title"></div>
+              <!-- Dimension -->
+              <div class="text-xs text-gray-400 font-mono mb-2" x-text="factor.dimension"></div>
+              <!-- Key assumption (truncated) -->
+              <div class="text-xs text-gray-500 line-clamp-2 mb-2"
+                   x-text="factor.key_assumption_at_risk || factor.description?.substring(0, 120) + '...'"></div>
+              <!-- Evidence counts -->
+              <div class="flex gap-3 text-xs text-gray-400">
+                <span>
+                  <span class="text-red-500">&uarr;</span>
+                  <span x-text="(factor.supporting_evidence || []).length"></span> support
+                </span>
+                <span>
+                  <span class="text-green-500">&darr;</span>
+                  <span x-text="(factor.contradicting_evidence || []).length"></span> contra
+                </span>
+              </div>
+            </div>
+          </template>
+        </div>
+      </section>
+
+      <!-- SECTION: Evidence -->
+      <section class="mb-8">
+        <h2 class="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-3">
+          Evidence
+          <span class="text-gray-300 font-normal normal-case tracking-normal" x-text="'(' + (DATA.evidence || []).length + ')'"></span>
+        </h2>
+
+        <!-- Filters + distribution bar -->
+        <div class="bg-white rounded-lg border border-gray-200 p-4 mb-3">
+          <div class="flex items-center gap-4 mb-3">
+            <select x-model="stanceFilter" class="text-xs border border-gray-200 rounded px-2 py-1">
+              <option value="all">All stances</option>
+              <option value="supports_risk">Supports risk</option>
+              <option value="contradicts_risk">Contradicts risk</option>
+              <option value="neutral">Neutral</option>
+            </select>
+            <select x-model="claimTypeFilter" class="text-xs border border-gray-200 rounded px-2 py-1">
+              <option value="all">All types</option>
+              <template x-for="t in claimTypes" :key="t">
+                <option :value="t" x-text="t"></option>
+              </template>
+            </select>
+            <span class="text-xs text-gray-400" x-text="filteredEvidence.length + ' of ' + DATA.evidence.length + ' items'"></span>
+          </div>
+          <!-- Distribution bar -->
+          <div class="flex h-3 rounded-full overflow-hidden bg-gray-100">
+            <div class="bg-red-400" :style="'width:' + stancePercent('supports_risk') + '%'"></div>
+            <div class="bg-green-400" :style="'width:' + stancePercent('contradicts_risk') + '%'"></div>
+            <div class="bg-gray-300" :style="'width:' + stancePercent('neutral') + '%'"></div>
+          </div>
+          <div class="flex gap-4 mt-1.5 text-xs text-gray-400">
+            <span><span class="inline-block w-2 h-2 rounded-full bg-red-400 mr-1"></span><span x-text="stanceCounts.supports_risk"></span> risk</span>
+            <span><span class="inline-block w-2 h-2 rounded-full bg-green-400 mr-1"></span><span x-text="stanceCounts.contradicts_risk"></span> contra</span>
+            <span><span class="inline-block w-2 h-2 rounded-full bg-gray-300 mr-1"></span><span x-text="stanceCounts.neutral"></span> neutral</span>
+          </div>
+        </div>
+
+        <!-- Evidence table -->
+        <div class="bg-white rounded-lg border border-gray-200 overflow-hidden max-h-[600px] overflow-y-auto">
+          <table class="w-full text-sm">
+            <thead class="sticky top-0 bg-white z-10">
+              <tr class="border-b border-gray-200 text-xs text-gray-400 uppercase tracking-wide">
+                <th class="text-left px-4 py-2.5 w-16">ID</th>
+                <th class="text-left px-4 py-2.5 w-24">Stance</th>
+                <th class="text-left px-4 py-2.5">Claim</th>
+                <th class="text-left px-4 py-2.5 w-36">Type</th>
+                <th class="text-left px-4 py-2.5 w-24">Source</th>
+              </tr>
+            </thead>
+            <tbody>
+              <template x-for="(ev, idx) in filteredEvidence" :key="ev.evidence_id">
+                <tr class="evidence-row">
+                  <td colspan="5" class="p-0">
+                    <!-- Clickable row -->
+                    <div @click="expandedEvidence = expandedEvidence === ev.evidence_id ? null : ev.evidence_id"
+                         :id="'ev-' + ev.evidence_id"
+                         class="flex items-start px-4 py-2.5 border-b border-gray-50 cursor-pointer hover:bg-gray-50/80 transition-colors">
+                      <div class="w-16 flex-shrink-0 font-mono text-xs text-gray-500 font-medium" x-text="ev.evidence_id"></div>
+                      <div class="w-24 flex-shrink-0">
+                        <span class="inline-block w-2 h-2 rounded-full mr-1"
+                              :class="stanceDotClass(ev.stance)"></span>
+                        <span class="text-xs" x-text="stanceLabel(ev.stance)"></span>
+                      </div>
+                      <div class="flex-1 min-w-0 text-gray-700 line-clamp-2" x-text="ev.claim_text"></div>
+                      <div class="w-32 flex-shrink-0 text-xs text-gray-400 pl-2" x-text="ev.claim_type"></div>
+                      <div class="w-24 flex-shrink-0 text-xs text-gray-400 pl-2" x-text="ev.source_type === 'company_filing' ? 'Filing' : 'Web'"></div>
+                    </div>
+                    <!-- Expanded detail -->
+                    <div x-show="expandedEvidence === ev.evidence_id"
+                         x-transition
+                         class="px-4 py-3 bg-gray-50 border-b border-gray-100 text-xs">
+                      <div class="grid grid-cols-2 gap-x-8 gap-y-1.5">
+                        <div><span class="text-gray-400">Source:</span> <span class="text-gray-700" x-text="ev.source_title"></span></div>
+                        <div><span class="text-gray-400">Published:</span> <span x-text="ev.published_at"></span></div>
+                        <div><span class="text-gray-400">Region:</span> <span x-text="ev.region || 'N/A'"></span></div>
+                        <div><span class="text-gray-400">Credibility:</span> <span x-text="ev.credibility_tier"></span></div>
+                        <div x-show="ev.metric_name" class="col-span-2">
+                          <span class="text-gray-400">Metric:</span>
+                          <span x-text="ev.metric_name"></span> = <span x-text="ev.metric_value"></span> <span x-text="ev.unit || ''"></span>
+                        </div>
+                      </div>
+                      <div x-show="ev.span_text" class="mt-2 p-2 bg-white rounded border border-gray-200 italic text-gray-600" x-text="ev.span_text"></div>
+                      <!-- Reverse lookup: which factors reference this evidence -->
+                      <div class="mt-2" x-show="referencingFactors(ev.evidence_id).length > 0">
+                        <span class="text-gray-400">Referenced by: </span>
+                        <template x-for="fid in referencingFactors(ev.evidence_id)" :key="fid">
+                          <button @click.stop="scrollToFactor(fid)"
+                                  class="text-blue-600 hover:underline mr-1 font-mono" x-text="fid"></button>
+                        </template>
+                      </div>
+                    </div>
+                  </td>
+                </tr>
+              </template>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- SECTION: Adversarial Challenges -->
+      <section class="mb-8">
+        <h2 class="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-3">
+          Adversarial Challenges
+          <span class="text-gray-300 font-normal normal-case tracking-normal" x-text="'(' + (DATA.challenges || []).length + ')'"></span>
+        </h2>
+        <div class="space-y-3">
+          <template x-for="ch in DATA.challenges" :key="ch.challenge_id">
+            <div class="bg-white rounded-lg border border-gray-200 p-4"
+                 :class="'severity-bar-' + (ch.severity === 'strong' ? 'low' : ch.severity === 'moderate' ? 'medium' : 'high')">
+              <div class="flex items-center justify-between mb-2">
+                <div class="flex items-center gap-2 text-xs">
+                  <span class="font-mono text-gray-400" x-text="ch.challenge_id"></span>
+                  <span class="text-gray-300">&rarr;</span>
+                  <button @click="scrollToFactor(ch.target_factor_id)"
+                          class="font-mono text-blue-600 hover:underline" x-text="ch.target_factor_id"></button>
+                  <span class="text-gray-400" x-text="factorDimension(ch.target_factor_id)"></span>
+                </div>
+                <span class="text-xs font-semibold px-2 py-0.5 rounded-full"
+                      :class="challengeBadgeClass(ch.severity)"
+                      x-text="ch.severity"></span>
+              </div>
+              <div class="text-xs text-gray-500 mb-1">
+                <span class="font-medium text-gray-600">Tested:</span>
+                <span x-text="ch.key_claim_tested"></span>
+              </div>
+              <div class="text-sm text-gray-700 leading-relaxed" x-text="ch.challenge_text"></div>
+              <div class="flex gap-4 mt-2 text-xs text-gray-400">
+                <span x-show="ch.verification_result">
+                  Verification: <span class="text-gray-600" x-text="ch.verification_result"></span>
+                </span>
+                <span x-show="ch.counter_evidence && ch.counter_evidence.length">
+                  Counter:
+                  <template x-for="eid in ch.counter_evidence" :key="eid">
+                    <button @click="scrollToEvidence(eid)" class="text-blue-600 hover:underline font-mono ml-1" x-text="eid"></button>
+                  </template>
+                </span>
+              </div>
+            </div>
+          </template>
+        </div>
+      </section>
+
+      <!-- SECTION: Backtest -->
+      <section class="mb-8" x-show="DATA.backtest && DATA.backtest.events && DATA.backtest.events.length">
+        <h2 class="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-3">
+          Backtest
+          <span class="text-gray-300 font-normal normal-case tracking-normal" x-text="'(' + (DATA.backtest?.events || []).length + ' events)'"></span>
+        </h2>
+        <div class="bg-white rounded-lg border border-gray-200 p-4 space-y-4">
+          <template x-for="evt in (DATA.backtest.events || [])" :key="evt.event_id">
+            <div class="flex items-start gap-3">
+              <span class="text-sm flex-shrink-0 mt-0.5" x-text="matchIcon(evt.match_quality)"></span>
+              <div class="flex-1">
+                <div class="flex items-center gap-2 mb-0.5">
+                  <span class="text-xs font-semibold px-2 py-0.5 rounded-full"
+                        :class="matchBadgeClass(evt.match_quality)"
+                        x-text="evt.match_quality?.toUpperCase()"></span>
+                  <span class="text-xs text-gray-400 font-mono" x-text="evt.event_id"></span>
+                  <span class="text-xs text-gray-400" x-text="evt.event_date"></span>
+                  <span class="text-xs text-gray-400" x-text="evt.event_type"></span>
+                </div>
+                <div class="text-sm text-gray-700" x-text="evt.description"></div>
+                <div class="mt-1 text-xs text-gray-400">
+                  Matched:
+                  <template x-for="fid in (evt.matched_factors || [])" :key="fid">
+                    <button @click="scrollToFactor(fid)" class="text-blue-600 hover:underline font-mono mr-1" x-text="fid"></button>
+                  </template>
+                </div>
+              </div>
+            </div>
+          </template>
+          <div x-show="DATA.backtest.summary" class="text-sm text-gray-600 border-t border-gray-100 pt-3" x-text="DATA.backtest.summary"></div>
+        </div>
+      </section>
+
+      <!-- SECTION: Risk Memo -->
+      <section class="mb-8">
+        <div class="flex items-center justify-between mb-3">
+          <h2 class="text-xs font-semibold uppercase tracking-wider text-gray-400">Risk Memo</h2>
+          <button @click="memoExpanded = !memoExpanded" class="text-xs text-blue-600 hover:underline"
+                  x-text="memoExpanded ? 'Collapse' : 'Expand'"></button>
+        </div>
+        <div class="bg-white rounded-lg border border-gray-200 p-5">
+          <div class="memo-prose text-sm text-gray-700 leading-relaxed overflow-hidden transition-all"
+               :class="memoExpanded ? '' : 'max-h-32'"
+               x-html="renderedMemo"></div>
+          <div x-show="!memoExpanded" class="h-8 -mt-8 bg-gradient-to-t from-white to-transparent relative z-10"></div>
+        </div>
+      </section>
+
+    </div>
+
+    <!-- ========== AGENT FLOW TAB ========== -->
+    <div x-show="tab === 'flow'">
+
+      <div x-show="!DATA.timeline || DATA.timeline.length === 0" class="text-center text-gray-400 py-12">
+        No timeline data available. Timeline requires <code class="text-xs bg-gray-100 px-1 rounded">llm_history.jsonl</code> in the output directory.
+      </div>
+
+      <div x-show="DATA.timeline && DATA.timeline.length > 0">
+
+        <!-- Sub-tab bar -->
+        <div class="flex gap-1 mb-4 border-b border-gray-200 -mt-1">
+          <button @click="flowTab = 'flowchart'"
+                  :class="flowTab === 'flowchart' ? 'text-gray-900 border-gray-900' : 'text-gray-500 border-transparent hover:text-gray-700'"
+                  class="text-xs font-medium px-3 py-2 border-b-2">
+            Flowchart
+          </button>
+          <button @click="flowTab = 'timeline'"
+                  :class="flowTab === 'timeline' ? 'text-gray-900 border-gray-900' : 'text-gray-500 border-transparent hover:text-gray-700'"
+                  class="text-xs font-medium px-3 py-2 border-b-2">
+            Timeline <span class="text-gray-300" x-text="'(' + (DATA.timeline || []).length + ')'"></span>
+          </button>
+          <button @click="flowTab = 'chat'"
+                  :class="flowTab === 'chat' ? 'text-gray-900 border-gray-900' : 'text-gray-500 border-transparent hover:text-gray-700'"
+                  class="text-xs font-medium px-3 py-2 border-b-2">
+            Raw Chat <span class="text-gray-300" x-text="'(' + llmCalls.length + ')'"></span>
+          </button>
+        </div>
+
+        <!-- Pipeline Graph (SVG) -->
+        <section class="mb-6" x-show="flowTab === 'flowchart'">
+          <h2 class="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-3">Pipeline Graph</h2>
+          <div class="bg-white rounded-lg border border-gray-200 p-4 overflow-x-auto">
+            <svg viewBox="0 0 1060 270" class="w-full max-h-[320px]" style="min-width: 700px;" xmlns="http://www.w3.org/2000/svg">
+              <defs>
+                <marker id="arrow" viewBox="0 0 10 6" refX="10" refY="3" markerWidth="8" markerHeight="6" orient="auto">
+                  <path d="M0,0 L10,3 L0,6 Z" fill="#9ca3af" />
+                </marker>
+              </defs>
+
+              <!-- Row 1 edges (main flow) -->
+              <line x1="115" y1="35" x2="140" y2="35" stroke="#d1d5db" stroke-width="1.5" marker-end="url(#arrow)" />
+              <line x1="275" y1="35" x2="300" y2="35" stroke="#d1d5db" stroke-width="1.5" marker-end="url(#arrow)" />
+              <line x1="435" y1="35" x2="460" y2="35" stroke="#d1d5db" stroke-width="1.5" marker-end="url(#arrow)" />
+              <!-- Fan-out bracket -->
+              <path d="M460,35 L475,35" stroke="#d1d5db" stroke-width="1.5" fill="none" />
+              <line x1="475" y1="35" x2="475" y2="225" stroke="#d1d5db" stroke-width="1.5" />
+              <line x1="475" y1="115" x2="490" y2="115" stroke="#d1d5db" stroke-width="1.5" marker-end="url(#arrow)" />
+              <line x1="475" y1="170" x2="490" y2="170" stroke="#d1d5db" stroke-width="1.5" marker-end="url(#arrow)" />
+              <line x1="475" y1="225" x2="490" y2="225" stroke="#d1d5db" stroke-width="1.5" marker-end="url(#arrow)" />
+              <!-- Converge bracket -->
+              <line x1="620" y1="115" x2="640" y2="115" stroke="#d1d5db" stroke-width="1.5" />
+              <line x1="620" y1="170" x2="640" y2="170" stroke="#d1d5db" stroke-width="1.5" />
+              <line x1="620" y1="225" x2="640" y2="225" stroke="#d1d5db" stroke-width="1.5" />
+              <line x1="640" y1="115" x2="640" y2="225" stroke="#d1d5db" stroke-width="1.5" />
+              <path d="M640,170 L655,170 L655,35 L670,35" stroke="#d1d5db" stroke-width="1.5" fill="none" marker-end="url(#arrow)" />
+              <!-- After adversarial -->
+              <line x1="810" y1="35" x2="840" y2="35" stroke="#d1d5db" stroke-width="1.5" marker-end="url(#arrow)" />
+              <line x1="970" y1="35" x2="1000" y2="35" stroke="#d1d5db" stroke-width="1.5" marker-end="url(#arrow)" />
+              <!-- Reanalyze loop (dashed) -->
+              <path d="M740,55 Q740,80 700,80 L200,80 Q170,80 170,55" stroke="#d1d5db" stroke-width="1" stroke-dasharray="4,3" fill="none" marker-end="url(#arrow)" />
+              <text x="440" y="92" text-anchor="middle" fill="#9ca3af" style="font-size:9px; font-style:italic">reanalyze (rare)</text>
+
+              <!-- Row 1 nodes -->
+              <g @click="toggleNode('init_case')" style="cursor:pointer">
+                <rect x="5" y="10" width="108" height="50" rx="8"
+                      :fill="selectedNode === 'init_case' ? '#eff6ff' : '#fff'"
+                      :stroke="selectedNode === 'init_case' ? '#60a5fa' : '#d1d5db'" stroke-width="1.5" />
+                <text x="59" y="32" text-anchor="middle" fill="#111827" style="font-size:11px; font-weight:500">init_case</text>
+                <text x="59" y="48" text-anchor="middle" fill="#9ca3af" style="font-size:9px" x-text="nodeStats('init_case')"></text>
+              </g>
+
+              <g @click="toggleNode('agentic_retrieval')" style="cursor:pointer">
+                <rect x="142" y="10" width="131" height="50" rx="8"
+                      :fill="selectedNode === 'agentic_retrieval' ? '#eff6ff' : '#fff'"
+                      :stroke="selectedNode === 'agentic_retrieval' ? '#60a5fa' : '#d1d5db'" stroke-width="1.5" />
+                <text x="208" y="32" text-anchor="middle" fill="#111827" style="font-size:10px; font-weight:500">agentic_retrieval</text>
+                <text x="208" y="48" text-anchor="middle" fill="#9ca3af" style="font-size:9px" x-text="nodeStats('agentic_retrieval')"></text>
+              </g>
+
+              <g @click="toggleNode('evidence_extraction')" style="cursor:pointer">
+                <rect x="302" y="10" width="131" height="50" rx="8"
+                      :fill="selectedNode === 'evidence_extraction' ? '#eff6ff' : '#fff'"
+                      :stroke="selectedNode === 'evidence_extraction' ? '#60a5fa' : '#d1d5db'" stroke-width="1.5" />
+                <text x="368" y="32" text-anchor="middle" fill="#111827" style="font-size:10px; font-weight:500">evidence_extraction</text>
+                <text x="368" y="48" text-anchor="middle" fill="#9ca3af" style="font-size:9px" x-text="nodeStats('evidence_extraction')"></text>
+              </g>
+
+              <g @click="toggleNode('adversarial_review')" style="cursor:pointer">
+                <rect x="672" y="10" width="136" height="50" rx="8"
+                      :fill="selectedNode === 'adversarial_review' ? '#eff6ff' : '#fff'"
+                      :stroke="selectedNode === 'adversarial_review' ? '#60a5fa' : '#d1d5db'" stroke-width="1.5" />
+                <text x="740" y="32" text-anchor="middle" fill="#111827" style="font-size:10px; font-weight:500">adversarial_review</text>
+                <text x="740" y="48" text-anchor="middle" fill="#9ca3af" style="font-size:9px" x-text="nodeStats('adversarial_review')"></text>
+              </g>
+
+              <g @click="toggleNode('risk_synthesis')" style="cursor:pointer">
+                <rect x="842" y="10" width="126" height="50" rx="8"
+                      :fill="selectedNode === 'risk_synthesis' ? '#eff6ff' : '#fff'"
+                      :stroke="selectedNode === 'risk_synthesis' ? '#60a5fa' : '#d1d5db'" stroke-width="1.5" />
+                <text x="905" y="32" text-anchor="middle" fill="#111827" style="font-size:10px; font-weight:500">risk_synthesis</text>
+                <text x="905" y="48" text-anchor="middle" fill="#9ca3af" style="font-size:9px" x-text="nodeStats('risk_synthesis')"></text>
+              </g>
+
+              <g @click="toggleNode('backtest')" style="cursor:pointer">
+                <rect x="1002" y="10" width="90" height="50" rx="8"
+                      :fill="selectedNode === 'backtest' ? '#eff6ff' : '#fff'"
+                      :stroke="selectedNode === 'backtest' ? '#60a5fa' : '#d1d5db'" stroke-width="1.5" />
+                <text x="1047" y="32" text-anchor="middle" fill="#111827" style="font-size:11px; font-weight:500">backtest</text>
+                <text x="1047" y="48" text-anchor="middle" fill="#9ca3af" style="font-size:9px" x-text="nodeStats('backtest')"></text>
+              </g>
+
+              <!-- Row 2 nodes (parallel analysts) -->
+              <g @click="toggleNode('industry_analyst')" style="cursor:pointer">
+                <rect x="492" y="90" width="126" height="50" rx="8"
+                      :fill="selectedNode === 'industry_analyst' ? '#eff6ff' : '#fff'"
+                      :stroke="selectedNode === 'industry_analyst' ? '#60a5fa' : '#d1d5db'" stroke-width="1.5" />
+                <text x="555" y="112" text-anchor="middle" fill="#111827" style="font-size:10px; font-weight:500">industry_analyst</text>
+                <text x="555" y="128" text-anchor="middle" fill="#9ca3af" style="font-size:9px" x-text="nodeStats('industry_analyst')"></text>
+              </g>
+
+              <g @click="toggleNode('company_analyst')" style="cursor:pointer">
+                <rect x="492" y="145" width="126" height="50" rx="8"
+                      :fill="selectedNode === 'company_analyst' ? '#eff6ff' : '#fff'"
+                      :stroke="selectedNode === 'company_analyst' ? '#60a5fa' : '#d1d5db'" stroke-width="1.5" />
+                <text x="555" y="167" text-anchor="middle" fill="#111827" style="font-size:10px; font-weight:500">company_analyst</text>
+                <text x="555" y="183" text-anchor="middle" fill="#9ca3af" style="font-size:9px" x-text="nodeStats('company_analyst')"></text>
+              </g>
+
+              <g @click="toggleNode('peer_analyst')" style="cursor:pointer">
+                <rect x="492" y="200" width="126" height="50" rx="8"
+                      :fill="selectedNode === 'peer_analyst' ? '#eff6ff' : '#fff'"
+                      :stroke="selectedNode === 'peer_analyst' ? '#60a5fa' : '#d1d5db'" stroke-width="1.5" />
+                <text x="555" y="222" text-anchor="middle" fill="#111827" style="font-size:10px; font-weight:500">peer_analyst</text>
+                <text x="555" y="238" text-anchor="middle" fill="#9ca3af" style="font-size:9px" x-text="nodeStats('peer_analyst')"></text>
+              </g>
+
+              <!-- Parallel label -->
+              <text x="555" y="83" text-anchor="middle" fill="#d1d5db" style="font-size:9px; font-style:italic">parallel fan-out</text>
+            </svg>
+          </div>
+          <div class="mt-2 text-xs text-gray-400" x-show="selectedNode">
+            Filtering timeline by: <span class="font-mono text-gray-600" x-text="selectedNode"></span>
+            <button @click="selectedNode = null" class="text-blue-600 hover:underline ml-2">Clear</button>
+          </div>
+        </section>
+
+        <!-- Event Timeline -->
+        <section x-show="flowTab === 'timeline'">
+          <h2 class="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-3">
+            Event Timeline
+            <span class="text-gray-300 font-normal" x-text="'(' + filteredTimeline.length + ' events)'"></span>
+          </h2>
+          <div class="bg-white rounded-lg border border-gray-200 p-4 max-h-[calc(100vh-300px)] overflow-y-auto">
+            <template x-for="evt in filteredTimeline" :key="evt.id">
+              <div class="mb-0.5">
+                <!-- Node header -->
+                <template x-if="evt.type === 'node_enter'">
+                  <div class="flex items-center gap-2 py-2 mt-2 first:mt-0 border-t border-gray-100 first:border-0">
+                    <div class="timeline-dot bg-gray-900"></div>
+                    <span class="font-medium text-gray-900 text-xs" x-text="evt.node"></span>
+                    <span class="text-xs text-gray-400" x-text="formatTime(evt.timestamp)"></span>
+                  </div>
+                </template>
+
+                <!-- Action -->
+                <template x-if="evt.type === 'action'">
+                  <div class="flex items-start gap-2 py-0.5 pl-1 timeline-line">
+                    <div class="timeline-dot bg-gray-300 ml-[-5px]"></div>
+                    <span class="text-xs text-gray-500" x-text="evt.data?.action || JSON.stringify(evt.data)"></span>
+                  </div>
+                </template>
+
+                <!-- LLM Call -->
+                <template x-if="evt.type === 'llm_call'">
+                  <div @click="selectedLLMCall = selectedLLMCall?.id === evt.id ? null : evt"
+                       class="flex items-start gap-2 py-1 pl-1 timeline-line cursor-pointer hover:bg-amber-50 rounded transition-colors">
+                    <div class="timeline-dot bg-amber-400 ml-[-5px]"></div>
+                    <div class="flex-1 min-w-0">
+                      <div class="flex items-center gap-2">
+                        <span class="text-xs font-medium text-amber-700">LLM</span>
+                        <span class="text-xs text-gray-600" x-text="evt.label"></span>
+                        <span class="text-xs text-gray-400" x-text="evt.token_usage ? (evt.token_usage.prompt_tokens + ' + ' + evt.token_usage.completion_tokens + ' tok') : ''"></span>
+                        <span x-show="evt.thinking" class="text-xs text-purple-500">thinking</span>
+                      </div>
+                    </div>
+                    <span class="text-xs text-gray-400">&#9654;</span>
+                  </div>
+                </template>
+
+                <!-- Tool Call -->
+                <template x-if="evt.type === 'tool_call'">
+                  <div class="flex items-start gap-2 py-0.5 pl-1 timeline-line">
+                    <div class="timeline-dot bg-blue-400 ml-[-5px]"></div>
+                    <div class="flex-1 min-w-0">
+                      <div class="flex items-center gap-2">
+                        <span class="text-xs font-medium text-blue-600" x-text="evt.tool_name"></span>
+                        <span class="text-xs text-gray-400 font-mono truncate" x-text="typeof evt.tool_inputs === 'object' ? (evt.tool_inputs.query || JSON.stringify(evt.tool_inputs)).substring(0, 60) : ''"></span>
+                      </div>
+                      <div class="text-[11px] text-gray-400 mt-0.5 truncate" x-text="(evt.tool_output || '').substring(0, 100)"></div>
+                    </div>
+                  </div>
+                </template>
+
+                <!-- Routing -->
+                <template x-if="evt.type === 'routing'">
+                  <div class="flex items-start gap-2 py-1 pl-1 timeline-line">
+                    <div class="timeline-dot bg-green-500 ml-[-5px]"></div>
+                    <span class="text-xs font-medium text-green-700">&rarr; routing:</span>
+                    <span class="text-xs text-gray-600" x-text="JSON.stringify(evt.data)"></span>
+                  </div>
+                </template>
+
+                <!-- Parallel -->
+                <template x-if="evt.type === 'parallel_start' || evt.type === 'parallel_end'">
+                  <div class="flex items-start gap-2 py-1 pl-1 timeline-line">
+                    <div class="timeline-dot bg-blue-400 ml-[-5px]"></div>
+                    <span class="text-xs text-blue-600" x-text="evt.type === 'parallel_start' ? 'parallel start' : 'parallel end'"></span>
+                    <span class="text-xs text-gray-400" x-text="(evt.data?.nodes || []).join(', ')"></span>
+                  </div>
+                </template>
+
+                <!-- Node exit (subtle) -->
+                <template x-if="evt.type === 'node_exit'">
+                  <div class="flex items-start gap-2 py-0.5 pl-1 timeline-line mb-1">
+                    <div class="timeline-dot bg-gray-200 ml-[-5px]"></div>
+                    <span class="text-xs text-gray-300" x-text="evt.node + ' done'"></span>
+                  </div>
+                </template>
+              </div>
+            </template>
+          </div>
+        </section>
+
+        <!-- ===== RAW CHAT: linear transcript of every LLM conversation ===== -->
+        <section x-show="flowTab === 'chat'">
+
+          <!-- Filter bar -->
+          <div class="bg-white rounded-lg border border-gray-200 p-3 mb-3 sticky top-0 z-20 flex flex-wrap items-center gap-3">
+            <select x-model="chatNodeFilter" class="text-xs border border-gray-200 rounded px-2 py-1">
+              <option value="all">All nodes</option>
+              <template x-for="n in chatNodes" :key="n">
+                <option :value="n" x-text="n"></option>
+              </template>
+            </select>
+            <input x-model="chatSearch" type="text" placeholder="Search in messages…"
+                   class="text-xs border border-gray-200 rounded px-2 py-1 w-64" />
+            <label class="text-xs text-gray-600 flex items-center gap-1">
+              <input type="checkbox" x-model="chatShowSystem" class="accent-gray-700" />
+              show system prompts
+            </label>
+            <label class="text-xs text-gray-600 flex items-center gap-1">
+              <input type="checkbox" x-model="chatShowThinking" class="accent-purple-600" />
+              show thinking
+            </label>
+            <span class="text-xs text-gray-400 ml-auto">
+              <span x-text="filteredChat.length"></span> / <span x-text="llmCalls.length"></span> conversations
+            </span>
+          </div>
+
+          <!-- Anchor nav: quick jumps -->
+          <div class="bg-white rounded-lg border border-gray-200 p-3 mb-3 flex flex-wrap gap-1.5 text-xs">
+            <span class="text-gray-400 mr-1">Jump to:</span>
+            <template x-for="(c, i) in filteredChat" :key="c.id">
+              <a :href="'#chat-' + c.id"
+                 class="px-2 py-0.5 rounded border border-gray-200 hover:border-amber-300 hover:bg-amber-50 font-mono text-[11px] text-gray-600">
+                <span class="text-amber-600" x-text="'#' + (i + 1)"></span>
+                <span x-text="c.node"></span>
+                <span class="text-gray-400" x-show="c.label" x-text="'/' + c.label"></span>
+              </a>
+            </template>
+            <span x-show="filteredChat.length === 0" class="text-gray-400 italic">No conversations match.</span>
+          </div>
+
+          <!-- Conversation cards (expanded) -->
+          <div class="space-y-6">
+            <template x-for="(call, idx) in filteredChat" :key="call.id">
+              <div :id="'chat-' + call.id" class="bg-white rounded-lg border border-gray-200 overflow-hidden">
+
+                <!-- Header strip -->
+                <div class="px-4 py-3 bg-gray-50 border-b border-gray-200 flex flex-wrap items-center gap-x-3 gap-y-1">
+                  <span class="text-xs font-mono text-amber-600" x-text="'#' + (idx + 1)"></span>
+                  <span class="text-sm font-medium text-gray-900 font-mono" x-text="call.node"></span>
+                  <span class="text-gray-300">/</span>
+                  <span class="text-xs text-amber-700 font-mono" x-text="call.label || 'llm_call'"></span>
+
+                  <span x-show="call.label === 'tool_loop'"
+                        class="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-blue-100 text-blue-700 uppercase tracking-wide">
+                    tool-loop · <span x-text="countToolTurns(call)"></span> turns
+                  </span>
+                  <span x-show="call.thinking"
+                        class="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-purple-100 text-purple-700 uppercase tracking-wide">
+                    thinking
+                  </span>
+
+                  <span x-show="call.token_usage?.prompt_tokens" class="text-xs text-gray-500 ml-auto">
+                    <span x-text="(call.token_usage?.prompt_tokens || 0).toLocaleString()"></span>
+                    +
+                    <span x-text="(call.token_usage?.completion_tokens || 0).toLocaleString()"></span>
+                    =
+                    <span class="font-semibold text-gray-700" x-text="(call.token_usage?.total_tokens || 0).toLocaleString()"></span>
+                    tok
+                  </span>
+                  <span class="text-xs text-gray-400" x-text="formatTime(call.timestamp)"></span>
+                  <button @click="toggleRawJson(call.id)"
+                          class="text-[10px] text-gray-400 hover:text-gray-700 underline ml-1">
+                    <span x-text="rawJsonOpen[call.id] ? 'hide raw JSON' : 'raw JSON'"></span>
+                  </button>
+                </div>
+
+                <!-- Raw JSON dump (optional) -->
+                <template x-if="rawJsonOpen[call.id]">
+                  <pre class="text-[10px] font-mono bg-gray-900 text-gray-100 px-4 py-3 overflow-x-auto max-h-[320px] overflow-y-auto"
+                       x-text="JSON.stringify(call, null, 2)"></pre>
+                </template>
+
+                <!-- Thinking block (if present and enabled) -->
+                <div x-show="chatShowThinking && call.thinking"
+                     class="px-4 py-3 bg-purple-50 border-b border-purple-100">
+                  <div class="text-[10px] font-semibold text-purple-600 uppercase tracking-wide mb-1">
+                    assistant · thinking
+                  </div>
+                  <pre class="text-[11px] text-purple-800 whitespace-pre-wrap font-mono leading-relaxed max-h-[380px] overflow-y-auto"
+                       x-text="call.thinking"></pre>
+                </div>
+
+                <!-- Conversation messages -->
+                <div class="divide-y divide-gray-100">
+                  <template x-for="(msg, mi) in (call.conversation || [])" :key="mi">
+                    <div>
+
+                      <!-- System (collapsed by default unless toggle on) -->
+                      <template x-if="msg.role === 'system'">
+                        <div class="px-4 py-3 bg-gray-50/50">
+                          <div class="flex items-center gap-2 mb-1">
+                            <span class="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-gray-200 text-gray-600 uppercase tracking-wide">system</span>
+                            <span class="text-xs text-gray-400" x-text="(msg.content || '').length.toLocaleString() + ' chars'"></span>
+                            <button @click="toggleMsg(call.id + '-' + mi)"
+                                    class="text-xs text-gray-500 hover:text-gray-800 underline ml-auto">
+                              <span x-text="(chatShowSystem || msgOpen[call.id + '-' + mi]) ? 'collapse' : 'expand'"></span>
+                            </button>
+                          </div>
+                          <pre x-show="chatShowSystem || msgOpen[call.id + '-' + mi]"
+                               class="text-[11px] text-gray-600 whitespace-pre-wrap font-mono leading-relaxed bg-white border border-gray-200 rounded p-3 max-h-[420px] overflow-y-auto"
+                               x-text="msg.content"></pre>
+                        </div>
+                      </template>
+
+                      <!-- User -->
+                      <template x-if="msg.role === 'user'">
+                        <div class="px-4 py-3">
+                          <div class="flex items-center gap-2 mb-1.5">
+                            <span class="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-blue-100 text-blue-700 uppercase tracking-wide">user</span>
+                            <span class="text-xs text-gray-400" x-text="(msg.content || '').length.toLocaleString() + ' chars'"></span>
+                          </div>
+                          <pre class="text-xs text-gray-800 whitespace-pre-wrap font-mono leading-relaxed bg-blue-50/40 border border-blue-100 rounded p-3 max-h-[520px] overflow-y-auto"
+                               x-text="msg.content"></pre>
+                        </div>
+                      </template>
+
+                      <!-- Assistant -->
+                      <template x-if="msg.role === 'assistant'">
+                        <div class="px-4 py-3">
+                          <div class="flex items-center gap-2 mb-1.5">
+                            <span class="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 uppercase tracking-wide">assistant</span>
+                            <span x-show="msg.tool_calls?.length"
+                                  class="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-blue-100 text-blue-700">
+                              <span x-text="msg.tool_calls.length"></span> tool call(s)
+                            </span>
+                            <span x-show="msg.thinking" class="text-[10px] text-purple-600 italic">+ thinking</span>
+                            <span class="text-xs text-gray-400" x-text="(msg.content || '').length.toLocaleString() + ' chars'"></span>
+                          </div>
+
+                          <!-- Embedded thinking (rare: per-message thinking in synthesized responses) -->
+                          <template x-if="chatShowThinking && msg.thinking">
+                            <pre class="text-[11px] text-purple-800 whitespace-pre-wrap font-mono leading-relaxed bg-purple-50 border border-purple-100 rounded p-3 mb-1.5 max-h-[320px] overflow-y-auto"
+                                 x-text="msg.thinking"></pre>
+                          </template>
+
+                          <pre x-show="msg.content"
+                               class="text-xs text-gray-800 whitespace-pre-wrap font-mono leading-relaxed bg-amber-50/40 border border-amber-100 rounded p-3 max-h-[520px] overflow-y-auto"
+                               x-text="msg.content"></pre>
+
+                          <!-- Tool calls issued by the assistant -->
+                          <template x-if="msg.tool_calls?.length">
+                            <div class="mt-2 space-y-1">
+                              <template x-for="(tc, ti) in msg.tool_calls" :key="ti">
+                                <div class="flex items-start gap-2 text-xs bg-blue-50/50 border border-blue-100 rounded px-2 py-1">
+                                  <span class="text-blue-600 font-semibold mt-0.5">→</span>
+                                  <div class="flex-1 min-w-0">
+                                    <div class="font-mono text-blue-700" x-text="tc.name"></div>
+                                    <pre x-show="tc.arguments && tc.arguments !== '{}'"
+                                         class="text-[11px] text-gray-600 whitespace-pre-wrap font-mono break-all"
+                                         x-text="formatArgs(tc.arguments)"></pre>
+                                  </div>
+                                </div>
+                              </template>
+                            </div>
+                          </template>
+                        </div>
+                      </template>
+
+                      <!-- Tool result -->
+                      <template x-if="msg.role === 'tool'">
+                        <div class="px-4 py-3 bg-gray-50/40">
+                          <div class="flex items-center gap-2 mb-1.5">
+                            <span class="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-blue-100 text-blue-700 uppercase tracking-wide">tool result</span>
+                            <span x-show="msg.name" class="text-[11px] text-gray-500 font-mono" x-text="msg.name"></span>
+                            <span class="text-xs text-gray-400" x-text="(msg.content || '').length.toLocaleString() + ' chars'"></span>
+                          </div>
+                          <pre class="text-[11px] text-gray-700 whitespace-pre-wrap font-mono leading-relaxed bg-white border border-gray-200 rounded p-3 max-h-[380px] overflow-y-auto"
+                               x-text="msg.content"></pre>
+                        </div>
+                      </template>
+
+                    </div>
+                  </template>
+
+                  <!-- Fallback: if there's no conversation array but a response field (simple call) -->
+                  <template x-if="!(call.conversation || []).some(m => m.role === 'assistant') && call.response">
+                    <div class="px-4 py-3">
+                      <div class="flex items-center gap-2 mb-1.5">
+                        <span class="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 uppercase tracking-wide">assistant</span>
+                        <span class="text-[10px] text-gray-400 italic">(from response field)</span>
+                      </div>
+                      <pre class="text-xs text-gray-800 whitespace-pre-wrap font-mono leading-relaxed bg-amber-50/40 border border-amber-100 rounded p-3 max-h-[520px] overflow-y-auto"
+                           x-text="call.response"></pre>
+                    </div>
+                  </template>
+                </div>
+              </div>
+            </template>
+
+            <div x-show="filteredChat.length === 0" class="text-center text-gray-400 py-12">
+              No conversations match the current filter.
+            </div>
+          </div>
+        </section>
+
+      </div>
+    </div>
+  </main>
+
+  <!-- Footer -->
+  <footer class="border-t border-gray-200 px-6 py-4 text-center text-xs text-gray-400">
+    Generated by <span class="font-medium">SFEWA</span> &middot; Strategic Failure Early Warning Agent
+  </footer>
+
+  <!-- ============================================ -->
+  <!--  SLIDE-OUT: Risk Factor Detail               -->
+  <!-- ============================================ -->
+  <div class="fixed inset-0 z-40" x-show="selectedFactor" @click="selectedFactor = null" x-transition:enter="transition-opacity" x-transition:enter-start="opacity-0" x-transition:enter-end="opacity-100" x-transition:leave="transition-opacity" x-transition:leave-start="opacity-100" x-transition:leave-end="opacity-0">
+    <div class="absolute inset-0 bg-black/20"></div>
+  </div>
+  <div class="slide-out bg-white border-l border-gray-200 shadow-xl"
+       :class="selectedFactor ? 'open' : ''">
+    <div class="h-full flex flex-col" x-show="selectedFactor">
+      <!-- Header -->
+      <div class="flex items-center justify-between px-5 py-4 border-b border-gray-200">
+        <div>
+          <div class="flex items-center gap-2">
+            <span class="font-mono text-sm text-gray-400" x-text="selectedFactor?.factor_id"></span>
+            <span class="text-xs font-semibold uppercase px-2 py-0.5 rounded-full"
+                  :class="levelBadgeClass(selectedFactor?.severity)"
+                  x-text="selectedFactor?.severity"></span>
+            <span class="text-xs text-gray-400 font-mono" x-text="depthDots(selectedFactor?.depth_of_analysis || 0)"></span>
+          </div>
+          <div class="font-medium text-gray-900 mt-1" x-text="selectedFactor?.title"></div>
+          <div class="text-xs text-gray-400 font-mono" x-text="selectedFactor?.dimension"></div>
+        </div>
+        <button @click="selectedFactor = null" class="text-gray-400 hover:text-gray-600 text-lg">&times;</button>
+      </div>
+      <!-- Content -->
+      <div class="flex-1 overflow-y-auto px-5 py-4 slide-out-content space-y-4">
+        <!-- Description -->
+        <div>
+          <div class="text-xs font-semibold uppercase tracking-wide text-gray-400 mb-1">Description</div>
+          <div class="text-sm text-gray-700 leading-relaxed whitespace-pre-line" x-text="selectedFactor?.description"></div>
+        </div>
+        <!-- Causal Chain -->
+        <div x-show="selectedFactor?.causal_chain?.length">
+          <div class="text-xs font-semibold uppercase tracking-wide text-gray-400 mb-1">Causal Chain</div>
+          <ol class="list-decimal list-inside text-sm text-gray-700 space-y-1">
+            <template x-for="step in (selectedFactor?.causal_chain || [])" :key="step">
+              <li x-text="step"></li>
+            </template>
+          </ol>
+        </div>
+        <!-- Structural Forces -->
+        <div x-show="selectedFactor?.structural_forces">
+          <div class="text-xs font-semibold uppercase tracking-wide text-gray-400 mb-1">Structural Forces</div>
+          <div x-show="selectedFactor?.structural_forces?.reinforcing_loops?.length" class="mb-2">
+            <div class="text-xs text-red-600 font-medium mb-0.5">Reinforcing Loops</div>
+            <template x-for="loop in (selectedFactor?.structural_forces?.reinforcing_loops || [])" :key="loop">
+              <div class="text-sm text-gray-700 pl-3 border-l-2 border-red-200 mb-1" x-text="loop"></div>
+            </template>
+          </div>
+          <div x-show="selectedFactor?.structural_forces?.balancing_loops?.length">
+            <div class="text-xs text-green-600 font-medium mb-0.5">Balancing Loops</div>
+            <template x-for="loop in (selectedFactor?.structural_forces?.balancing_loops || [])" :key="loop">
+              <div class="text-sm text-gray-700 pl-3 border-l-2 border-green-200 mb-1" x-text="loop"></div>
+            </template>
+          </div>
+        </div>
+        <!-- Key Assumption -->
+        <div x-show="selectedFactor?.key_assumption_at_risk">
+          <div class="text-xs font-semibold uppercase tracking-wide text-gray-400 mb-1">Key Assumption at Risk</div>
+          <div class="text-sm text-gray-700 p-3 bg-amber-50 rounded border border-amber-200" x-text="selectedFactor?.key_assumption_at_risk"></div>
+        </div>
+        <!-- Evidence -->
+        <div>
+          <div class="text-xs font-semibold uppercase tracking-wide text-gray-400 mb-1">Supporting Evidence</div>
+          <div class="flex flex-wrap gap-1.5">
+            <template x-for="eid in (selectedFactor?.supporting_evidence || [])" :key="eid">
+              <button @click="scrollToEvidence(eid)" class="text-xs font-mono px-2 py-0.5 rounded bg-red-50 text-red-700 hover:bg-red-100" x-text="eid"></button>
+            </template>
+          </div>
+        </div>
+        <div x-show="selectedFactor?.contradicting_evidence?.length">
+          <div class="text-xs font-semibold uppercase tracking-wide text-gray-400 mb-1">Contradicting Evidence</div>
+          <div class="flex flex-wrap gap-1.5">
+            <template x-for="eid in (selectedFactor?.contradicting_evidence || [])" :key="eid">
+              <button @click="scrollToEvidence(eid)" class="text-xs font-mono px-2 py-0.5 rounded bg-green-50 text-green-700 hover:bg-green-100" x-text="eid"></button>
+            </template>
+          </div>
+        </div>
+        <!-- Linked challenge -->
+        <div x-show="getChallenge(selectedFactor?.factor_id)">
+          <div class="text-xs font-semibold uppercase tracking-wide text-gray-400 mb-1">Adversarial Challenge</div>
+          <div class="text-sm text-gray-700 p-3 bg-gray-50 rounded border border-gray-200">
+            <div class="flex items-center gap-2 mb-1">
+              <span class="font-mono text-xs text-gray-400" x-text="getChallenge(selectedFactor?.factor_id)?.challenge_id"></span>
+              <span class="text-xs font-semibold px-2 py-0.5 rounded-full"
+                    :class="challengeBadgeClass(getChallenge(selectedFactor?.factor_id)?.severity)"
+                    x-text="getChallenge(selectedFactor?.factor_id)?.severity"></span>
+            </div>
+            <div x-text="getChallenge(selectedFactor?.factor_id)?.challenge_text"></div>
+          </div>
+        </div>
+        <!-- Unresolved Gaps -->
+        <div x-show="selectedFactor?.unresolved_gaps?.length">
+          <div class="text-xs font-semibold uppercase tracking-wide text-gray-400 mb-1">Unresolved Gaps</div>
+          <ul class="list-disc list-inside text-sm text-gray-600 space-y-0.5">
+            <template x-for="gap in (selectedFactor?.unresolved_gaps || [])" :key="gap">
+              <li x-text="gap"></li>
+            </template>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================================ -->
+  <!--  SLIDE-OUT: LLM Call / Conversation Detail    -->
+  <!-- ============================================ -->
+  <div class="fixed inset-0 z-40" x-show="selectedLLMCall" @click="selectedLLMCall = null" x-transition:enter="transition-opacity" x-transition:enter-start="opacity-0" x-transition:enter-end="opacity-100" x-transition:leave="transition-opacity" x-transition:leave-start="opacity-100" x-transition:leave-end="opacity-0">
+    <div class="absolute inset-0 bg-black/20"></div>
+  </div>
+  <div class="slide-out bg-white border-l border-gray-200 shadow-xl"
+       :class="selectedLLMCall ? 'open' : ''">
+    <div class="h-full flex flex-col" x-show="selectedLLMCall">
+      <!-- Header -->
+      <div class="flex items-center justify-between px-5 py-4 border-b border-gray-200">
+        <div>
+          <div class="text-sm font-medium text-gray-900">
+            <span class="font-mono" x-text="selectedLLMCall?.node"></span>
+            <span class="text-gray-400 mx-1">/</span>
+            <span class="font-mono text-amber-700" x-text="selectedLLMCall?.label"></span>
+          </div>
+          <div class="text-xs text-gray-400 mt-0.5">
+            <span x-show="selectedLLMCall?.token_usage?.prompt_tokens"
+                  x-text="selectedLLMCall?.token_usage?.prompt_tokens + ' prompt + ' + selectedLLMCall?.token_usage?.completion_tokens + ' completion'"></span>
+            <span x-show="selectedLLMCall?.thinking" class="ml-2 text-purple-500">thinking mode</span>
+            <span x-show="selectedLLMCall?.conversation?.length > 3" class="ml-2"
+                  x-text="selectedLLMCall?.conversation?.filter(m => m.role === 'assistant').length + ' turns'"></span>
+          </div>
+        </div>
+        <button @click="selectedLLMCall = null" class="text-gray-400 hover:text-gray-600 text-lg">&times;</button>
+      </div>
+
+      <!-- Tab bar: Chat vs Raw -->
+      <div class="flex border-b border-gray-200 px-5 text-xs">
+        <button @click="llmCallTab = 'chat'"
+                :class="llmCallTab === 'chat' ? 'border-gray-900 text-gray-900' : 'border-transparent text-gray-400'"
+                class="py-2 px-3 border-b-2">Conversation</button>
+        <button @click="llmCallTab = 'system'"
+                :class="llmCallTab === 'system' ? 'border-gray-900 text-gray-900' : 'border-transparent text-gray-400'"
+                class="py-2 px-3 border-b-2">System</button>
+        <button x-show="selectedLLMCall?.thinking" @click="llmCallTab = 'thinking'"
+                :class="llmCallTab === 'thinking' ? 'border-purple-600 text-purple-600' : 'border-transparent text-gray-400'"
+                class="py-2 px-3 border-b-2">Thinking</button>
+      </div>
+
+      <!-- Content -->
+      <div class="flex-1 overflow-y-auto px-5 py-4 slide-out-content">
+
+        <!-- CHAT VIEW: Full conversation in chat bubbles -->
+        <div x-show="llmCallTab === 'chat'" class="space-y-3">
+          <template x-for="(msg, idx) in (selectedLLMCall?.conversation || [])" :key="idx">
+            <div>
+              <!-- System message (collapsed by default) -->
+              <template x-if="msg.role === 'system'">
+                <div class="text-[11px] text-gray-400 italic text-center cursor-pointer hover:text-gray-600"
+                     @click="$el.nextElementSibling?.classList.toggle('hidden')">
+                  System prompt (click to expand)
+                </div>
+              </template>
+              <template x-if="msg.role === 'system'">
+                <pre class="hidden text-[11px] text-gray-500 whitespace-pre-wrap font-mono leading-relaxed bg-gray-50 rounded p-3 max-h-[300px] overflow-y-auto" x-text="msg.content"></pre>
+              </template>
+
+              <!-- User message -->
+              <template x-if="msg.role === 'user'">
+                <div class="flex justify-end">
+                  <div class="max-w-[85%] bg-blue-50 border border-blue-100 rounded-lg px-3 py-2">
+                    <div class="text-[10px] font-semibold text-blue-400 uppercase mb-1">User</div>
+                    <pre class="text-xs text-gray-700 whitespace-pre-wrap font-mono leading-relaxed max-h-[400px] overflow-y-auto" x-text="msg.content"></pre>
+                  </div>
+                </div>
+              </template>
+
+              <!-- Assistant message -->
+              <template x-if="msg.role === 'assistant'">
+                <div class="flex justify-start">
+                  <div class="max-w-[85%] bg-amber-50 border border-amber-100 rounded-lg px-3 py-2">
+                    <div class="text-[10px] font-semibold text-amber-500 uppercase mb-1">Assistant</div>
+                    <!-- Thinking block (collapsed by default) -->
+                    <template x-if="msg.thinking">
+                      <div class="mb-2">
+                        <div class="text-[10px] text-purple-500 italic cursor-pointer hover:text-purple-700"
+                             @click="$el.nextElementSibling?.classList.toggle('hidden')">
+                          Thinking... (click to expand)
+                        </div>
+                        <pre class="hidden text-[11px] text-purple-700 whitespace-pre-wrap font-mono leading-relaxed bg-purple-50 rounded p-2 mt-1 max-h-[400px] overflow-y-auto" x-text="msg.thinking"></pre>
+                      </div>
+                    </template>
+                    <pre x-show="msg.content" class="text-xs text-gray-700 whitespace-pre-wrap font-mono leading-relaxed" x-text="msg.content"></pre>
+                    <!-- Tool calls -->
+                    <template x-if="msg.tool_calls?.length">
+                      <div class="mt-1.5 space-y-1">
+                        <template x-for="(tc, ti) in msg.tool_calls" :key="ti">
+                          <div class="flex items-center gap-1.5 text-xs">
+                            <span class="text-blue-500 font-medium" x-text="'→ ' + tc.name"></span>
+                            <span class="text-gray-400 font-mono text-[11px] truncate" x-text="tc.arguments && tc.arguments !== '{}' ? tc.arguments.substring(0, 80) : ''"></span>
+                          </div>
+                        </template>
+                      </div>
+                    </template>
+                  </div>
+                </div>
+              </template>
+
+              <!-- Tool result -->
+              <template x-if="msg.role === 'tool'">
+                <div class="ml-4">
+                  <div class="bg-gray-50 border border-gray-200 rounded-lg px-3 py-2">
+                    <div class="flex items-center gap-1.5 mb-1">
+                      <span class="text-[10px] font-semibold text-blue-500 uppercase">Tool Result</span>
+                      <span x-show="msg.name" class="text-[10px] text-gray-400 font-mono" x-text="msg.name"></span>
+                    </div>
+                    <pre class="text-[11px] text-gray-600 whitespace-pre-wrap font-mono leading-relaxed max-h-[200px] overflow-y-auto" x-text="msg.content"></pre>
+                  </div>
+                </div>
+              </template>
+            </div>
+          </template>
+
+          <!-- Final response (if not in conversation) -->
+          <div x-show="!selectedLLMCall?.conversation?.length && selectedLLMCall?.response">
+            <div class="bg-amber-50 border border-amber-100 rounded-lg px-3 py-2">
+              <div class="text-[10px] font-semibold text-amber-500 uppercase mb-1">Response</div>
+              <pre class="text-xs text-gray-700 whitespace-pre-wrap font-mono leading-relaxed" x-text="selectedLLMCall?.response"></pre>
+            </div>
+          </div>
+        </div>
+
+        <!-- SYSTEM VIEW: Raw system prompt -->
+        <pre x-show="llmCallTab === 'system'" class="text-xs text-gray-700 whitespace-pre-wrap font-mono leading-relaxed" x-text="selectedLLMCall?.system_prompt"></pre>
+
+        <!-- THINKING VIEW -->
+        <pre x-show="llmCallTab === 'thinking'" class="text-xs text-purple-800 whitespace-pre-wrap font-mono leading-relaxed bg-purple-50 p-3 rounded" x-text="selectedLLMCall?.thinking"></pre>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================================ -->
+  <!--  DATA + APP LOGIC                            -->
+  <!-- ============================================ -->
+  <script>
+    const DATA = /* __SFEWA_DATA__ */ {};
+
+    function sfewa() {
+      return {
+        // View state
+        tab: 'results',
+        flowTab: 'flowchart',
+        selectedFactor: null,
+        selectedLLMCall: null,
+        expandedEvidence: null,
+        selectedNode: null,
+        memoExpanded: false,
+        llmCallTab: 'chat',
+
+        // Filters
+        stanceFilter: 'all',
+        claimTypeFilter: 'all',
+
+        // Raw-chat view state
+        chatNodeFilter: 'all',
+        chatSearch: '',
+        chatShowSystem: false,
+        chatShowThinking: false,
+        msgOpen: {},      // per-system-message expand state (keyed by callId-msgIdx)
+        rawJsonOpen: {},  // per-call raw-JSON toggle
+
+        // Cross-reference index
+        _factorIdx: {},
+        _challengeIdx: {},
+        _factorEvidenceIdx: {},
+
+        init() {
+          // Build factor index
+          (DATA.risk_factors || []).forEach(f => { this._factorIdx[f.factor_id] = f; });
+          // Build challenge-by-factor index
+          (DATA.challenges || []).forEach(c => { this._challengeIdx[c.target_factor_id] = c; });
+          // Build reverse evidence → factor index
+          (DATA.risk_factors || []).forEach(f => {
+            for (const eid of [...(f.supporting_evidence || []), ...(f.contradicting_evidence || [])]) {
+              if (!this._factorEvidenceIdx[eid]) this._factorEvidenceIdx[eid] = [];
+              this._factorEvidenceIdx[eid].push(f.factor_id);
+            }
+          });
+          // Compute node stats from timeline
+          this._nodeStatsCache = {};
+          this._nodePassCache = {};
+          (DATA.timeline || []).forEach(evt => {
+            const n = evt.node;
+            if (!n) return;
+            if (!this._nodeStatsCache[n]) this._nodeStatsCache[n] = { llm: 0, tool: 0 };
+            if (evt.type === 'llm_call') this._nodeStatsCache[n].llm++;
+            if (evt.type === 'tool_call') this._nodeStatsCache[n].tool++;
+            if (evt.type === 'node_enter') this._nodePassCache[n] = (this._nodePassCache[n] || 0) + 1;
+          });
+        },
+
+        // Computed
+        get summary() {
+          const s = DATA.summary || {};
+          // Fallback: if risk_score missing, derive from level
+          if (s.risk_score == null && s.overall_risk_level) {
+            s.risk_score = { critical: 90, high: 70, medium: 50, low: 30 }[s.overall_risk_level] || 50;
+          }
+          return s;
+        },
+        get riskFactors() {
+          const order = { critical: 0, high: 1, medium: 2, low: 3 };
+          return [...(DATA.risk_factors || [])].sort((a, b) => (order[a.severity] ?? 9) - (order[b.severity] ?? 9));
+        },
+        get filteredEvidence() {
+          return (DATA.evidence || []).filter(e =>
+            (this.stanceFilter === 'all' || e.stance === this.stanceFilter) &&
+            (this.claimTypeFilter === 'all' || e.claim_type === this.claimTypeFilter)
+          );
+        },
+        get claimTypes() {
+          return [...new Set((DATA.evidence || []).map(e => e.claim_type))].sort();
+        },
+        get stanceCounts() {
+          const c = { supports_risk: 0, contradicts_risk: 0, neutral: 0 };
+          (DATA.evidence || []).forEach(e => { if (c[e.stance] !== undefined) c[e.stance]++; });
+          return c;
+        },
+        get renderedMemo() {
+          if (!DATA.memo) return '';
+          return typeof marked !== 'undefined' ? marked.parse(DATA.memo) : DATA.memo;
+        },
+        get filteredTimeline() {
+          if (!DATA.timeline) return [];
+          if (!this.selectedNode) return DATA.timeline;
+          return DATA.timeline.filter(e => e.node === this.selectedNode || e.type === 'parallel_start' || e.type === 'parallel_end');
+        },
+
+        // ── Raw-chat view ─────────────────────────────────────────────
+        get llmCalls() {
+          return (DATA.timeline || []).filter(e => e.type === 'llm_call');
+        },
+        get chatNodes() {
+          return [...new Set(this.llmCalls.map(c => c.node))].sort();
+        },
+        get filteredChat() {
+          const q = (this.chatSearch || '').trim().toLowerCase();
+          return this.llmCalls.filter(c => {
+            if (this.chatNodeFilter !== 'all' && c.node !== this.chatNodeFilter) return false;
+            if (this.selectedNode && c.node !== this.selectedNode) return false;
+            if (!q) return true;
+            // Search system_prompt, user_prompt, response, thinking, and any conversation content
+            const blobs = [c.system_prompt, c.user_prompt, c.response, c.thinking, c.label, c.node];
+            for (const m of (c.conversation || [])) {
+              blobs.push(m.content, m.thinking);
+              for (const tc of (m.tool_calls || [])) {
+                blobs.push(tc.name, tc.arguments);
+              }
+            }
+            return blobs.some(x => x && String(x).toLowerCase().includes(q));
+          });
+        },
+        countToolTurns(call) {
+          return (call.conversation || []).filter(m => m.role === 'assistant' && (m.tool_calls || []).length).length;
+        },
+        toggleMsg(key)    { this.msgOpen[key] = !this.msgOpen[key]; },
+        toggleRawJson(id) { this.rawJsonOpen[id] = !this.rawJsonOpen[id]; },
+        formatArgs(raw) {
+          if (!raw) return '';
+          try { return JSON.stringify(JSON.parse(raw), null, 2); }
+          catch { return raw; }
+        },
+
+        // Lookups
+        getChallenge(factorId) { return this._challengeIdx[factorId]; },
+        referencingFactors(evidenceId) { return this._factorEvidenceIdx[evidenceId] || []; },
+        factorDimension(factorId) {
+          const f = this._factorIdx[factorId];
+          return f ? f.dimension : '';
+        },
+
+        // Node stats for SVG
+        _nodeStatsCache: {},
+        nodeStats(nodeName) {
+          const s = { llm: 0, tool: 0 };
+          // adversarial_verification is a sub-step of adversarial_review — fold it in
+          const aliases = { adversarial_review: ['adversarial_review', 'adversarial_verification'] };
+          const keys = aliases[nodeName] || [nodeName];
+          for (const k of keys) {
+            const c = this._nodeStatsCache[k];
+            if (c) { s.llm += c.llm; s.tool += c.tool; }
+          }
+          if (!s.llm && !s.tool) return '';
+          const parts = [];
+          if (s.llm) parts.push(s.llm + ' LLM');
+          if (s.tool) parts.push(s.tool + ' tool');
+          // Pass count: how many times did this node fire?
+          const passes = this._nodePassCache[nodeName] || 0;
+          if (passes > 1) parts.push(passes + '×');
+          return parts.join(' · ');
+        },
+        _nodePassCache: {},
+
+        // Navigation
+        toggleNode(name) {
+          this.selectedNode = this.selectedNode === name ? null : name;
+        },
+        scrollToEvidence(id) {
+          this.selectedFactor = null;
+          this.tab = 'results';
+          this.expandedEvidence = id;
+          this.$nextTick(() => {
+            const el = document.getElementById('ev-' + id);
+            if (el) { el.scrollIntoView({ behavior: 'smooth', block: 'center' }); el.classList.add('evidence-highlight'); }
+          });
+        },
+        scrollToFactor(id) {
+          this.tab = 'results';
+          this.$nextTick(() => {
+            const el = document.getElementById('factor-' + id);
+            if (el) { el.scrollIntoView({ behavior: 'smooth', block: 'center' }); el.classList.add('evidence-highlight'); }
+          });
+        },
+
+        // Helpers
+        stancePercent(stance) {
+          const total = (DATA.evidence || []).length;
+          return total ? ((this.stanceCounts[stance] / total) * 100).toFixed(1) : 0;
+        },
+        levelColor(level) {
+          return { critical: '#dc2626', high: '#ea580c', medium: '#ca8a04', low: '#16a34a' }[level] || '#6b7280';
+        },
+        levelBadgeClass(level) {
+          return {
+            critical: 'bg-red-100 text-red-700',
+            high: 'bg-orange-100 text-orange-700',
+            medium: 'bg-yellow-100 text-yellow-700',
+            low: 'bg-green-100 text-green-700',
+          }[level] || 'bg-gray-100 text-gray-700';
+        },
+        levelTextClass(level) {
+          return { critical: 'text-red-600', high: 'text-orange-600', medium: 'text-yellow-600', low: 'text-green-600' }[level] || 'text-gray-600';
+        },
+        challengeBadgeClass(severity) {
+          return { strong: 'bg-green-100 text-green-700', moderate: 'bg-yellow-100 text-yellow-700', weak: 'bg-red-100 text-red-700' }[severity] || 'bg-gray-100 text-gray-700';
+        },
+        matchBadgeClass(quality) {
+          return { strong: 'bg-green-100 text-green-700', partial: 'bg-yellow-100 text-yellow-700', weak: 'bg-orange-100 text-orange-700', miss: 'bg-red-100 text-red-700' }[quality] || 'bg-gray-100 text-gray-700';
+        },
+        matchIcon(quality) {
+          return { strong: '●', partial: '◐', weak: '○', miss: '✕' }[quality] || '?';
+        },
+        stanceDotClass(stance) {
+          return { supports_risk: 'bg-red-400', contradicts_risk: 'bg-green-400', neutral: 'bg-gray-300' }[stance] || 'bg-gray-300';
+        },
+        stanceLabel(stance) {
+          return { supports_risk: 'risk', contradicts_risk: 'contra', neutral: 'neutral' }[stance] || stance;
+        },
+        depthDots(n) { return '●'.repeat(n) + '○'.repeat(Math.max(0, 4 - n)); },
+        formatTime(ts) {
+          if (!ts) return '';
+          try { return new Date(ts).toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' }); }
+          catch { return ts; }
+        },
+      };
+    }
+  </script>
+
+</body>
+</html>

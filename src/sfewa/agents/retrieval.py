@@ -181,8 +181,11 @@ def _generate_archival_queries(
         queries.append(f"site:{site} {short_name} electric vehicle {cutoff_year}")
     # Competitor comparison queries on one archival source
     if peers:
-        top_peer = peers[0].split()[0] if peers else "Tesla"
-        queries.append(f"site:reuters.com {short_name} vs {top_peer} EV {prior_year}")
+        first_peer = peers[0]
+        peer_name = first_peer.get("name", "") if isinstance(first_peer, dict) else str(first_peer)
+        top_peer = peer_name.split()[0] if peer_name else ""
+        if top_peer:
+            queries.append(f"site:reuters.com {short_name} vs {top_peer} EV {prior_year}")
     return queries
 
 

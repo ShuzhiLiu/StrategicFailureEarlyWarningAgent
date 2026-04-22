@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Literal
+from typing import Any, Literal
 
 from typing_extensions import TypedDict
 
@@ -21,18 +21,21 @@ class PipelineState(TypedDict):
     strategy_theme: str
     cutoff_date: str  # ISO format YYYY-MM-DD
     regions: list[str]
-    peers: list  # list[str] or list[dict] — both supported
-    ground_truth_events: list[dict]
-    analysis_dimensions: dict  # LLM-generated per-analyst dimensions (optional)
+    # Either ["Toyota Motor", "BYD", ...] or [{"name": "Toyota Motor", ...}, ...]
+    peers: list[str | dict[str, Any]]
+    ground_truth_events: list[dict[str, Any]]
+    # LLM-generated per-analyst dimensions, e.g.
+    # {"industry": [{"name": "...", "description": "...", ...}], "company": [...], "peer": [...]}
+    analysis_dimensions: dict[str, list[dict[str, str]]]
 
     # ── Accumulating fields (extended by merge_state in pipeline executor) ──
-    evidence: list[dict]
-    risk_factors: list[dict]
-    adversarial_challenges: list[dict]
-    backtest_events: list[dict]
+    evidence: list[dict[str, Any]]
+    risk_factors: list[dict[str, Any]]
+    adversarial_challenges: list[dict[str, Any]]
+    backtest_events: list[dict[str, Any]]
 
     # ── Overwriting fields ──
-    retrieved_docs: list[dict]
+    retrieved_docs: list[dict[str, Any]]
     risk_score: int | None  # 0-100 continuous risk score
     overall_risk_level: Literal["critical", "high", "medium", "low"] | None
     overall_confidence: float | None

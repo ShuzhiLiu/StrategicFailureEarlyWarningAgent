@@ -134,16 +134,22 @@ def _make_verification_search_tool() -> Tool:
         try:
             web = _search_web(query, max_results=5, ddgs_instance=ddgs)
             results.extend(web)
-        except Exception:
-            pass
+        except Exception as e:
+            reporting.log_action("Verification web search failed", {
+                "query": query[:60],
+                "error": str(e)[:120],
+            })
 
         time.sleep(2)
 
         try:
             news = _search_news(query, max_results=3, ddgs_instance=ddgs)
             results.extend(news)
-        except Exception:
-            pass
+        except Exception as e:
+            reporting.log_action("Verification news search failed", {
+                "query": query[:60],
+                "error": str(e)[:120],
+            })
 
         # Deduplicate by link
         unique: list[dict] = []
@@ -284,13 +290,22 @@ def _refine_challenges(
         parsed = extract_json(raw_text)
 
         if isinstance(parsed, dict):
-            refined_challenges = parsed.get("challenges", challenges)
+            refined_challenges = parsed.get("challenges")
+            if not isinstance(refined_challenges, list):
+                reporting.log_action("Refinement: 'challenges' not a list — using Phase 1", {
+                    "got_type": type(refined_challenges).__name__,
+                })
+                refined_challenges = challenges
             rec = parsed.get("recommendation", recommendation)
             if isinstance(rec, dict):
                 return refined_challenges, rec.get("action", "proceed")
             return refined_challenges, "proceed"
         elif isinstance(parsed, list):
             return parsed, "proceed"
+        else:
+            reporting.log_action("Refinement returned unexpected type — using Phase 1", {
+                "got_type": type(parsed).__name__,
+            })
 
     except Exception as e:
         reporting.log_action("Refinement parse failed — using Phase 1 results", {

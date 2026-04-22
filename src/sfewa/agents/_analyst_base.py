@@ -330,6 +330,7 @@ def run_analyst(
         reporting.log_action(f"Self-consistency: sampling {n_samples}x")
 
     all_samples: list[list[dict]] = []
+    sample_errors: list[str] = []
     for sample_idx in range(n_samples):
         try:
             response = llm.invoke(messages)
@@ -344,7 +345,13 @@ def run_analyst(
                     if cleaned:
                         validated.append(cleaned)
                 all_samples.append(validated)
+            else:
+                sample_errors.append(f"sample {sample_idx + 1}: parse returned {type(parsed).__name__}, expected list")
+                reporting.log_action(f"Parse failure (sample {sample_idx + 1})", {
+                    "got_type": type(parsed).__name__,
+                })
         except Exception as e:
+            sample_errors.append(f"sample {sample_idx + 1}: {type(e).__name__}: {str(e)[:120]}")
             reporting.log_action(f"LLM call failed (sample {sample_idx + 1})", {"error": str(e)[:200]})
 
         # Dynamic early-stop: if first 2 samples agree on severity for all dimensions
@@ -356,7 +363,11 @@ def run_analyst(
                 break
 
     if not all_samples:
-        return {"risk_factors": []}
+        # All samples failed — surface this as a pipeline error so downstream
+        # nodes can distinguish "no risk found" from "analyst broke".
+        err_msg = f"{node_name}: all {n_samples} samples failed. " + "; ".join(sample_errors)
+        reporting.log_action(f"{node_name} produced no valid samples", {"errors": err_msg[:400]})
+        return {"risk_factors": [], "error": err_msg}
 
     # Pick consensus or single-sample result
     if len(all_samples) == 1 or n_samples == 1:

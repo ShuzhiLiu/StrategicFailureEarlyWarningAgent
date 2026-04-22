@@ -34,9 +34,6 @@ from sfewa.graph.routing import (
     route_after_quality_gate,
 )
 
-# Lazy import for v2 pipeline -- only loaded when needed
-_agentic_retrieval_loaded = False
-
 # Fields that accumulate across nodes (extend, not overwrite)
 ACCUMULATING_FIELDS = {"evidence", "risk_factors", "adversarial_challenges", "backtest_events"}
 
