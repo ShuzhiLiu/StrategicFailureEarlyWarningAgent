@@ -25,9 +25,9 @@ except ImportError:
     from duckduckgo_search import DDGS  # type: ignore[no-redef]
 
 from sfewa import reporting
+from sfewa.agents.retrieval import _search_news, _search_web
 from sfewa.context import build_pipeline_context
 from sfewa.llm import get_llm, get_llm_for_role
-from sfewa.tools.chat_log import get_call_log, log_llm_call
 from sfewa.prompts.adversarial import (
     ADVERSARIAL_SYSTEM,
     ADVERSARIAL_USER,
@@ -40,9 +40,8 @@ from sfewa.prompts.adversarial import (
     format_risk_factors_for_review,
 )
 from sfewa.prompts.analysis import format_evidence_for_analyst
-from sfewa.agents.retrieval import _search_web, _search_news
 from sfewa.schemas.state import PipelineState
-
+from sfewa.tools.chat_log import get_call_log, log_llm_call
 
 # ── Constants ──
 
@@ -239,10 +238,22 @@ def _run_verification_search(
 
     result = agent.run(VERIFICATION_USER)
 
+    # Classify how the verification loop terminated so downstream analysis
+    # can distinguish "searched hard, found nothing" from "agent gave up early"
+    # from "agent crashed against the iteration cap".
+    if result.hit_limit:
+        stop_reason = "max_iterations"
+    elif result.tool_call_count == 0:
+        stop_reason = "no_search_attempted"
+    elif result.tool_call_count >= MAX_VERIFICATION_QUERIES:
+        stop_reason = "budget_exhausted"
+    else:
+        stop_reason = "agent_satisfied"
+
     reporting.log_action("Verification search complete", {
         "queries": result.tool_call_count,
         "iterations": result.iterations,
-        "hit_limit": result.hit_limit,
+        "stop_reason": stop_reason,
     })
 
     return result.content

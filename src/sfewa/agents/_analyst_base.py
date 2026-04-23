@@ -17,11 +17,9 @@ from collections import Counter
 from statistics import median
 
 from liteagent import extract_json, strip_thinking
-
 from sfewa import reporting
 from sfewa.context import build_pipeline_context
 from sfewa.llm import get_llm_for_role
-from sfewa.tools.chat_log import log_llm_call
 from sfewa.prompts.analysis import (
     ANALYST_SYSTEM,
     ANALYST_USER,
@@ -29,8 +27,17 @@ from sfewa.prompts.analysis import (
     format_evidence_for_analyst,
 )
 from sfewa.schemas.state import PipelineState
+from sfewa.tools.chat_log import log_llm_call
 
 # Number of samples for self-consistency. Set to 1 to disable.
+#
+# Rationale: self-consistency (Wang et al., ICLR 2023) reduces LLM output
+# variance by taking modal severity and median depth across N independent
+# samples per analyst. Dynamic early-stop skips the Nth sample when the
+# first N-1 already agree on every dimension, so amortized cost is
+# ~2.2x single-sample, not 3x. Empirically, N=1 produced Honda run-to-run
+# score ranges of 20-30 points (iterations 28-31); N=3 tightened this to
+# ~10-17 points (iteration 39 baseline). See docs/iteration_log.md.
 ANALYST_SAMPLES = 3
 
 
