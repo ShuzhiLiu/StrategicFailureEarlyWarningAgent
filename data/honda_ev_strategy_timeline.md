@@ -1,11 +1,25 @@
 # Honda EV Strategy Timeline: 2024 - March 2026
 
-## Research for Strategic Failure Early Warning System Backtesting
+## Purpose
 
-This document provides a detailed chronological timeline of Honda's EV strategy developments,
-the ultimate strategic failure (March 2026 cancellation), and surrounding industry context.
-All data is organized to support backtesting a system that should detect early warning signals
-using only information available *before* the March 12, 2026 announcement.
+This document is the public-record research used to author the `ground_truth_events` in
+`configs/cases/honda_ev_pre_reset.yaml` — the post-cutoff events that the pipeline's
+`backtest_node` matches risk factors against.
+
+**The pipeline does not read this file at runtime.** Retrieval, extraction, analysts,
+adversarial review, and synthesis are structurally blind to this file and to the
+`ground_truth_events` field — only `backtest_node` reads the events, and only after
+the reasoning pipeline has already committed its risk factors to state. See
+`docs/architecture.md` § Temporal Integrity for the 3-gate enforcement that prevents
+post-cutoff information from reaching the reasoning nodes.
+
+This file exists so that the backtest events are grounded in cited public sources
+rather than authored from memory.
+
+---
+
+All data is organized to support backtesting a system that should detect early warning
+signals using only information available *before* the March 12, 2026 announcement.
 
 ---
 

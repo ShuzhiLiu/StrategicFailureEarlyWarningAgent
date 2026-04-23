@@ -183,6 +183,13 @@ cython_debug/
 
 # Claude Code local settings
 .claude/settings.local.json
+.claude/scheduled_tasks.lock
+
+# Local browser profile for running Claude Code benchmarks (do not ship)
+chrome/
+
+# Local presentation drafts (not part of open-source distribution)
+presentations/
 
 # Pipeline run outputs (generated artifacts)
 outputs/

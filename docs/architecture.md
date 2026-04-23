@@ -792,33 +792,3 @@ SFEWA depends on `liteagent` for generic agent patterns and adds domain-specific
 | `rich` | Terminal reporting |
 | `typer` | CLI interface |
 
----
-
-## 13. Event Alignment: AI Tinkerers HK (April 29, 2026)
-
-### Capability Checklist
-
-| Event Wants | SFEWA Delivers | Strength |
-|---|---|---|
-| **LLM orchestration** | Plain Python pipeline, 10 nodes, parallel fan-out, 2 LLM-driven loops | STRONG |
-| **Tool-calling** | DuckDuckGo + EDINET + CNINFO + temporal filter | STRONG |
-| **State management** | `merge_state()` with explicit accumulation, `dedup_by_key()` | STRONG |
-| **Multi-step reasoning loops** | Quality gate + adversarial loop (both LLM-driven) | STRONG |
-| **Analytical framework** | Iceberg Model with 4-layer progressive deepening + Chain of Verification | STRONG |
-| **Systems that take action** | Fully autonomous: retrieve -> analyze -> challenge -> synthesize -> backtest | STRONG |
-| **Code over decks** | Terminal output, Rich reporting, JSON artifacts | STRONG |
-| **Framework-free design** | No LangChain/LangGraph -- plain Python + liteagent utilities | STRONG |
-
-### Recommended Demo Narrative
-
-**Min 0-1**: Hook -- "Honda wrote down 2.5T yen in March 2026. Could agents have seen it coming?"
-
-**Min 1-4**: Architecture -- Show `run_pipeline()` function. "No framework, no graph DSL. Planner decides what to search, Generator runs 3 parallel analysts with the Iceberg Model, Evaluator challenges every conclusion via Chain of Verification."
-
-**Min 4-6**: Live trace -- Agentic retrieval deriving queries from dimensions, analysts producing depth profiles (Layer 2-4), adversarial reviewer Phase 2 searching for counter-evidence.
-
-**Min 6-8**: Cross-company proof -- Same pipeline, same model: Honda ~90/100 (CRITICAL), Toyota ~58/100 (MEDIUM), BYD ~42/100 (MEDIUM-LOW). Show depth distributions and STRONG challenge counts.
-
-**Min 8-9**: Backtest -- Honda 3x STRONG matches on target revision, EV cancellation, and Afeela restructuring.
-
-**Min 9-10**: Honest failures -- Temporal leakage, structured output reliability, run variability. Invite discussion.
