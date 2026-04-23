@@ -1,14 +1,15 @@
 {
-  "case_id": "honda_ev_pre_reset_2025",
+  "case_id": "honda_motor_co_20250519",
   "company": "Honda Motor Co., Ltd.",
   "strategy_theme": "EV electrification strategy",
   "cutoff_date": "2025-05-19",
-  "overall_risk_level": "high",
-  "overall_confidence": 0.68,
-  "evidence_count": 29,
-  "risk_factor_count": 9,
-  "challenge_count": 9,
+  "risk_score": 91,
+  "overall_risk_level": "critical",
+  "overall_confidence": 0.64,
+  "evidence_count": 49,
+  "risk_factor_count": 10,
+  "challenge_count": 10,
   "backtest_events": 3,
   "adversarial_pass_count": 1,
-  "iteration_count": 3
+  "iteration_count": 1
 }

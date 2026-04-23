@@ -3,27 +3,27 @@
     {
       "event_id": "gt_001",
       "event_date": "2025-03-27",
-      "description": "BYD reports record FY2024 revenue and 34% net profit growth despite market headwinds.",
+      "description": "BYD reports record FY2024 revenue of 777 billion yuan and net profit of 40.3 billion yuan (+34% YoY) with 4.27 million NEV sales.",
       "event_type": "financial_metric",
       "matched_factors": [
+        "PEER002",
         "IND002",
-        "COM001",
-        "PEER001"
+        "COM001"
       ],
       "match_quality": "strong"
     },
     {
       "event_id": "gt_002",
       "event_date": "2025-06-01",
-      "description": "BYD continues international expansion with new factories in Thailand, Brazil, and Hungary; no major strategy revision.",
+      "description": "BYD continues international expansion with new factories in Thailand, Brazil, and Hungary with no major strategy revision.",
       "event_type": "target_statement",
       "matched_factors": [
+        "PEER003",
         "IND001",
-        "COM003",
-        "PEER002"
+        "COM003"
       ],
-      "match_quality": "partial"
+      "match_quality": "strong"
     }
   ],
-  "summary": "The model demonstrated strong predictive capability regarding financial resilience, accurately forecasting that BYD's cost advantages and vertical integration would sustain profit growth despite aggressive pricing wars and market saturation (gt_001). However, the model exhibited a 'false positive' tendency regarding operational execution risks; while it correctly identified the Brazil labor violation as a significant hurdle, it overestimated the severity of the impact, failing to predict that the company would successfully resume expansion and open new factories in Brazil and other regions without a major strategic pivot (gt_002)."
+  "summary": "The backtest reveals a high degree of accuracy in the predicted risk factors, particularly regarding financial performance and strategic execution. Predictions regarding the tension between cash flow strain and profit growth (PEER002, COM001) were strongly validated by the record financial results in gt_001. Similarly, the anticipated expansion into new manufacturing hubs like Hungary and Brazil (IND001, COM003) was confirmed in gt_002, indicating that the identified risks were either successfully mitigated or were part of the expected strategic trajectory rather than unforeseen failures."
 }

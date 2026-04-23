@@ -1,269 +1,418 @@
 [
   {
-    "factor_id": "IND001",
-    "dimension": "policy_dependency",
-    "title": "Trade Barrier Exposure in Key Expansion Markets",
-    "description": "BYD's expansion strategy into Europe faces material headwinds from new tariff regimes that have already slowed growth, while a labor violation in Brazil threatens its local manufacturing pivot designed to circumvent trade barriers. These policy-driven obstacles directly challenge the company's reliance on export-led growth and local production incentives.",
-    "severity": "medium",
-    "confidence": 0.75,
-    "supporting_evidence": [
-      "E005",
-      "E029"
-    ],
-    "contradicting_evidence": [
-      "E020",
-      "E022",
-      "E023"
-    ],
-    "causal_chain": [
-      "Evidence E029 confirms that EU tariffs implemented in 2024 have directly slowed BYD's growth trajectory in the European BEV market, reducing the effectiveness of its export strategy.",
-      "Evidence E005 indicates a halt in BYD's Brazil factory construction due to labor violations, creating a specific regulatory barrier to establishing local production capacity intended to mitigate trade barriers.",
-      "However, Evidence E020, E022, and E023 demonstrate BYD's strong vertical integration and secured raw material rights, providing a cost advantage (15% over Tesla) that offers some buffer against tariff-induced price increases.",
-      "The net assessment is 'medium' because while policy barriers are real and active (EU tariffs, Brazil halt), they block expansion in specific regions rather than threatening existing core revenue streams in China, where BYD remains dominant."
-    ],
-    "unresolved_gaps": [
-      "The specific timeline for the resolution of the Brazil labor violations and factory restart.",
-      "The exact magnitude of price pass-through to consumers in Europe due to the 2024 tariffs.",
-      "Details on whether BYD is pivoting to other non-tariffed markets to offset EU and Brazil delays."
-    ]
-  },
-  {
-    "factor_id": "IND002",
-    "dimension": "market_timing",
-    "title": "Domestic Market Saturation and Unsustainable Pricing Dynamics",
-    "description": "The Chinese EV market is experiencing severe overcapacity and record inventory levels, forcing BYD into aggressive price wars that executives admit are unsustainable. While BYD is growing, the industry-wide shift toward price-based competition threatens long-term profitability and suggests the market is transitioning slower in terms of healthy demand growth than a high-growth expansion strategy would assume.",
-    "severity": "medium",
-    "confidence": 0.8,
-    "supporting_evidence": [
-      "E011",
-      "E020",
-      "E053",
-      "E086",
-      "E032"
-    ],
-    "contradicting_evidence": [
-      "E001",
-      "E002",
-      "E017",
-      "E050",
-      "E083",
-      "E034"
-    ],
-    "causal_chain": [
-      "Evidence E020, E053, and E086 highlight a structural industry problem: 49.5% capacity utilization and record inventory levels in China, indicating a market saturation that outpaces organic demand growth.",
-      "Evidence E032 and E011 confirm that this saturation has triggered a price war, with BYD's own executive admitting the current pricing strategy is 'not sustainable' and 'extreme'.",
-      "Contradicting evidence (E001, E002, E017, E050, E083) shows BYD is successfully capturing volume (41% sales growth) and maintaining profit growth (34%) despite these conditions.",
-      "Evidence E034 suggests margins are holding up better than expected due to cost advantages.",
-      "The risk is rated 'medium' because while the market timing is unfavorable (saturation/price war), BYD's execution (volume growth, cost leadership) is currently mitigating the threat to its core business, turning a potential strategic failure into a manageable profitability squeeze."
-    ],
-    "unresolved_gaps": [
-      "The projected duration of the price war and when the market is expected to clear excess inventory.",
-      "The specific impact of price reductions on brand equity and long-term customer loyalty in the Chinese market.",
-      "Whether the current profit growth is sustainable once the 'extreme' pricing strategy is normalized."
-    ]
-  },
-  {
-    "factor_id": "COM001",
-    "dimension": "capital_allocation",
-    "title": "Sustainable Capital Deployment Amidst Aggressive R&D and Expansion",
-    "description": "BYD is deploying capital at an unprecedented scale, with R&D spending rising 36% to RMB 54.2 billion in 2024 and significant overseas manufacturing commitments. However, the company's strong financial performance (34% profit growth) and 15% cost advantage suggest this aggressive allocation is currently sustainable and driving growth rather than threatening solvency.",
-    "severity": "low",
-    "confidence": 0.85,
-    "supporting_evidence": [
-      "E025",
-      "E026",
-      "E027"
-    ],
-    "contradicting_evidence": [
-      "E001",
-      "E002",
-      "E023",
-      "E017"
-    ],
-    "causal_chain": [
-      "Evidence E026 and E027 show BYD increased R&D spending by 36% to RMB 54.2 billion in 2024, indicating a massive capital commitment to technology development.",
-      "Evidence E001 and E002 demonstrate that this capital deployment is supported by robust revenue growth (41% sales increase) and expanding profitability (34% net profit increase).",
-      "Evidence E023 confirms a 15% cost advantage over Tesla, suggesting the capital allocation is efficient and generating competitive leverage rather than burning cash.",
-      "The net result is that while the absolute investment level is high, it is well-covered by cash flow and driving market share gains, making the risk of misallocation low."
-    ],
-    "unresolved_gaps": [
-      "Specific breakdown of capital expenditure (CapEx) vs. R&D spending for overseas factory construction projects.",
-      "Detailed timeline for ROI on the new Brazil and Chile mining investments."
-    ]
-  },
-  {
-    "factor_id": "COM002",
-    "dimension": "narrative_consistency",
-    "title": "Strategic Pivot on Pricing Sustainability Acknowledged by Leadership",
-    "description": "BYD's leadership has publicly acknowledged that its current 'extreme' pricing strategy is 'not sustainable' (E011), marking a potential shift from previous narratives of aggressive price wars to secure volume. This admission suggests a future strategic pivot that may conflict with current market expectations of continued price aggression.",
-    "severity": "medium",
-    "confidence": 0.75,
-    "supporting_evidence": [
-      "E011",
-      "E032"
-    ],
-    "contradicting_evidence": [
-      "E034",
-      "E001",
-      "E017"
-    ],
-    "causal_chain": [
-      "Evidence E032 notes BYD has driven aggressive price reductions, contributing to a price war in China.",
-      "Evidence E011 reveals a direct contradiction to the sustainability of this approach, with an executive VP stating the pricing is 'very extreme' and 'not sustainable'.",
-      "Evidence E034 suggests margins have held up better than expected, which contradicts the immediate financial threat but does not resolve the long-term strategic inconsistency regarding pricing power.",
-      "The risk lies in the potential for a sudden strategic shift away from price competition, which could disrupt the current growth trajectory if competitors do not follow suit."
-    ],
-    "unresolved_gaps": [
-      "Specific timeline or conditions under which BYD plans to normalize pricing.",
-      "Clarification on whether the 'unsustainable' comment refers to margins or market share dynamics."
-    ]
-  },
-  {
-    "factor_id": "COM003",
-    "dimension": "execution",
-    "title": "Regulatory and Operational Disruptions in Overseas Manufacturing",
-    "description": "BYD's execution of its global expansion strategy faces tangible operational hurdles, exemplified by the suspension of its Brazil factory construction due to labor violations. While the company has strong domestic execution, this incident highlights vulnerabilities in managing complex international regulatory environments.",
-    "severity": "medium",
-    "confidence": 0.8,
-    "supporting_evidence": [
-      "E005"
-    ],
-    "contradicting_evidence": [
-      "E001",
-      "E003",
-      "E014",
-      "E022"
-    ],
-    "causal_chain": [
-      "Evidence E005 confirms a concrete execution failure: the suspension of a BYD factory in Brazil by authorities in December 2024 due to labor violations.",
-      "This represents a direct barrier to the company's stated strategy of expanding overseas production capacity.",
-      "However, Evidence E003 and E014 show successful sales execution in other markets (9.77% overseas sales, outselling Toyota in Japan), indicating the issue is localized rather than systemic.",
-      "Evidence E022 shows proactive mitigation through securing mining rights in Brazil and Chile, suggesting the company is attempting to resolve supply chain and local partnership issues despite the construction halt."
-    ],
-    "unresolved_gaps": [
-      "The expected duration of the Brazil factory suspension.",
-      "Whether similar labor or regulatory issues are pending in other target markets like Europe or Southeast Asia."
-    ]
-  },
-  {
-    "factor_id": "COM004",
-    "dimension": "product_portfolio",
-    "title": "Portfolio Resilience Amidst External Trade Barriers",
-    "description": "BYD's product portfolio is facing headwinds in the EU market due to tariffs, with growth slowing despite an 8% market share in 2023. However, the portfolio's strength in China and emerging markets, combined with a diverse mix of BEV and PHEV models, mitigates the risk of a portfolio-wide failure.",
-    "severity": "low",
-    "confidence": 0.7,
-    "supporting_evidence": [
-      "E029"
-    ],
-    "contradicting_evidence": [
-      "E001",
-      "E003",
-      "E014",
-      "E018",
-      "E019",
-      "E021"
-    ],
-    "causal_chain": [
-      "Evidence E029 indicates that BYD's growth in the EU BEV market has slowed due to 2024 tariffs, posing a risk to the portfolio's expansion in a key high-margin region.",
-      "However, Evidence E001 and E017 show that overall global sales grew 41%, driven by strong domestic performance and other regions.",
-      "Evidence E018 and E019 highlight a robust portfolio strategy involving vertical integration (Blade Battery) and a mix of passenger and commercial vehicles, which insulates the company from single-market shocks.",
-      "The risk is contained to a specific region (EU) and does not threaten the core product portfolio's viability given the company's dominant position in China and growing presence in Japan and SE Asia."
-    ],
-    "unresolved_gaps": [
-      "Specific details on how BYD is adapting its product mix (e.g., pricing, model specs) specifically for the post-tariff EU market.",
-      "Data on inventory levels of specific models in the EU to assess if the slowdown is due to demand or logistics."
-    ]
-  },
-  {
     "factor_id": "PEER001",
-    "dimension": "competitive_pressure",
-    "title": "Unsustainable Pricing Strategy in Domestic Market",
-    "description": "BYD's executive leadership has explicitly acknowledged that its current aggressive pricing strategy is 'extreme' and 'not sustainable,' driven by a domestic market operating at only 49.5% capacity utilization. While BYD maintains a 15% cost advantage over Tesla and achieved record sales growth, the reliance on price wars to defend market share against a backdrop of record inventory levels poses a threat to long-term margin stability.",
+    "dimension": "software_defining_vehicle_gap",
+    "title": "Software Capability Gap as a Secondary Trade-off",
     "severity": "medium",
     "confidence": 0.75,
+    "depth_of_analysis": 2,
+    "claim": "BYD's software and autonomous driving capabilities lag behind peers like Tesla, NIO, and Xpeng, but this gap is a managed trade-off of its hardware-first strategy, evidenced by recent strategic pivots to 'Whole Vehicle Intelligence' and mapless navigation launches.",
+    "warrant": "While the evidence confirms BYD is playing catch-up in software (a known industry perception), the company is actively deploying counter-measures (E008, E013) and maintaining dominant market share (E005, E023) driven by hardware cost leadership. Since this dimension is tagged as [Strategy relevance: secondary], the gap represents a strategic choice to prioritize hardware scale first, not a failure of the primary strategy.",
+    "strongest_counter": "The 'flywheel' effect of data collection for competitors (Tesla/NIO) is widening the gap faster than BYD can catch up, potentially making the software deficit a primary barrier to premium market entry in the future.",
+    "description": "Layer 1: Evidence shows BYD has launched 'Whole Vehicle Intelligence' (E008) and 'Tian Shen Zhi Yan' mapless city navigation (E013), indicating active investment in software. However, the dimension definition notes a perception of lagging behind peers in OTA frequency and autonomous capabilities, which is not directly contradicted by specific comparative data in the evidence set. Layer 2: The pattern is STABLE/IMPROVING. BYD is executing a 'catch-up' trajectory while maintaining a 33.2% market share in China (E005) and overtaking Tesla in total sales (E029). The company's stated trajectory (hardware first, software second) aligns with actual results (massive volume growth). Step-back: For a hardware-cost leader, a temporary software lag is a standard trade-off. Since the primary strategy (hardware cost leadership) is succeeding, this secondary gap does not constitute a failure. The Strategy-Relative Depth Gate triggers a stop at Layer 2 with MEDIUM severity.",
+    "structural_forces": {
+      "reinforcing_loops": [],
+      "balancing_loops": []
+    },
+    "key_assumption_at_risk": null,
     "supporting_evidence": [
-      "E011",
-      "E020",
-      "E053",
-      "E086",
-      "E032"
+      "E008",
+      "E013"
     ],
     "contradicting_evidence": [
-      "E001",
-      "E002",
-      "E017",
+      "E005",
       "E023",
-      "E034"
+      "E029",
+      "E004"
     ],
     "causal_chain": [
-      "The Chinese auto industry is facing severe overcapacity (49.5% utilization) and record inventory levels (E020, E053, E086).",
-      "To maintain volume growth in this environment, BYD has engaged in aggressive price reductions (E032).",
-      "BYD's own executive vice president has admitted this pricing strategy is 'not sustainable' (E011).",
-      "However, BYD's vertical integration provides a 15% cost advantage over Tesla (E023), allowing margins to hold up better than expected despite the price war (E034).",
-      "The risk is elevated because the strategy is self-identified as unsustainable, but mitigated by BYD's superior cost structure and continued profit growth (E002).",
-      "Therefore, the risk is 'medium' as it threatens future margin expansion rather than current solvency."
+      "BYD prioritizes hardware cost leadership (Strategy).",
+      "Software capabilities lag behind software-first peers (Observation).",
+      "BYD launches specific software initiatives to close the gap (E008, E013).",
+      "Market share and sales volume continue to grow despite the gap (E005, E029).",
+      "Conclusion: The gap is a managed secondary trade-off, not a primary failure."
     ],
     "unresolved_gaps": [
-      "Specific timeline for when BYD plans to shift away from the 'extreme' pricing strategy.",
-      "Quantitative data on the exact margin compression caused by price reductions in 2024 vs. 2023."
+      "Specific quantitative comparison of OTA update frequency vs. Tesla/NIO/Xpeng.",
+      "Data on software-specific contribution to resale value for BYD vs. peers."
     ]
   },
   {
     "factor_id": "PEER002",
-    "dimension": "regional_mismatch",
-    "title": "Execution Risks in South American Expansion",
-    "description": "While BYD has strategically secured lithium mining rights in Brazil and Chile to support its supply chain, the execution of its local manufacturing footprint in Brazil was halted in December 2024 due to labor violations. This operational failure in a key growth region for raw materials and potential market expansion highlights a vulnerability in BYD's regional investment management, contrasting with its successful entry into Japan.",
+    "dimension": "supply_chain_vertical_integration_depth",
+    "title": "Vertical Integration Driving Cost Leadership Amidst Cash Flow Pressure",
     "severity": "medium",
-    "confidence": 0.8,
+    "confidence": 0.85,
+    "depth_of_analysis": 3,
+    "claim": "BYD's deep vertical integration is successfully driving market share gains and pricing power, but is currently straining operating cash flow, a manageable friction point supported by massive cash reserves.",
+    "warrant": "Evidence shows operating cash flow dropped significantly (E015, E020) due to increased payments for goods/services, a direct consequence of scaling a vertically integrated supply chain. However, this is balanced by record revenue growth (E001), profit growth (E002), and massive cash reserves (E014), indicating the integration model is working but requires heavy capital deployment.",
+    "strongest_counter": "The rigidity of deep integration could become a fatal flaw if market demand shifts faster than BYD's internal supply chain can pivot, especially given the 21% drop in operating cash flow which signals potential liquidity stress if sales growth slows.",
+    "description": "Layer 1: Evidence confirms BYD's vertical integration is active, with R&D spending exceeding net profit (E025) and massive increases in payments for goods/services (E015, E020). This integration supports the launch of proprietary tech like the Blade Battery (E033, E034). Layer 2: The pattern is IMPROVING in terms of market position (33.2% share, E005) but WORSENING in terms of short-term cash efficiency (OCF -21.37%, E015). Layer 3: Structural Analysis reveals a REINFORCING LOOP: 'Vertical integration → Lower unit costs → Higher volume → Higher raw material purchases → Lower OCF'. However, a strong BALANCING LOOP exists: 'High cash reserves (154.9B yuan, E014) + High Profit Growth (34%, E002) → Ability to fund integration scale-up without liquidity crisis'. The resilience case is better supported: the cash flow drop is a function of growth and inventory buildup, not a fundamental failure of the model. The balancing forces (financial buffer) dominate, preventing a HIGH severity rating.",
+    "structural_forces": {
+      "reinforcing_loops": [
+        "Vertical integration lowers unit costs, enabling aggressive pricing which drives volume, requiring even more capital for raw material procurement, further straining operating cash flow."
+      ],
+      "balancing_loops": [
+        "Massive cash reserves (154.9B yuan) and record net profit growth (34%) provide a buffer to absorb the cash flow drag from scaling the integrated supply chain."
+      ]
+    },
+    "key_assumption_at_risk": null,
     "supporting_evidence": [
-      "E005",
-      "E022"
+      "E015",
+      "E020",
+      "E021",
+      "E025"
     ],
     "contradicting_evidence": [
-      "E003",
+      "E001",
+      "E002",
       "E014",
-      "E020"
+      "E005",
+      "E033"
     ],
     "causal_chain": [
-      "BYD has committed significant resources to South America, securing lithium mining rights in Brazil and Chile (E022).",
-      "Despite these strategic investments, the construction of a BYD factory in Brazil was halted by authorities due to labor violations (E005).",
-      "This indicates a gap between strategic planning and local operational compliance in a critical region for raw material security.",
-      "However, BYD is successfully expanding in other regions, such as Japan, where it outsold Toyota in EVs (E014), and has achieved 9.77% overseas sales globally (E003).",
-      "The risk is 'medium' because it affects a specific committed project (factory construction) and supply chain security in a key region, but does not yet threaten the company's global sales momentum or other regional expansions."
+      "BYD employs deep vertical integration (Strategy).",
+      "Scaling this model requires massive upfront payments for goods/services (E015, E020).",
+      "This results in a temporary decline in operating cash flow (E015).",
+      "However, the strategy delivers dominant market share and profit growth (E005, E002).",
+      "Large cash reserves (E014) neutralize the liquidity risk.",
+      "Conclusion: The model is effective but capital-intensive; risk is manageable."
     ],
     "unresolved_gaps": [
-      "The expected timeline for resuming construction in Brazil and the financial impact of the delay.",
-      "Whether the labor violations are isolated to one site or indicative of broader compliance issues in BYD's international operations."
+      "Specific breakdown of inventory turnover days vs. competitors to assess rigidity risk.",
+      "Data on the flexibility of internal component suppliers to pivot to new tech standards."
     ]
   },
   {
     "factor_id": "PEER003",
-    "dimension": "technology_capability",
-    "title": "Reliance on LFP Blade Battery vs. High-Performance Competitors",
-    "description": "BYD's technology strategy heavily relies on its proprietary LFP Blade Battery, which offers cost advantages and reduced reliance on nickel/cobalt. While this supports its volume and cost leadership, it may present a capability gap against competitors like Tesla who utilize high-nickel chemistries for superior range and performance in premium segments. However, BYD's massive R&D investment (up 36% YoY) suggests active mitigation of this gap.",
-    "severity": "low",
+    "dimension": "global_ecosystem_partnerships",
+    "title": "Organic Expansion Outpacing Strategic Partnership Depth",
+    "severity": "medium",
     "confidence": 0.7,
+    "depth_of_analysis": 3,
+    "claim": "BYD is successfully penetrating global markets through organic expansion and local manufacturing, but lacks deep strategic alliances with legacy OEMs or charging networks, creating a 'island effect' risk in mature Western markets.",
+    "warrant": "Evidence shows BYD is expanding via its own factories (Thailand, Uzbekistan) and direct sales (Japan, E027, E028), rather than through major joint ventures or tech licensing deals with peers like Toyota or VW. While this supports its independent strategy, the lack of ecosystem partnerships (charging, service) in protected markets (EU tariffs E037) creates a structural barrier that organic growth alone may struggle to overcome quickly.",
+    "strongest_counter": "BYD's technology is so compelling (Blade Battery, DM-i) that it forces market entry without needing partnerships, as seen by outselling Toyota in Japan (E027) and entering 100+ countries (E009).",
+    "description": "Layer 1: Evidence highlights organic expansion: factories in Thailand/Uzbekistan (E011, E032), entry into 100+ countries (E009), and direct sales wins in Japan (E027). There is no evidence of major strategic alliances, joint ventures, or charging network partnerships with legacy OEMs. Layer 2: The pattern is STABLE/IMPROVING in terms of volume (overseas sales +71.9%, E030), but the *method* of expansion is purely organic. Step-back: For a company aiming for 50% overseas sales by 2030 (E031), relying solely on organic build-out is slower and riskier in mature markets with established ecosystems. Layer 3: Structural Analysis shows a REINFORCING LOOP: 'Lack of local partnerships → Reliance on own infrastructure → Higher capital expenditure and slower market penetration → Increased exposure to tariffs/regulatory barriers (E037, E059)'. A BALANCING LOOP exists: 'Proprietary tech superiority (E033, E034) → Consumer demand overcomes ecosystem friction → Revenue funds local infrastructure build-out (E038)'. The balancing loop is strong but the reinforcing loop regarding regulatory/tariff barriers (E037, E059) is significant. The risk is MEDIUM because the company is actively mitigating via local production (E038), but the lack of partnerships remains a structural vulnerability in the face of protectionism.",
+    "structural_forces": {
+      "reinforcing_loops": [
+        "Absence of local charging/service partnerships increases customer friction, slowing adoption in mature markets, which necessitates higher organic investment to build own networks, increasing exposure to local regulatory/tariff risks."
+      ],
+      "balancing_loops": [
+        "Superior hardware technology (Blade Battery, DM-i) drives consumer demand strong enough to overcome ecosystem gaps, generating revenue to fund local manufacturing and infrastructure."
+      ]
+    },
+    "key_assumption_at_risk": null,
     "supporting_evidence": [
-      "E019",
-      "E021"
+      "E037",
+      "E059",
+      "E031",
+      "E009"
     ],
     "contradicting_evidence": [
-      "E023",
-      "E025",
-      "E026",
       "E027",
-      "E016"
+      "E028",
+      "E030",
+      "E038",
+      "E033"
     ],
     "causal_chain": [
-      "BYD deliberately relies on LFP chemistry (Blade Battery) to reduce reliance on nickel and cobalt (E019, E021).",
-      "This choice provides a 15% cost advantage over Tesla (E023) and allows BYD to match Tesla's global EV sales volume (E016).",
-      "The potential risk is a performance gap in high-end, long-range segments where competitors use different chemistries.",
-      "However, BYD is aggressively investing in R&D (RMB 54.2 billion, up 36% YoY) to close any technology gaps (E026, E027).",
-      "Given BYD's market leadership and successful execution of its chosen technology path, the risk of capability gap is 'low' and manageable."
+      "BYD relies on organic expansion rather than strategic partnerships (Observation).",
+      "This leads to 'island effect' risks in markets with established ecosystems (E059).",
+      "Protectionist tariffs (E037) exacerbate the difficulty of organic entry.",
+      "However, strong product demand (E027, E030) allows BYD to fund local production (E038) as a counter-measure.",
+      "Conclusion: The lack of partnerships is a structural risk, but currently mitigated by product strength and organic investment."
     ],
     "unresolved_gaps": [
-      "Specific performance metrics (range, charging speed) comparing BYD's latest LFP models against Tesla's high-end offerings.",
-      "Details on BYD's roadmap for next-generation battery technologies beyond LFP."
+      "Specific data on BYD's charging network density vs. Tesla/NIO in key European markets.",
+      "Details on any undisclosed technology licensing agreements or minority stake partnerships."
+    ]
+  },
+  {
+    "factor_id": "IND001",
+    "dimension": "geopolitical_trade_barriers",
+    "title": "EU Tariff Regime Threatens Export-Dependent Growth Model",
+    "severity": "high",
+    "confidence": 0.75,
+    "depth_of_analysis": 4,
+    "claim": "The EU's implementation of a 17% protective tariff on BYD imports creates a critical vulnerability, as BYD's strategy to localize production in Europe (e.g., Hungary) lacks confirmed operational capacity to offset this cost before the 2030 overseas sales target becomes unattainable.",
+    "warrant": "Evidence E037 confirms the 17% tariff is active, directly eroding the price advantage central to BYD's export model. While E038 states a plan to shift production to Europe, there is no evidence of operational European factories (unlike Thailand/Uzbekistan in E011/E032) to bypass these tariffs immediately. The company's own risk disclosure (E016) acknowledges rising protectionism, and the gap between the tariff implementation and the execution of local manufacturing creates a window of vulnerability where the primary growth engine (exports) is structurally impaired.",
+    "strongest_counter": "BYD's massive cash reserves (E014: 154.9 billion yuan) and aggressive R&D spending (E003) provide a financial buffer to absorb tariff costs temporarily while accelerating the construction of European facilities, potentially mitigating the impact before it becomes existential.",
+    "description": "Layer 1 evidence confirms the EU has imposed a 17% protective tariff on BYD (E037) due to subsidy concerns, a direct non-tariff barrier. BYD acknowledges rising protectionism as a key risk (E016). While the company plans to shift production to Europe to counter this (E038), current operational factories are only confirmed in Asia (Thailand, Uzbekistan) (E011, E032). Layer 2 reveals a worsening pattern: the company's stated trajectory of 50% overseas sales by 2030 (E031) relies on high-margin Western exports, but the tariff immediately compresses these margins. Layer 3 structural analysis identifies a reinforcing loop: tariffs reduce price competitiveness → market share growth slows → revenue for local factory construction decreases → inability to bypass tariffs. A balancing loop exists via financial reserves (E014), but it is a finite resource against a structural policy shift. Layer 4 challenges the critical assumption that BYD can localize manufacturing fast enough. A pre-mortem suggests that if European regulatory hurdles or construction delays push local production beyond 2027, the 17% tariff will permanently erode the cost advantage, making the 50% overseas sales target mathematically impossible without sacrificing profitability.",
+    "structural_forces": {
+      "reinforcing_loops": [
+        "EU tariffs increase import costs -> BYD loses price advantage -> market share growth stalls -> reduced revenue for local CAPEX -> slower localization -> continued reliance on taxed imports."
+      ],
+      "balancing_loops": [
+        "High cash reserves (154.9B yuan) allow temporary absorption of tariff costs while accelerating European factory construction."
+      ]
+    },
+    "key_assumption_at_risk": "BYD can successfully establish operational EV manufacturing capacity within the EU (e.g., Hungary) within 2-3 years to bypass the 17% tariff before it permanently displaces its market share.",
+    "supporting_evidence": [
+      "E016",
+      "E037",
+      "E038",
+      "E039",
+      "E059"
+    ],
+    "contradicting_evidence": [
+      "E014",
+      "E030",
+      "E032",
+      "E038"
+    ],
+    "causal_chain": [
+      "EU imposes 17% tariff on Chinese EVs (E037).",
+      "BYD's growth model relies on exporting low-cost volume to high-margin Western markets (E031, E030).",
+      "Tariffs directly erode the price advantage of imported Chinese EVs.",
+      "BYD plans to localize production but currently has no operational EU factories (E038 vs E011).",
+      "Delay in localization leaves BYD exposed to tariffs during a critical expansion window.",
+      "This structural barrier threatens the 50% overseas sales target."
+    ],
+    "unresolved_gaps": [
+      "Specific timeline for the commencement of production at the proposed Hungarian factory.",
+      "Details on the extent of 'local content' requirements in the EU that might still apply even to locally assembled vehicles.",
+      "Financial impact modeling of the 17% tariff on BYD's specific EU margin structure."
+    ]
+  },
+  {
+    "factor_id": "IND002",
+    "dimension": "battery_raw_material_volatility",
+    "title": "Raw Material Price Volatility Pressures Operating Cash Flow Despite Vertical Integration",
+    "severity": "medium",
+    "confidence": 0.85,
+    "depth_of_analysis": 3,
+    "claim": "While BYD acknowledges raw material volatility as a risk (E021), the sharp 21.37% decline in operating cash flow (E015) indicates that vertical integration is not fully insulating the company from the cost of goods sold, though strong profitability (E002) provides a robust buffer.",
+    "warrant": "Evidence E021 explicitly cites lithium and copper price volatility as a direct risk to production costs. This is corroborated by E015 and E020, which show a significant year-over-year decrease in operating cash flow (21.37% in FY2024, 82.70% in H1 2024) attributed to increased cash payments for goods and services. However, the company's net profit still grew 34% (E002) and revenue grew 29% (E001), suggesting that while costs are rising, the company's pricing power and volume growth are currently absorbing the shock. The analysis stops at Layer 3 because the balancing force (strong profitability and cash reserves) dominates the reinforcing loop of rising costs.",
+    "strongest_counter": "BYD's vertical integration strategy, including in-house battery production and mining investments, is designed to decouple from spot market prices. The fact that net profit grew 34% despite the cash flow squeeze proves the strategy is working to maintain margins, even if working capital requirements have increased.",
+    "description": "Layer 1 evidence shows BYD explicitly identifies raw material volatility (lithium, copper) as a risk (E021). Financial data reveals a concerning trend: operating cash flow dropped 21.37% in FY2024 (E015) and 82.70% in H1 2024 (E020), directly linked to higher payments for goods. Layer 2 pattern recognition indicates a 'worsening' cash flow efficiency, but a 'stable' profitability trajectory (34% profit growth, E002). This suggests a temporary strain on working capital rather than a structural failure. Layer 3 structural analysis identifies a reinforcing loop: global raw material price spikes -> increased cash outflow for inventory -> reduced operating cash flow. However, a strong balancing loop exists: BYD's massive scale and vertical integration allow it to pass on some costs or absorb them via high volume, evidenced by the continued 34% profit growth (E002) and 154.9B yuan cash reserve (E014). The net direction is stable because the financial buffer is sufficient to weather the volatility without threatening the core strategy.",
+    "structural_forces": {
+      "reinforcing_loops": [
+        "Global raw material price volatility -> Increased cash payments for goods (E015) -> Reduced operating cash flow -> Potential strain on liquidity for further expansion."
+      ],
+      "balancing_loops": [
+        "Vertical integration and scale -> Ability to maintain 34% profit growth despite cost increases (E002) -> Strong cash reserves (E014) absorb working capital shocks."
+      ]
+    },
+    "key_assumption_at_risk": null,
+    "supporting_evidence": [
+      "E015",
+      "E020",
+      "E021",
+      "E054"
+    ],
+    "contradicting_evidence": [
+      "E001",
+      "E002",
+      "E014",
+      "E003"
+    ],
+    "causal_chain": [
+      "Global raw material prices fluctuate (E021).",
+      "BYD increases cash payments for goods and services to secure supply (E015).",
+      "Operating cash flow decreases significantly (E015, E020).",
+      "Despite cost pressures, BYD maintains high volume and pricing power.",
+      "Net profit continues to grow 34% (E002), indicating the cost shock is being managed.",
+      "Financial reserves provide a buffer against liquidity risks."
+    ],
+    "unresolved_gaps": [
+      "Specific breakdown of how much of the cash flow decrease is due to lithium vs. other materials.",
+      "Details on the duration of long-term offtake agreements vs. spot market exposure.",
+      "Impact of potential export restrictions on Chinese raw materials processing capacity."
+    ]
+  },
+  {
+    "factor_id": "IND003",
+    "dimension": "global_charging_infrastructure_gap",
+    "title": "Charging Infrastructure Deficits in Emerging Markets Mitigated by Hybrid Portfolio Strategy",
+    "severity": "low",
+    "confidence": 0.8,
+    "depth_of_analysis": 2,
+    "claim": "The lack of robust charging infrastructure in target expansion markets (SE Asia, LatAm) poses a secondary risk that is effectively neutralized by BYD's strategic emphasis on plug-in hybrids (DM-i) and strong BEV sales in mature markets.",
+    "warrant": "Evidence E007 highlights the launch of the 5th Gen DM technology with ultra-low fuel consumption, a direct strategic response to range anxiety and infrastructure gaps. Evidence E009 and E030 confirm BYD is expanding into 100+ countries, many of which have underdeveloped grids. However, the analysis stops at Layer 2 because the pattern is benign: BYD's hybrid portfolio (DM-i) specifically addresses the infrastructure gap, allowing the company to capture market share in these regions without waiting for grid upgrades. The company's strong BEV performance in markets with better infrastructure (e.g., Japan E027, E028) further validates a dual-track approach.",
+    "strongest_counter": "If BYD fails to transition these emerging markets to pure BEVs within 5 years, it may miss the long-term regulatory shifts toward zero-emission zones, potentially locking them into a lower-margin hybrid future in those regions.",
+    "description": "Layer 1 evidence shows BYD is expanding into 100+ countries (E009) and has achieved significant overseas sales growth (E030). Simultaneously, the company has heavily invested in hybrid technology, launching the 5th Gen DM with 2.9L/100km fuel consumption (E007). Layer 2 pattern recognition reveals a stable and improving situation: BYD is not relying solely on BEVs for global expansion. The 'step-back' reasoning shows that for a company with a strong hybrid portfolio, infrastructure gaps are a known trade-off, not a failure. The company is executing its strategy by using hybrids to penetrate markets with poor infrastructure while pushing BEVs where infrastructure exists (e.g., Japan, E027). The pattern is benign because the product mix is aligned with the market reality, and there is no evidence of sales stagnation due to charging issues.",
+    "structural_forces": {
+      "reinforcing_loops": [],
+      "balancing_loops": []
+    },
+    "key_assumption_at_risk": null,
+    "supporting_evidence": [
+      "E007",
+      "E009",
+      "E030"
+    ],
+    "contradicting_evidence": [
+      "E027",
+      "E028",
+      "E004"
+    ],
+    "causal_chain": [
+      "Target markets (SE Asia, LatAm) have limited charging infrastructure.",
+      "BYD deploys 5th Gen DM hybrids (E007) which offer EV range with gasoline backup.",
+      "This mitigates range anxiety and allows sales growth (E030) despite infrastructure gaps.",
+      "BEV sales continue to grow in markets with better infrastructure (Japan E027).",
+      "The strategy successfully balances market penetration with infrastructure reality."
+    ],
+    "unresolved_gaps": [
+      "Specific data on the ratio of BEV vs. PHEV sales in emerging markets like Thailand or Brazil.",
+      "Long-term regulatory timelines for mandatory BEV-only sales in these emerging markets."
+    ]
+  },
+  {
+    "factor_id": "COM001",
+    "dimension": "dm_i_vs_bev_profit_mix",
+    "title": "Hybrid Profitability vs. BEV Transition Cash Flow Strain",
+    "severity": "medium",
+    "confidence": 0.75,
+    "depth_of_analysis": 3,
+    "claim": "BYD's aggressive expansion and R&D spending (exceeding net profit) has caused a 21% year-over-year decline in operating cash flow, creating a liquidity dependency on hybrid volume that could be threatened by accelerating global zero-emission mandates.",
+    "warrant": "While FY2024 revenue and net profit grew significantly (E001, E002), operating cash flow dropped 21% (E015) and R&D spend (54.2B yuan) exceeded net profit (40.2B yuan) (E025). This indicates the company is burning cash to fund the transition, relying on the high-volume, high-margin DM-i hybrid segment to generate the bulk of current cash, while the BEV segment absorbs the cost of the transition. The risk is that if regulatory shifts (e.g., EU tariffs E037) or market saturation hit the hybrid segment before BEV margins normalize, the cash flow buffer will evaporate.",
+    "strongest_counter": "BYD's massive cash reserves of 154.9 billion yuan (E014) provide a multi-year buffer to sustain the cash burn, and the 5th Gen DM technology (E007) extends the commercial viability of hybrids, delaying the need for a full BEV pivot in key markets.",
+    "description": "Layer 1: Evidence shows BYD is in a high-investment phase, with R&D spending (54.2B yuan) surpassing net profit (40.2B yuan) in FY2024 (E002, E025). While revenue grew 29% (E001), operating cash flow declined 21% (E015), signaling that capital is being deployed faster than it is being generated from operations. Layer 2: The pattern reveals a 'cash burn for growth' strategy. The company is successfully executing its volume strategy (33.2% market share E005), but the financial structure relies on the profitability of the DM-i hybrid segment to subsidize the BEV transition and R&D. Layer 3: A reinforcing loop exists where high hybrid margins fund R&D, but the cash flow decline suggests the cost of scaling BEV and overseas infrastructure is outpacing hybrid cash generation. However, a strong balancing loop is the 154.9B yuan cash reserve (E014), which acts as a significant shock absorber. The risk is manageable (Medium) because the cash buffer is substantial, but the structural dependency on hybrid cash flow remains a vulnerability if regulatory environments shift faster than BYD's BEV margin improvement.",
+    "structural_forces": {
+      "reinforcing_loops": [
+        "High R&D and CAPEX spending exceeds net profit, draining operating cash flow (E015, E025).",
+        "Dependency on hybrid volume to fund BEV transition creates vulnerability to zero-emission regulatory shifts (E037)."
+      ],
+      "balancing_loops": [
+        "Massive cash reserves (154.9B yuan) provide a multi-year runway to sustain cash burn (E014).",
+        "Continuous improvement in hybrid efficiency (5th Gen DM) extends the revenue window of the cash-generating segment (E007)."
+      ]
+    },
+    "key_assumption_at_risk": null,
+    "supporting_evidence": [
+      "E015",
+      "E025",
+      "E002",
+      "E037"
+    ],
+    "contradicting_evidence": [
+      "E001",
+      "E014",
+      "E007"
+    ],
+    "causal_chain": [
+      "R&D and CAPEX spending exceeds net profit (E025).",
+      "Operating cash flow declines despite revenue growth (E015).",
+      "Company relies on hybrid segment profitability to fund transition.",
+      "Regulatory risks (tariffs, ZEV mandates) threaten hybrid revenue streams (E037).",
+      "Cash reserves provide temporary buffer but do not solve structural cash flow mismatch."
+    ],
+    "unresolved_gaps": [
+      "Breakdown of gross margin by DM-i vs. BEV segment is not provided in the evidence.",
+      "Specific timeline for when BEV segment is projected to become cash-flow positive."
+    ]
+  },
+  {
+    "factor_id": "COM002",
+    "dimension": "blade_battery_technology_moat",
+    "title": "LFP Chemistry Dominance vs. Solid-State Disruption Risk",
+    "severity": "low",
+    "confidence": 0.85,
+    "depth_of_analysis": 2,
+    "claim": "BYD's Blade Battery maintains a strong technological and cost moat through continuous iteration (2nd Gen) and safety leadership, with no evidence in the current dataset indicating an imminent threat from solid-state or NCM alternatives that would undermine its mass-market strategy.",
+    "warrant": "Evidence shows BYD is actively iterating its core technology with a 2nd Gen Blade Battery promising greater range (E033) and maintaining a safety-first architecture (E034). The company holds a massive R&D lead with 121,598 personnel (E012) and 32 patents per day (E060). There is no evidence in the provided set of a competitive breakthrough in solid-state batteries that has displaced LFP in the mass market, nor evidence of BYD losing ground to NCM chemistries in its core volume segments.",
+    "strongest_counter": "The evidence does not explicitly mention competitor solid-state battery commercialization timelines or specific market share losses to NCM chemistries, which could theoretically erode the LFP advantage in premium segments.",
+    "description": "Layer 1: BYD claims and evidence confirm the launch of a 2nd Generation Blade Battery with improved range (E033) and highlight the safety features of the LFP chemistry (E034). The company demonstrates immense R&D capacity with 121k personnel (E012) and high patent output (E060). Layer 2: The pattern is clearly IMPROVING. BYD is not resting on its laurels but actively deepening its moat through iteration. The strategy of using LFP for cost leadership is being reinforced by technological advancements that address range anxiety. There is no evidence of a 'worsening' trend or a competitive threat that has breached the moat. Since the pattern is benign and the company is executing its technology roadmap effectively, the analysis stops at Layer 2 with a LOW severity rating.",
+    "structural_forces": {
+      "reinforcing_loops": [],
+      "balancing_loops": []
+    },
+    "key_assumption_at_risk": null,
+    "supporting_evidence": [
+      "E033",
+      "E034",
+      "E012",
+      "E060"
+    ],
+    "contradicting_evidence": [],
+    "causal_chain": [
+      "BYD launches 2nd Gen Blade Battery to extend range (E033).",
+      "Safety advantages of LFP are reinforced (E034).",
+      "Massive R&D investment sustains patent leadership (E012, E060).",
+      "No evidence of competitive disruption in the dataset."
+    ],
+    "unresolved_gaps": [
+      "Data on competitor solid-state battery commercialization status is missing.",
+      "Specific market share data for LFP vs. NCM in BYD's export markets is not detailed."
+    ]
+  },
+  {
+    "factor_id": "COM003",
+    "dimension": "overseas_manufacturing_scalability",
+    "title": "Greenfield Factory Execution vs. Trade Barrier Mitigation",
+    "severity": "medium",
+    "confidence": 0.7,
+    "depth_of_analysis": 3,
+    "claim": "BYD's shift to localized production in Europe and Southeast Asia is underway (Thailand/Uzbekistan operational), but the strategy faces a 'liquidity trap' risk where high CAPEX and tariff barriers (EU 17%) could delay ROI if local supply chain integration lags behind production ramp-up.",
+    "warrant": "BYD has successfully started production in Thailand and Uzbekistan (E011, E032) and plans to shift production to Europe to counter 17% tariffs (E037, E038). However, the company acknowledges risks from protectionism (E016) and the complexity of international trade. The structural risk is that while the *decision* to localize is correct, the *execution* of building a local supply chain (E038 mentions buying from local suppliers) is difficult and capital-intensive. If local factories cannot achieve the same cost efficiency as domestic Chinese plants, the margin benefit of avoiding tariffs may be eroded by higher local production costs.",
+    "strongest_counter": "BYD's rapid execution (Thailand factory operational in July 2024, E011) and 71.9% growth in overseas sales (E030) demonstrate strong execution capability. The company's vertical integration allows it to replicate supply chains more easily than competitors.",
+    "description": "Layer 1: Evidence confirms BYD is actively building greenfield factories in Thailand and Uzbekistan (E011) and plans to localize production in Europe to mitigate 17% tariffs (E037, E038). Overseas sales are growing rapidly (71.9% YoY, E030). Layer 2: The pattern is IMPROVING in terms of volume and footprint, but the financial efficiency of these new factories is unproven. The company is executing its strategy to bypass trade barriers. Layer 3: A reinforcing loop of risk exists: Tariffs force localization (E037) -> Localization requires massive CAPEX and local supply chain build-out (E038) -> If local supply chains are inefficient, unit costs rise -> Margins compress despite tariff avoidance. A balancing loop is BYD's proven ability to scale quickly (E011) and its vertical integration which reduces dependency on external local suppliers. The severity is MEDIUM because while the risk is structural, the company has demonstrated execution speed and has the capital to absorb initial inefficiencies.",
+    "structural_forces": {
+      "reinforcing_loops": [
+        "EU tariffs (17%) force costly localization (E037).",
+        "Building local supply chains from scratch may initially increase unit costs compared to domestic production (E038)."
+      ],
+      "balancing_loops": [
+        "Rapid factory ramp-up in Thailand/Uzbekistan demonstrates execution capability (E011).",
+        "Vertical integration allows BYD to control more of the supply chain, mitigating local supplier inefficiencies."
+      ]
+    },
+    "key_assumption_at_risk": null,
+    "supporting_evidence": [
+      "E037",
+      "E038",
+      "E016",
+      "E011"
+    ],
+    "contradicting_evidence": [
+      "E030",
+      "E032"
+    ],
+    "causal_chain": [
+      "EU imposes 17% tariff on Chinese EVs (E037).",
+      "BYD commits to local production to avoid tariffs (E038).",
+      "Local production requires building new supply chains and factories (E011).",
+      "Risk of higher unit costs in new markets vs. domestic efficiency.",
+      "Rapid sales growth suggests demand exists to support the investment (E030)."
+    ],
+    "unresolved_gaps": [
+      "Specific CAPEX figures for the new European and Southeast Asian factories are not provided.",
+      "Data on the percentage of local content achieved in the new Thailand/Uzbekistan factories is missing."
+    ]
+  },
+  {
+    "factor_id": "COM004",
+    "dimension": "brand_premium_positioning",
+    "title": "Premium Brand Adoption as a Secondary Strategic Trade-off",
+    "severity": "medium",
+    "confidence": 0.6,
+    "depth_of_analysis": 2,
+    "claim": "BYD's premium sub-brands (Yangwang, Denza) represent a secondary strategic trade-off to capture higher margins, but the evidence provided lacks specific data on their profitability or market penetration, limiting the ability to assess if this is a failure or a long-term investment.",
+    "warrant": "The evidence set confirms BYD's global expansion and volume success (E004, E005, E029) but contains NO specific data on the sales volume, margin contribution, or brand sentiment of its premium sub-brands (Yangwang, Denza). The strategy is to move upmarket, but without evidence of success or failure in this specific segment, we cannot determine if the 'low-margin trap' is being avoided. Per the framework, this is a [Strategy relevance: secondary] dimension. The lack of negative evidence combined with the primary strategy's success (volume) suggests this is a known trade-off/investment phase rather than a critical failure.",
+    "strongest_counter": "The absence of negative evidence regarding premium brand failure, combined with the company's overall financial strength (E001, E002), suggests the premium push is being funded successfully and is not yet a threat to the core business.",
+    "description": "Layer 1: The evidence details BYD's massive volume growth (E004) and total sales overtaking Tesla (E029). However, there is a distinct gap: no evidence_ids provide specific sales figures, margin data, or consumer sentiment analysis for the premium sub-brands (Yangwang, Denza). Layer 2: The pattern is STABLE/UNKNOWN for this specific dimension. The primary strategy (volume/cost leadership) is clearly succeeding. The premium push is a secondary objective. Since the evidence does not show the premium strategy failing (e.g., no reports of inventory buildup, price cuts, or brand rejection), and the primary strategy is funding the overall growth, this is treated as a secondary domain trade-off. The analysis stops at Layer 2 with MEDIUM severity, as the risk is a known consequence of the strategy (investing in premium without immediate returns) rather than evidence of execution failure.",
+    "structural_forces": {
+      "reinforcing_loops": [],
+      "balancing_loops": []
+    },
+    "key_assumption_at_risk": null,
+    "supporting_evidence": [
+      "E004",
+      "E029"
+    ],
+    "contradicting_evidence": [],
+    "causal_chain": [
+      "BYD achieves massive volume and overtakes Tesla (E029).",
+      "No specific evidence on premium sub-brand performance is available.",
+      "Primary strategy success funds secondary premium initiatives.",
+      "Lack of negative evidence suggests the premium push is not yet a critical failure point."
+    ],
+    "unresolved_gaps": [
+      "Sales volume and revenue breakdown for Yangwang and Denza sub-brands.",
+      "Consumer sentiment data or pricing power metrics for premium models vs. competitors like BMW/Tesla.",
+      "Margin contribution of premium segment vs. mass-market segment."
     ]
   }
 ]

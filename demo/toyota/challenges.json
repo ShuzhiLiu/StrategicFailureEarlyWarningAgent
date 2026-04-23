@@ -1,92 +1,139 @@
 [
   {
     "challenge_id": "AC001",
-    "target_factor_id": "IND001",
-    "challenge_text": "This risk factor conflates an industry-wide trend with a specific Toyota risk. While hybrid growth supports Toyota's strategy, framing general market segmentation as a company-specific 'market timing' risk introduces Industry-vs-company confusion. Evidence E017 shows global EV sales surging, suggesting the hybrid preference may be temporary.",
+    "target_factor_id": "PEER001",
+    "key_claim_tested": "Toyota's reliance on external suppliers (Panasonic, Idemitsu) and delayed in-house battery manufacturing creates a cost structure disadvantage compared to vertically integrated competitors",
+    "verification_result": "contradicted",
+    "challenge_text": "The factor carries a STANCE_MISMATCH flag where 3 of 5 supporting citations (60%) have contradicts_risk stance (E018, E039, E060), indicating the evidence base fundamentally contradicts its own claim. The cited evidence showing partnerships and delayed manufacturing actually demonstrates strategic choices rather than disadvantages.",
     "counter_evidence": [
-      "E017"
-    ],
-    "severity": "moderate",
-    "resolution": null
-  },
-  {
-    "challenge_id": "AC002",
-    "target_factor_id": "IND002",
-    "challenge_text": "The severity is inflated to 'HIGH' because the causal chain ignores the explicit mitigation strategy cited in Evidence E016 ($1 billion US investment). While the tariff impact is real, the risk assessment fails to weigh the active capital allocation designed to offset these costs.",
-    "counter_evidence": [
-      "E016"
-    ],
-    "severity": "moderate",
-    "resolution": null
-  },
-  {
-    "challenge_id": "AC003",
-    "target_factor_id": "COM001",
-    "challenge_text": "The interpretation of the 10,000 vehicle figure as a hard capacity limit is a Selection Bias error. Evidence suggests this is an initial ramp-up for 2030 mass production, not a decade-long ceiling, which contradicts the claim of 'insufficient' capital allocation.",
-    "counter_evidence": [
-      "E008"
-    ],
-    "severity": "moderate",
-    "resolution": null
-  },
-  {
-    "challenge_id": "AC004",
-    "target_factor_id": "COM002",
-    "challenge_text": "The evidence provided (E012, E013) directly contradicts the premise of a 'tension' between narrative and reality by confirming market alignment. Labeling a validated strategy as a 'risk' constitutes a definition error given the data proves consistency.",
-    "counter_evidence": [
-      "E012",
-      "E013"
+      "E018",
+      "E039",
+      "E060"
     ],
     "severity": "strong",
     "resolution": null
   },
   {
-    "challenge_id": "AC005",
-    "target_factor_id": "COM003",
-    "challenge_text": "Severity is inflated by focusing on past delays (E007) while ignoring strong recent recovery data. Evidence E014 and E017 show 195.7% YoY sales growth, indicating execution issues are resolving, which was not factored into the Medium severity rating.",
+    "challenge_id": "AC002",
+    "target_factor_id": "PEER002",
+    "key_claim_tested": "Toyota is losing BEV market share in China to domestic leaders like BYD",
+    "verification_result": "data error",
+    "challenge_text": "The key claim specifically references China market share loss, but the supporting evidence (E025, E026, E027) only covers global sales data and Japan-specific BYD outperformance. No China-specific market share evidence exists in the provided data set, constituting a geographic data category error.",
     "counter_evidence": [
-      "E014",
-      "E017"
+      "E027"
     ],
-    "severity": "moderate",
+    "severity": "strong",
+    "resolution": null
+  },
+  {
+    "challenge_id": "AC003",
+    "target_factor_id": "PEER003",
+    "key_claim_tested": "Toyota's reliance on third-party charging and software partnerships leaves it vulnerable to ecosystem lock-in",
+    "verification_result": "contradicted",
+    "challenge_text": "The factor carries a STANCE_MISMATCH flag where 4 of 5 supporting citations (80%) have contradicts_risk stance (E005, E055, E058, E040), indicating a fundamental citation error. The evidence base showing BEV Factory establishment and partnerships contradicts the claim of vulnerability.",
+    "counter_evidence": [
+      "E005",
+      "E055",
+      "E058",
+      "E040"
+    ],
+    "severity": "strong",
+    "resolution": null
+  },
+  {
+    "challenge_id": "AC004",
+    "target_factor_id": "IND001",
+    "key_claim_tested": "Toyota's strategy relies on regulators maintaining a 'multi-pathway' approach allowing hybrids to count toward electrification targets through 2035",
+    "verification_result": "partially supported (Independent verification weakens risk)",
+    "challenge_text": "The claim is reasonably supported by 6 pieces of evidence including shareholder rejection of climate lobbying alignment (E016), regulatory delay decisions (E028, E029), and company risk disclosures (E007). Depth=4 with structural forces is appropriate for HIGH severity. Analysis acknowledges balancing forces (financial buffer). [Independently verified: Verdict: Weakened. Key Finding: Regulators are moving toward multi-pathway/hybrid allowance, contradicting the risk of strict ban. Risk of strategy failure is lower than claimed.]",
+    "counter_evidence": [
+      "E005",
+      "E022",
+      "E023",
+      "E024"
+    ],
+    "severity": "weak",
+    "resolution": null
+  },
+  {
+    "challenge_id": "AC005",
+    "target_factor_id": "IND002",
+    "key_claim_tested": "Consumer demand for pure BEVs is shifting from linear to exponential growth in key markets",
+    "verification_result": "contradicted (Independent verification confirms demand slowdown)",
+    "challenge_text": "Evidence shows Toyota's <2% EV sales and BYD outperformance in Japan supporting the competitive pressure, though the 'exponential' characterization is theoretical. Depth=4 with structural forces appropriately analyzes the risk with balancing loop acknowledgment. Counter-evidence on hybrid strength is acknowledged. [Independently verified: Verdict: Contradicted. Key Finding: BEV demand growth is slowing/plateauing, not exponential. Market behavior contradicts the claim of exponential shift.]",
+    "counter_evidence": [
+      "E019",
+      "E052",
+      "E040"
+    ],
+    "severity": "strong",
     "resolution": null
   },
   {
     "challenge_id": "AC006",
-    "target_factor_id": "COM004",
-    "challenge_text": "This factor is well-supported as Low severity by the market data. The portfolio aligns with the hybrid dominance confirmed in E012 and E013, and the risk is appropriately rated given the company's multi-pathway strategy matches current demand.",
-    "counter_evidence": [],
-    "severity": "weak",
+    "target_factor_id": "IND003",
+    "key_claim_tested": "Toyota's reliance on solid-state batteries faces significant supply chain and cost risks",
+    "verification_result": "partially supported",
+    "challenge_text": "The factor carries a MINOR_STANCE_MISMATCH flag where 2 of 5 supporting citations (40%) have contradicts_risk stance (E018, E050). Evidence shows active partnerships and METI certification that mitigate the risk, suggesting the severity should be moderated. However, the risk acknowledgment is valid.",
+    "counter_evidence": [
+      "E018",
+      "E050"
+    ],
+    "severity": "moderate",
     "resolution": null
   },
   {
     "challenge_id": "AC007",
-    "target_factor_id": "PEER001",
-    "challenge_text": "Focus on the Japan EV loss (2,223 vs 2,038 units) suffers from Selection Bias by isolating a tiny volume segment. This ignores Toyota's massive total market dominance in hybrids, making the 'loss of leadership' less material than the Medium severity implies.",
+    "target_factor_id": "COM001",
+    "key_claim_tested": "Toyota's 2027-2028 mass production target for solid-state batteries faces a high probability of delay",
+    "verification_result": "partially supported (Independent verification affirms timeline)",
+    "challenge_text": "The factor carries a MINOR_STANCE_MISMATCH flag where 2 of 4 supporting citations (50%) have contradicts_risk stance (E018, E050). METI certification and partnerships suggest mitigation, but the lack of scaling evidence supports the delay risk. Depth=4 is appropriate for HIGH severity. [Independently verified: Verdict: Weakened. Key Finding: 2027-2028 mass production targets reaffirmed by Toyota and partners. 'High probability of delay' claim not strongly supported by recent data.]",
     "counter_evidence": [
-      "E012"
+      "E018",
+      "E050"
     ],
-    "severity": "moderate",
+    "severity": "strong",
     "resolution": null
   },
   {
     "challenge_id": "AC008",
-    "target_factor_id": "PEER002",
-    "challenge_text": "This factor is largely redundant with COM001 (Solid-State Capacity) using the same evidence (E009). Additionally, Evidence E017 indicates ongoing investment in battery infrastructure, contradicting the claim of static limited capability.",
+    "target_factor_id": "COM002",
+    "key_claim_tested": "Toyota's reliance on legacy ICE platforms slows BEV iteration speed despite new organizational structures",
+    "verification_result": "supported",
+    "challenge_text": "Evidence shows delays in US EV plans (E028, E029, E036) and low BEV sales (E025) supporting the claim. Depth=3 with structural forces (golden handcuffs reinforcing loop) is appropriate. Balancing forces (BEV Factory, parts reduction) are acknowledged, justifying MEDIUM severity.",
     "counter_evidence": [
-      "E017"
+      "E005",
+      "E017",
+      "E031"
+    ],
+    "severity": "weak",
+    "resolution": null
+  },
+  {
+    "challenge_id": "AC009",
+    "target_factor_id": "COM003",
+    "key_claim_tested": "There is insufficient evidence that Toyota has built internal software talent and OTA monetization capabilities",
+    "verification_result": "partially supported",
+    "challenge_text": "The factor carries an EVIDENCE IMBALANCE flag with only 1 supporting citation (E057) versus 2 contradicting citations (E058, E060). While the absence of software metrics is noted, the evidence imbalance requires minimum MODERATE challenge per programmatic rules.",
+    "counter_evidence": [
+      "E058",
+      "E060"
     ],
     "severity": "moderate",
     "resolution": null
   },
   {
-    "challenge_id": "AC009",
-    "target_factor_id": "PEER003",
-    "challenge_text": "Using a 2024 launch delay (E007) as a current risk indicator introduces Temporal Bias. Evidence E017 demonstrates strong sales performance in 2025 post-launch, mitigating the relevance of the past delay to current strategic risk.",
+    "challenge_id": "AC010",
+    "target_factor_id": "COM004",
+    "key_claim_tested": "Toyota's hybrid profitability funds EV transition but creates strategic inertia against aggressive BEV pricing",
+    "verification_result": "partially supported",
+    "challenge_text": "The factor carries a MINOR_STANCE_MISMATCH flag where 3 of 7 supporting citations (43%) have contradicts_risk stance (E022, E023, E024). Financial evidence supports both funding and inertia aspects. Depth=3 with structural forces appropriately balances the dual nature of the risk.",
     "counter_evidence": [
-      "E017"
+      "E022",
+      "E023",
+      "E024"
     ],
-    "severity": "weak",
+    "severity": "moderate",
     "resolution": null
   }
 ]

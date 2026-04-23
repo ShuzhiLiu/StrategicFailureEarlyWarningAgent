@@ -1,14 +1,15 @@
 {
-  "case_id": "toyota_ev_strategy_2025",
+  "case_id": "toyota_motor_corporation_20250519",
   "company": "Toyota Motor Corporation",
   "strategy_theme": "EV electrification strategy",
   "cutoff_date": "2025-05-19",
+  "risk_score": 55,
   "overall_risk_level": "medium",
   "overall_confidence": 0.75,
-  "evidence_count": 14,
-  "risk_factor_count": 9,
-  "challenge_count": 9,
+  "evidence_count": 41,
+  "risk_factor_count": 10,
+  "challenge_count": 10,
   "backtest_events": 2,
   "adversarial_pass_count": 1,
-  "iteration_count": 3
+  "iteration_count": 1
 }

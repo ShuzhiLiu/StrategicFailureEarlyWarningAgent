@@ -3,27 +3,28 @@
     {
       "event_id": "gt_001",
       "event_date": "2025-05-08",
-      "description": "Toyota reports record FY2024 operating profit driven by strong hybrid sales; EV targets maintained.",
+      "description": "Toyota reports record FY2024 operating profit of 5.35 trillion yen. Hybrid sales continue to grow strongly. EV targets maintained.",
       "event_type": "financial_metric",
       "matched_factors": [
+        "PEER001",
+        "PEER002",
         "IND001",
-        "COM002",
-        "COM004",
-        "PEER001"
+        "IND002",
+        "COM004"
       ],
-      "match_quality": "strong"
+      "match_quality": "partial"
     },
     {
       "event_id": "gt_002",
       "event_date": "2025-06-15",
-      "description": "Toyota announces next-gen EV platform with solid-state battery target for 2027-2028; no strategy revision.",
+      "description": "Toyota announces next-gen EV platform with solid-state battery target for 2027-2028. No major strategy revision or writedown.",
       "event_type": "target_statement",
       "matched_factors": [
         "COM001",
-        "PEER002"
+        "IND003"
       ],
       "match_quality": "partial"
     }
   ],
-  "summary": "The backtest reveals a high degree of accuracy regarding Toyota's strategic resilience, with multiple risk factors (IND001, COM002, COM004, PEER001) strongly anticipating the record profits driven by hybrid sales. However, predictions regarding solid-state battery limitations (COM001, PEER002) were only partially accurate; while the 2027-2028 timeline was correctly identified, the prediction of a 'negligible' 10,000 unit capacity was not explicitly validated or refuted by the announcement of the new platform, which maintained targets without confirming the specific volume constraints."
+  "summary": "The backtest reveals a high rate of 'false alarms' where predicted risks materialized as the status quo rather than failures. Predictions regarding record profitability (COM004, PEER001) and the maintenance of the 2027-2028 solid-state timeline (COM001) were directionally correct but failed to anticipate that the 'risk' would not materialize into a negative outcome. The models correctly identified the strategic trade-offs (hybrid profits vs. EV speed) but overestimated the likelihood of these factors forcing a strategy revision or financial distress in the short term."
 }

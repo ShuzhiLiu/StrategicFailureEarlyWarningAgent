@@ -1,14 +1,15 @@
 {
-  "case_id": "byd_ev_strategy_2025",
+  "case_id": "byd_company_limited_20250519",
   "company": "BYD Company Limited",
   "strategy_theme": "EV electrification strategy",
   "cutoff_date": "2025-05-19",
-  "overall_risk_level": "low",
-  "overall_confidence": 0.85,
-  "evidence_count": 27,
-  "risk_factor_count": 9,
-  "challenge_count": 9,
+  "risk_score": 40,
+  "overall_risk_level": "medium",
+  "overall_confidence": 0.63,
+  "evidence_count": 44,
+  "risk_factor_count": 10,
+  "challenge_count": 10,
   "backtest_events": 2,
   "adversarial_pass_count": 1,
-  "iteration_count": 3
+  "iteration_count": 1
 }

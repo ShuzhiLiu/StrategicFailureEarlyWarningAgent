@@ -3,43 +3,44 @@
     {
       "event_id": "gt_001",
       "event_date": "2025-05-20",
-      "description": "Honda revises 2030 EV sales target down to 20% and cuts investment from 10T to 7T yen, emphasizing HEV.",
+      "description": "Honda revises 2030 EV target down to 20% and cuts investment from 10T to 7T yen, emphasizing HEV.",
       "event_type": "target_revision",
       "matched_factors": [
-        "IND002",
         "COM001",
+        "COM002",
         "COM003",
-        "PEER001"
+        "IND001",
+        "PEER002",
+        "PEER003"
       ],
       "match_quality": "strong"
     },
     {
       "event_id": "gt_002",
       "event_date": "2026-03-12",
-      "description": "Honda cancels North American EV models (0 Series) and records massive operating expenses/losses.",
+      "description": "Honda cancels multiple North American EV models (0 SUV, 0 Saloon) and records massive operating expenses.",
       "event_type": "project_cancellation",
       "matched_factors": [
-        "IND002",
         "COM001",
+        "COM002",
         "COM003",
-        "PEER001",
         "PEER002",
-        "COM002"
+        "PEER001"
       ],
       "match_quality": "strong"
     },
     {
       "event_id": "gt_003",
       "event_date": "2026-03-25",
-      "description": "Sony Honda Mobility (Afeela) project effectively cancelled or restructured.",
+      "description": "Sony Honda Mobility (Afeela) project effectively cancelled or significantly restructured.",
       "event_type": "project_cancellation",
       "matched_factors": [
+        "COM001",
         "COM002",
-        "COM004",
-        "PEER003"
+        "PEER001"
       ],
       "match_quality": "partial"
     }
   ],
-  "summary": "The predicted risk factors demonstrated high precision and recall, successfully anticipating the major strategic pivots and cancellations. Specifically, factors regarding market timing (IND002), capital allocation strain (COM001), and product portfolio gaps (COM003) strongly predicted the downscaling of EV targets and the cancellation of the 0 Series. While the specific cancellation of the Sony partnership (gt_003) was only partially predicted as a general execution risk in joint ventures, the overall assessment accurately captured the fundamental failure of Honda's aggressive independent EV transition strategy."
+  "summary": "The backtest reveals a high degree of accuracy in the predicted risk factors, particularly regarding the structural cost disadvantages and the failure of the proprietary 'e:Architecture' timeline. Factors COM001 (platform scalability) and PEER002 (cost structure) strongly anticipated the massive cancellations and investment cuts (gt_001, gt_002) by correctly identifying that Honda could not achieve cost parity with vertically integrated competitors. While the prediction for the Afeela cancellation (gt_003) was less specific, the underlying risks regarding software ecosystem gaps (PEER001) and solid-state battery delays (COM002) provided a solid partial match for the restructuring of that specific joint venture."
 }

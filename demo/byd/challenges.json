@@ -1,56 +1,76 @@
 [
   {
     "challenge_id": "AC001",
-    "target_factor_id": "IND001",
-    "challenge_text": "This risk factor exhibits selection bias by overemphasizing isolated trade barriers (EU tariffs, Brazil halt) while ignoring strong contradictory evidence of global sales growth (41%). The severity appears inflated given that domestic dominance in China buffers the specific regional headwinds described.",
+    "target_factor_id": "PEER001",
+    "key_claim_tested": "BYD's software gap is a managed trade-off evidenced by strategic pivots (E008, E013) and market share.",
+    "verification_result": "data error",
+    "challenge_text": "The factor is flagged [STANCE_MISMATCH] as 100% of supporting citations (E008, E013) have a 'contradicts_risk' stance, indicating a fundamental citation error where evidence proving capability advancement was misclassified as supporting a risk of lag. This undermines the validity of the 'support' base for the factor.",
     "counter_evidence": [
-      "E001",
-      "E017",
-      "E003"
-    ],
-    "severity": "moderate",
-    "resolution": null
-  },
-  {
-    "challenge_id": "AC002",
-    "target_factor_id": "IND002",
-    "challenge_text": "The analysis relies on industry-wide capacity metrics (E020, E053) to frame a company-specific risk, ignoring BYD's actual 34% profit growth (E002) and cost advantages. This represents severity inflation where financial performance contradicts the 'unsustainability' narrative derived from executive rhetoric.",
-    "counter_evidence": [
-      "E002",
-      "E001",
-      "E034"
+      "E008",
+      "E013",
+      "E005",
+      "E023",
+      "E029",
+      "E004"
     ],
     "severity": "strong",
     "resolution": null
   },
   {
-    "challenge_id": "AC003",
-    "target_factor_id": "COM001",
-    "challenge_text": "Framing capital allocation as a risk when evidence confirms sustainable deployment and strong profitability (E026, E002) suggests a bias in risk categorization. The factor is effectively neutral rather than a strategic risk, warranting a downgrade or removal.",
+    "challenge_id": "AC002",
+    "target_factor_id": "PEER002",
+    "key_claim_tested": "Vertical integration strains operating cash flow but is manageable via cash reserves.",
+    "verification_result": "partially supported",
+    "challenge_text": "The factor carries an [EVIDENCE IMBALANCE] flag (4 supporting vs 5 contradicting). While the OCF decline (E015) supports the 'strain' claim, the weight of contradicting evidence (profit growth, market share) suggests the risk is less severe than implied, warranting a downgrade in confidence or a moderate challenge to the severity inflation.",
     "counter_evidence": [
       "E001",
       "E002",
-      "E026"
+      "E014",
+      "E005",
+      "E033"
+    ],
+    "severity": "moderate",
+    "resolution": null
+  },
+  {
+    "challenge_id": "AC003",
+    "target_factor_id": "PEER003",
+    "key_claim_tested": "Organic expansion creates 'island effect' risk due to lack of strategic alliances.",
+    "verification_result": "partially supported",
+    "challenge_text": "Flagged with [EVIDENCE IMBALANCE] (4 supporting vs 5 contradicting). Evidence of strong organic growth (E027, E030) and product demand contradicts the severity of the partnership gap, suggesting the 'risk' is being effectively managed by market pull, reducing the necessity of a partnership-dependent model.",
+    "counter_evidence": [
+      "E027",
+      "E028",
+      "E030",
+      "E038",
+      "E033"
     ],
     "severity": "moderate",
     "resolution": null
   },
   {
     "challenge_id": "AC004",
-    "target_factor_id": "COM002",
-    "challenge_text": "The risk hinges on a single executive quote (E011) regarding pricing without contextualizing the sustained margin stability shown in financial data (E034). This selection bias overlooks the broader financial health that mitigates the strategic inconsistency mentioned.",
+    "target_factor_id": "IND001",
+    "key_claim_tested": "EU 17% tariff creates critical vulnerability before localization capacity is operational.",
+    "verification_result": "contradicted_by_independent_verification",
+    "challenge_text": "Key claim is well-supported by direct evidence of the 17% tariff (E037) and the lack of operational EU factories vs. the plan (E038). Depth 4 analysis includes pre-mortem on localization timelines. No programmatic flags indicate a strong violation; the HIGH severity is justified by the structural nature of the barrier. [Independently verified: Localization has commenced (Hungary trial production) and sales surged despite tariffs, contradicting the 'critical vulnerability' and 'pre-operational' premises]",
     "counter_evidence": [
-      "E034",
-      "E002"
+      "E014",
+      "E030",
+      "E032"
     ],
-    "severity": "moderate",
+    "severity": "strong",
     "resolution": null
   },
   {
     "challenge_id": "AC005",
-    "target_factor_id": "COM003",
-    "challenge_text": "This factor generalizes a localized execution failure (Brazil factory) into a systemic operational risk, despite evidence of successful expansion in other markets like Japan (E014). It suffers from selection bias by focusing on the negative outlier while ignoring broader execution success.",
+    "target_factor_id": "IND002",
+    "key_claim_tested": "Raw material volatility pressures operating cash flow despite vertical integration.",
+    "verification_result": "partially supported",
+    "challenge_text": "Flagged with [EVIDENCE IMBALANCE] (4 supporting vs 4 contradicting). While OCF decline supports the risk, equal weight of evidence on profit growth and cash reserves (E002, E014) suggests the buffer is robust, making the 'pressure' a manageable metric rather than a strategic threat.",
     "counter_evidence": [
+      "E001",
+      "E002",
       "E014",
       "E003"
     ],
@@ -59,45 +79,74 @@
   },
   {
     "challenge_id": "AC006",
-    "target_factor_id": "COM004",
-    "challenge_text": "The risk is rated low but the description suggests potential portfolio-wide failure due to EU tariffs, which is unsupported by evidence showing strong growth in China and SE Asia (E001). The framing is consistent with the data but slightly overstates the regional impact.",
+    "target_factor_id": "IND003",
+    "key_claim_tested": "Charging infrastructure deficits pose secondary risk neutralized by hybrid portfolio.",
+    "verification_result": "data error",
+    "challenge_text": "The factor is flagged [STANCE_MISMATCH] with 100% of supporting citations (E007, E009, E030) having a 'contradicts_risk' stance. This indicates a critical data integrity error where evidence proving market penetration and tech mitigation was mislabeled as supporting a risk, invalidating the evidence base for this claim.",
     "counter_evidence": [
-      "E001",
-      "E017"
-    ],
-    "severity": "weak",
-    "resolution": null
-  },
-  {
-    "challenge_id": "AC007",
-    "target_factor_id": "PEER001",
-    "challenge_text": "This factor is substantially redundant with IND002 and repeats the 'unsustainable pricing' claim while ignoring the same contradictory financial evidence (E002, E023). The duplication suggests a lack of distinct strategic differentiation in the risk assessment.",
-    "counter_evidence": [
-      "E002",
-      "E023",
-      "E034"
+      "E007",
+      "E009",
+      "E030",
+      "E027",
+      "E028",
+      "E004"
     ],
     "severity": "strong",
     "resolution": null
   },
   {
-    "challenge_id": "AC008",
-    "target_factor_id": "PEER002",
-    "challenge_text": "This risk overlaps significantly with IND001 regarding the Brazil factory halt, adding little new insight beyond supply chain context. The distinction between mining rights and manufacturing compliance is muddled, indicating a lack of clarity in regional risk segmentation.",
+    "challenge_id": "AC007",
+    "target_factor_id": "COM001",
+    "key_claim_tested": "Liquidity dependency on hybrid volume is threatened by regulatory shifts given OCF decline.",
+    "verification_result": "supported",
+    "challenge_text": "The claim is logically sound and supported by OCF decline (E015) and R&D spend > profit (E025). The presence of cash reserves (E014) is acknowledged in the analysis. No programmatic flags exist, and the structural analysis (Depth 3) appropriately balances the cash burn against reserves.",
     "counter_evidence": [
-      "E003",
-      "E014"
+      "E001",
+      "E014",
+      "E007"
+    ],
+    "severity": "weak",
+    "resolution": null
+  },
+  {
+    "challenge_id": "AC008",
+    "target_factor_id": "COM002",
+    "key_claim_tested": "Blade Battery maintains strong moat with no evidence of imminent disruption.",
+    "verification_result": "data error",
+    "challenge_text": "Flagged [STANCE_MISMATCH] with 100% of supporting citations (E033, E034, E012, E060) having 'contradicts_risk' stance. Evidence showing tech iteration and R&D leadership contradicts the 'risk' of disruption, meaning these were misclassified as supporting evidence for a risk factor that argues the moat is strong.",
+    "counter_evidence": [
+      "E033",
+      "E034",
+      "E012",
+      "E060"
+    ],
+    "severity": "strong",
+    "resolution": null
+  },
+  {
+    "challenge_id": "AC009",
+    "target_factor_id": "COM003",
+    "key_claim_tested": "Localized production faces liquidity trap risk where CAPEX and tariffs delay ROI.",
+    "verification_result": "partially supported",
+    "challenge_text": "Flagged [MINOR_STANCE_MISMATCH] as 50% of supporting citations (E038, E011) have 'contradicts_risk' stance. While the risk of cost inefficiency is valid, the evidence of rapid ramp-up contradicts the severity. This warrants a moderate challenge to ensure the 'trap' risk isn't overstated.",
+    "counter_evidence": [
+      "E038",
+      "E011",
+      "E030",
+      "E032"
     ],
     "severity": "moderate",
     "resolution": null
   },
   {
-    "challenge_id": "AC009",
-    "target_factor_id": "PEER003",
-    "challenge_text": "The analysis frames LFP reliance as a capability gap despite evidence explicitly confirming a 15% cost advantage and volume leadership (E023). This demonstrates a bias toward competitor technology norms (high-nickel) rather than validating BYD's proven mass-market strategy.",
+    "challenge_id": "AC010",
+    "target_factor_id": "COM004",
+    "key_claim_tested": "Premium sub-brands represent a trade-off with insufficient data on profitability.",
+    "verification_result": "data error",
+    "challenge_text": "Flagged [STANCE_MISMATCH] with 100% of supporting citations (E004, E029) having 'contradicts_risk' stance. Evidence of volume growth and overtaking Tesla contradicts the notion of failure or stagnation, misclassifying success metrics as supporting evidence for a lack of data/risk factor.",
     "counter_evidence": [
-      "E023",
-      "E016"
+      "E004",
+      "E029"
     ],
     "severity": "strong",
     "resolution": null
