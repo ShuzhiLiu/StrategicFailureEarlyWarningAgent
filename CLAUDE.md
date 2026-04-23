@@ -1,16 +1,19 @@
 # Strategic Failure Early Warning Agent
 
 ## Project Overview
-A time-bounded multi-agent system (Planner-Generator-Evaluator) for strategic failure early warning on public companies. Built on `liteagent` (a minimal agent framework -- utilities, not a runtime) with Qwen3.5-27B on local vLLM for reasoning, and evidence-driven analysis with temporal integrity.
+
+**An agent-harness engineering study.** The project frame: *Agent = Model + Harness*. Models commoditize; harnesses don't. This repo is a hands-on reference implementation of an agent harness (`liteagent`, ~1,000 LOC, 1 external dep) plus a domain application (`sfewa`) that pressure-tests the harness on a real prediction task — flagging a public company's strategic failure from timestamped pre-cutoff evidence.
+
+The architectural pattern is Planner-Generator-Evaluator. The domain task uses Qwen3.5-27B on local vLLM for reasoning, with strict evidence-driven analysis and three-layer temporal-integrity enforcement. See `docs/harness_engineering.md` for the thesis document; `docs/architecture.md` for the pipeline design; `docs/iteration_log.md` for the 40-iteration audit trail.
 
 **Case studies** (all cutoff 2025-05-19):
 - **Honda** → HIGH-CRITICAL risk, mean 76.7 (ground truth: May 2025 target revision + March 2026 writedown)
 - **Toyota** → MEDIUM-HIGH risk, mean 56.0 (control: weak BEV execution but strong hybrid position)
 - **BYD** → MEDIUM risk, mean 44.7 (control: world's largest NEV maker, strategy succeeding)
 
-**Demo**: AI Tinkerers HK at AWS, April 29, 2026. Pre-cached runs in `demo/`.
+**Demos**: pre-cached runs for Honda, Toyota, BYD available in `demo/` (self-contained HTML reports, no setup required).
 
-**Status**: 39 iterations complete. Pipeline v2 (agentic retrieval + 3-phase adversarial) is the primary path (`--agentic` flag). Iter 39 adds self-consistency sampling (N=3), Toulmin-structured output, programmatic depth-severity + citation flags, analyst agreement confidence, and evidence-gated downgrades. Cross-company ordering H>T>B maintained in 100% of stability runs (9/9 post iter 39).
+**Status**: 40 iterations complete. Pipeline v2 (agentic retrieval + 3-phase adversarial) is the primary path (`--agentic` flag). Iter 39 added self-consistency sampling (N=3), Toulmin-structured output, programmatic depth-severity + citation flags, analyst agreement confidence, and evidence-gated downgrades. Iter 40 was an open-source readiness pass with a fresh stability re-run — see `docs/iteration_log.md` for the full audit trail.
 
 ## Tech Stack
 - **Agent framework**: `liteagent` (in-house, ~800 lines, plain Python + OpenAI SDK)
@@ -149,7 +152,7 @@ After any significant change, run the **full cross-company stability test**: 3 r
 Run companies **sequentially** (DuckDuckGo rate limits cause evidence loss when companies run concurrently):
 ```bash
 # Round 1
-python -m sfewa.main --case configs/cases/honda_ev_strategy.yaml --agentic
+python -m sfewa.main --case configs/cases/honda_ev_pre_reset.yaml --agentic
 python -m sfewa.main --case configs/cases/toyota_ev_strategy.yaml --agentic
 python -m sfewa.main --case configs/cases/byd_ev_strategy.yaml --agentic
 # Repeat for rounds 2 and 3

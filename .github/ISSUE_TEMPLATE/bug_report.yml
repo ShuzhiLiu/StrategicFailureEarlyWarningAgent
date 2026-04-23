@@ -1,0 +1,45 @@
+name: Bug report
+description: Report a defect in the pipeline, prompts, or reporting.
+labels: ["bug"]
+body:
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What did the pipeline produce, and what did you expect?
+      placeholder: |
+        Running Honda retrospective, I got risk_score=45 (expected 75-90).
+    validations:
+      required: true
+
+  - type: textarea
+    id: repro
+    attributes:
+      label: Reproduction
+      description: Exact command + case config used.
+      placeholder: |
+        PYTHONPATH=src uv run python -m sfewa.main --case configs/cases/honda_ev_pre_reset.yaml --agentic
+      render: bash
+    validations:
+      required: true
+
+  - type: textarea
+    id: artifacts
+    attributes:
+      label: Artifacts
+      description: |
+        Please attach (or paste the relevant excerpt of):
+          - outputs/<run_id>/run_summary.json
+          - outputs/<run_id>/llm_history.jsonl (relevant portion)
+          - outputs/<run_id>/challenges.json (if adversarial-related)
+    validations:
+      required: false
+
+  - type: input
+    id: llm-backend
+    attributes:
+      label: LLM backend
+      description: vLLM / Ollama / OpenAI + model name
+      placeholder: vLLM Qwen3.5-27B-GPTQ-Int4
+    validations:
+      required: true
