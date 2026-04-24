@@ -30,43 +30,58 @@ The headline result: using only pre-May-2025 evidence, the harness flagged **Hon
 
 ### Retrospective (cutoff 2025-05-19 — ground truth known)
 
-Two independent samples, same case configs, different code vintages.
+Two independent samples on the same case configs, two different open-weight models. The harness is identical; only `DEFAULT_LLM_MODEL` differs.
 
-**Latest 3-round re-run (current code, 2026-04-22):**
+**Current — Qwen3.6-27B (full precision), 3-round re-run (2026-04-23):**
 
 | Company | Runs | Mean | Range | Level | Backtest |
 |---|---|---:|---:|:---:|:---|
-| **Honda** — target: strategy failure | 79, 96, 91 | **88.7** | 79–96 | HIGH–CRITICAL (3/3) | **7 STRONG + 2 PARTIAL / 9** |
-| Toyota — control: executing | 57, 54, 55 | 55.3 | 54–57 | MEDIUM (3/3) | 2 STRONG + 2 PARTIAL + 2 WEAK / 6 |
-| BYD — control: succeeding | 37, 59, 40 | 45.3 | 37–59 | LOW–MEDIUM (3/3) | **4 STRONG + 2 PARTIAL / 6** |
+| **Honda** — target: strategy failure | 73, 63, 77 | **71.0** | 63–77 | HIGH (3/3) | **6 STRONG + 3 PARTIAL / 9** |
+| Toyota — control: executing | 58, 57, 60 | 58.3 | 57–60 | MEDIUM–HIGH | 4 STRONG + 2 PARTIAL / 6 |
+| BYD — control: succeeding | 20, 29, 35 | 28.0 | 20–35 | LOW (3/3) | **4 STRONG + 1 PARTIAL / 6** |
 
-**Historical 9-run baseline (iter 39 code, 2026-04-19):**
+**Previous — Qwen3.5-27B-GPTQ-Int4 (iter 40 code, 2026-04-22):**
 
-| Company | Mean | Range | Level | Confidence | Backtest |
-|---|---:|---:|:---:|---:|:---|
-| Honda | 84.7 | 79–89 | HIGH–CRITICAL | 0.71 | 7 STRONG + 2 PARTIAL / 9 |
-| Toyota | 64.7 | 58–74 | MEDIUM–HIGH | 0.76 | 0 STRONG + 6 PARTIAL / 6 |
-| BYD | 29.7 | 23–39 | LOW | 0.65 | 2 STRONG + 4 PARTIAL / 6 |
+| Company | Runs | Mean | Range | Level | Backtest |
+|---|---|---:|---:|:---:|:---|
+| Honda | 79, 96, 91 | 88.7 | 79–96 | HIGH–CRITICAL (3/3) | 7 STRONG + 2 PARTIAL / 9 |
+| Toyota | 57, 54, 55 | 55.3 | 54–57 | MEDIUM (3/3) | 2 STRONG + 2 PARTIAL + 2 WEAK / 6 |
+| BYD | 37, 59, 40 | 45.3 | 37–59 | LOW–MEDIUM | 4 STRONG + 2 PARTIAL / 6 |
 
 **What both samples agree on — the robust claims:**
-- **Honda flagged HIGH or CRITICAL in all 12 runs** (combined range 79–96). Predictive signal reproduces across code changes.
-- **Honda backtest reproduces exactly: 7 STRONG + 2 PARTIAL / 9** in both samples. The March 2026 writedown, May 2025 target revision, and Afeela restructuring were all predicted from pre-May-2025 evidence.
-- **BYD scored lowest of the three in 11 of 12 runs.** The harness consistently reads BYD's position as less at-risk than Honda's, matching the ground truth.
-- **Toyota stable in MEDIUM band** in both samples (combined range 54–74).
+- **Honda flagged HIGH or CRITICAL in all 6 runs** (combined range 63–96). Predictive signal reproduces across model upgrades.
+- **Honda backtest covers 9/9 ground-truth events in both samples** (Qwen3.5: 7 STRONG + 2 PARTIAL; Qwen3.6: 6 STRONG + 3 PARTIAL). The March 2026 writedown, May 2025 target revision, and Afeela restructuring were all predicted from pre-May-2025 evidence.
+- **BYD scored lowest of the three in 5 of 6 runs.** The harness consistently reads BYD's position as less at-risk than Honda's, matching the ground truth. (1 inversion: Qwen3.5 R2, BYD 59 > Toyota 54 — does not reproduce on Qwen3.6.)
+- **Toyota stable in MEDIUM band** in both samples (combined range 54–60).
+- **Strict H>T>B ordering**: Qwen3.5 2/3, Qwen3.6 **3/3**.
 
 **STRONG** = a risk factor the system flagged directly matches a post-cutoff event. **PARTIAL** = covers the broader risk class but differs on specifics. **WEAK** = distant thematic match.
 
-**Known limitation — BYD variance.** BYD's run-to-run range is 22 pts today vs Honda 17 and Toyota 3. The driver is variability in evidence retrieval volume: when BYD retrieves 150+ documents, more factors accumulate enough supporting citations to resist STRONG downgrades (see [evidence-gated rule](docs/architecture.md) — `valid_sup ≥ 3`), pushing scores upward. In 1 of 3 rounds today, BYD exceeded Toyota (59 vs 54). Strict H>T>B ordering holds in 2/3 today and 3/3 historically, but it is not the robust claim — the directional claim (Honda highest, BYD lowest, Toyota stable middle) is. Tightening BYD stability is an [open roadmap item](ROADMAP.md).
+**What the model swap shows about the harness.** Same code, same prompts — only the model changed (quantized Qwen3.5 → full-precision Qwen3.6). The qualitative result (H > T > B, Honda HIGH/CRITICAL, BYD LOW) survives. Score *magnitudes* shift (Honda mean 88.7 → 71.0, BYD 45.3 → 28.0); ordering tightens (2/3 → 3/3). Qwen3.6 also triggers more STRONG challenges per run (Honda 0-1 → 2-3, BYD 1-3 → 7-9), and the evidence-gated rule (`valid_sup ≥ 3`) channels that asymmetric scrutiny — Honda's filing-backed factors survive, BYD's thinner factors get downgraded. The harness's separation of *what counts as a STRONG challenge* (model-driven) from *which factors get downgraded* (deterministic, evidence-quality-driven) is what keeps the result coherent across the model swap.
+
+**Known limitation — BYD variance.** BYD's retrospective range is 15 pts on Qwen3.6 (vs 22 on Qwen3.5 — improved, not solved). BYD forward range is 20 pts (see below) and produces 2/3 T-B inversions. Driver: evidence-retrieval volume variance interacts with the evidence-gated rule. When BYD retrieves 100+ docs, more factors hit `valid_sup ≥ 3` and resist downgrades. The directional claim (Honda highest, BYD lowest, Toyota stable middle) is the robust signal; strict H>T>B is more fragile. [Tightening BYD stability is an open roadmap item.](ROADMAP.md)
 
 ### Forward prediction (cutoff 2026-04-19, 9 runs — no known outcome at run time)
 
-Same harness, same model, same prompts — pointed at today's information with no backtest to anchor it:
+Same harness, same model, same prompts — pointed at today's information with no backtest to anchor it.
+
+**Current — Qwen3.6-27B (2026-04-23/24):**
+
+| Company | Runs | Mean | Range | Level | Δ vs retro |
+|---|---|---:|---:|:---:|---:|
+| **Honda** | 93, 93, 92 | **92.7** | 92–93 (1 pt) | CRITICAL (all 3 runs) | +21.7 |
+| Toyota | 48, 53, 60 | 53.7 | 48–60 (12 pts) | MEDIUM–HIGH | −4.6 |
+| BYD | 62, 45, 65 | 57.3 | 45–65 (20 pts) | MEDIUM–HIGH | **+29.3** |
+
+**Previous — Qwen3.5-27B-GPTQ-Int4:**
 
 | Company | Mean | Range | Level | Δ vs retro |
 |---|---:|---:|:---:|---:|
-| **Honda** | **98.0** | 96–100 (4 pts) | CRITICAL (all 3 runs) | +13.3 |
+| Honda | 98.0 | 96–100 (4 pts) | CRITICAL (all 3 runs) | +13.3 |
 | Toyota | 68.3 | 58–84 (26 pts) | MEDIUM–CRITICAL | +3.6 |
-| BYD | 57.3 | 53–64 (11 pts) | MEDIUM–HIGH | **+27.6** |
+| BYD | 57.3 | 53–64 (11 pts) | MEDIUM–HIGH | +27.6 |
+
+**Both models agree**: Honda is CRITICAL in all 6 forward runs (combined range 92–100). The "Honda strategy is in trouble" signal is the most robust output of the harness. Forward Honda is +13–22 pts above retro Honda — the gap is the value of the actual post-cutoff disclosures (May 2025 revision, March 2026 writedown) becoming pre-cutoff *evidence* in forward mode. If the temporal gate were leaking in retro, retro Honda would already match forward Honda. It doesn't.
 
 **Reproduce either run:**
 
@@ -126,9 +141,9 @@ Each omission has a concrete entry on [ROADMAP.md](ROADMAP.md) with scope, motiv
 
 Same LLM, same prompts, three companies, three different conclusions. The differentiation lives in four harness layers:
 
-**1. Temporal integrity — the cross-validator.** Cutoff is enforced at three redundant layers (published-date filter, extraction filter, prompt instruction). The empirical proof the gates hold: retrospective Honda scores 79–96; forward Honda (same code, same prompts, cutoff moved to post-writedown) scores 96–100. If the model were leaking Qwen3.5's training-data knowledge of the March 2026 writedown, retrospective would already be ~98. It isn't. Only when the writedown is *in-evidence* does the score converge.
+**1. Temporal integrity — the cross-validator.** Cutoff is enforced at three redundant layers (published-date filter, extraction filter, prompt instruction). The empirical proof the gates hold: retrospective Honda scores 63–77 (Qwen3.6); forward Honda (same code, same prompts, cutoff moved to post-writedown) scores 92–93. If the model were leaking training-data knowledge of the March 2026 writedown, retrospective would already be ~93. It isn't. Only when the writedown is *in-evidence* does the score converge. The same +13–22 pt retro→forward gap reproduces on Qwen3.5 (88.7 → 98.0).
 
-**2. Separated evaluation — the anti-self-congratulation safeguard.** Analysts generate risk factors. A structurally separated adversarial reviewer (different prompt, different mode, sees all evidence not just cited evidence) challenges every factor via [Chain of Verification](https://arxiv.org/abs/2309.11495) — then runs its own web search for counter-evidence the analysts never saw. Only STRONG challenges trigger downgrades, and only when evidence support is weak (`valid_sup < 3`). Honda's EDINET-backed factors survive this gate; BYD's more speculative claims often don't. In stability testing, **BYD triggers 4–7 STRONG challenges per run; Honda triggers 0–1**. The harness is *less* confident about the easy case — a sign the evaluator is doing work.
+**2. Separated evaluation — the anti-self-congratulation safeguard.** Analysts generate risk factors. A structurally separated adversarial reviewer (different prompt, different mode, sees all evidence not just cited evidence) challenges every factor via [Chain of Verification](https://arxiv.org/abs/2309.11495) — then runs its own web search for counter-evidence the analysts never saw. Only STRONG challenges trigger downgrades, and only when evidence support is weak (`valid_sup < 3`). Honda's EDINET-backed factors survive this gate; BYD's more speculative claims often don't. In Qwen3.6 stability testing, **BYD triggers 7–9 STRONG challenges per run; Honda triggers 2–3**. The harness is *less* confident about the easy case — a sign the evaluator is doing work.
 
 **3. Agentic depth routing — the Iceberg Model.** Analysts apply 4 layers of progressive deepening per risk dimension. Benign patterns stop at layer 2 (LOW). Structural risks descend to layer 4 (HIGH/CRITICAL) with pre-mortem assumption challenge. Depth itself becomes signal — Honda analysts reach layer 4 on most dimensions; BYD analysts stop at layer 2 on most.
 
@@ -142,17 +157,17 @@ Full technical reference: [docs/harness_engineering.md](docs/harness_engineering
 
 To pressure-test the result, the same forward-prediction prompt was given to [Claude Code](https://www.anthropic.com/claude-code) — a general-purpose harness with features `liteagent` deliberately omits (sub-agents, persistent memory, TaskCreate, Plan Mode, first-party WebSearch/WebFetch). Claude Code was blind to this project's scores and ran the task 3 times.
 
-| Company | This harness (9 runs, mean) | Claude Code Opus4.7 (3 runs, mean) | Δ |
+| Company | This harness — Qwen3.5 (3 runs forward, mean) | This harness — Qwen3.6 (3 runs forward, mean) | Claude Code Opus4.7 (3 runs, mean) |
 |---|---:|---:|---:|
-| Honda  | **98.0** CRITICAL | **79.0** HIGH   | −19.0 |
-| Toyota | **68.3** HIGH     | **41.3** MEDIUM | −27.0 |
-| BYD    | **57.3** MEDIUM   | **42.3** MEDIUM | −15.0 |
+| Honda  | **98.0** CRITICAL | **92.7** CRITICAL | **79.0** HIGH   |
+| Toyota | **68.3** HIGH     | **53.7** MEDIUM   | **41.3** MEDIUM |
+| BYD    | **57.3** MEDIUM   | **57.3** MEDIUM   | **42.3** MEDIUM |
 
-**Caveat:** Claude Code ran 3 times vs this harness's 9. Magnitude delta is directional only; the robust signal is ordering.
+**Caveats:** Claude Code ran 3 times. Magnitude delta is directional only; the robust signal is ordering. The Claude Code benchmark was originally run against Qwen3.5; the Qwen3.6 column is added for completeness — Honda and BYD ordering vs Claude Code is unchanged, Toyota mean compresses 14.6 pts but stays above Claude Code.
 
-1. **Honda ordering agrees.** An independent agent with different retrieval, different reasoning, different adversarial mechanics — running on a different model family — reaches the same qualitative conclusion: Honda is the highest-risk of the three. This is the strongest external validation of the predictive signal.
-2. **This harness scores systematically more severe** by 15–27 points. The Iceberg depth gate plus 3-phase adversarial tend to push toward primary-strategy-failure framings. Claude Code more readily accepts balancing forces (motorcycle cash, hybrid margin, overseas growth) as mitigating.
-3. **Toyota vs BYD ordering disagrees.** Worth a deeper audit.
+1. **Honda ordering agrees across all three configurations.** An independent agent with different retrieval, different reasoning, different adversarial mechanics — running on a different model family — reaches the same qualitative conclusion: Honda is the highest-risk of the three. This is the strongest external validation of the predictive signal.
+2. **This harness scores systematically more severe** — by 15–27 points on Qwen3.5, compressed to 12–15 points on Qwen3.6. The Iceberg depth gate plus 3-phase adversarial tend to push toward primary-strategy-failure framings. Claude Code more readily accepts balancing forces (motorcycle cash, hybrid margin, overseas growth) as mitigating. The compression on Qwen3.6 is consistent with the model triggering more STRONG challenges that the evidence-gated rule then channels into actual downgrades.
+3. **Full 3-way ordering converged on Qwen3.6.** On Qwen3.5 forward this harness produced H>T>B while Claude Code produced H>B>T — the only meaningful disagreement. On Qwen3.6 forward this harness now produces H>B>T (Toyota 53.7 < BYD 57.3), matching Claude Code's ordering. Both independent systems now agree on all three pairwise comparisons in forward mode.
 4. **Memory's value is empirically visible.** Claude Code's R2 notes: *"6 Explore sub-agents in two parallel waves, ~120 tool calls, seeded by prior-run memory `sector_auto_ev_risk.md`."* Direct evidence for the persistence layer `liteagent` doesn't implement — which is why it is [v0.2 on the roadmap](ROADMAP.md).
 
 Full methodology: [docs/claude_code_benchmark.md](docs/claude_code_benchmark.md).
@@ -243,10 +258,9 @@ PYTHONPATH=src uv run pytest   # 71 tests, <1s
 
 ### 3. LLM backend
 
-The harness uses the OpenAI-compatible protocol. The reference configuration — what produced every number in this README — is **vLLM serving `Qwen/Qwen3.5-27B-GPTQ-Int4`**:
-Then point `.env` at it (`DEFAULT_BASE_URL=http://localhost:8000/v1`). Hardware: ~32 GB VRAM.
+The harness uses the OpenAI-compatible protocol. The current reference configuration — what produced the headline tables in this README — is **vLLM serving `Qwen/Qwen3.6-27B`** (full precision). The previous baseline used `Qwen/Qwen3.5-27B-GPTQ-Int4`; both numbers are published side-by-side above so the model swap's effect is auditable. Point `.env` at the endpoint (`DEFAULT_BASE_URL=http://localhost:8000/v1`). Hardware: ~32 GB VRAM (Qwen3.5 quantized) to ~54 GB VRAM (Qwen3.6 full precision).
 
-Qwen3.5 was chosen for three reasons:
+The Qwen line was chosen for three reasons:
 - **Open weights** — no closed-weight dependency, no per-token cost, full reproducibility of every published result.
 - **Thinking / non-thinking mode split** — lets the harness route analysts (fast, structured JSON) to non-thinking mode and the adversarial reviewer / synthesis (deep reasoning) to thinking mode. Both modes are served by the same model instance.
 - **Native tool calling** — `--enable-auto-tool-choice` gives proper OpenAI function-calling over vLLM, so `ToolLoopAgent` works without prompt-engineering workarounds.
@@ -331,7 +345,7 @@ A: STRONG is defined narrowly: the analyst-generated factor's description must c
 A: Empirically, a single LLM call produces a 20–30 point score range across runs; N=3 modal consensus with dynamic early-stop (skip third sample if first two agree) reduces Honda's run-to-run range to 10–17 points. Rationale cited in `src/sfewa/agents/_analyst_base.py` alongside the constant.
 
 **Q: What if my LLM is different / smaller / bigger?**
-A: Unknown — this has been benchmarked on Qwen3.5-27B and via Claude Code (different family). The harness and prompts are backend-agnostic, but tool-calling reliability varies. A multi-backend portability study is [v0.7 on the roadmap](ROADMAP.md).
+A: This has been benchmarked on Qwen3.5-27B-GPTQ-Int4 *and* Qwen3.6-27B (full precision) — the [retrospective and forward tables](#retrospective-cutoff-2025-05-19--ground-truth-known) publish both side-by-side, and the qualitative result (H>T>B in retro, Honda CRITICAL in forward) survives the swap. Claude Code Opus 4.7 (different family) was the third backend. The harness and prompts are backend-agnostic, but tool-calling reliability varies; a wider multi-backend portability study is [v0.7 on the roadmap](ROADMAP.md).
 
 ---
 

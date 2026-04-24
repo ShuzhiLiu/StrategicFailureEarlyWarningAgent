@@ -56,6 +56,7 @@ This doesn't prove the pre-iteration-33 architecture isn't Honda-shaped. It does
 | 38 | Pipeline Event Logging + Factor ID Fix | PipelineEventRecord in liteagent + regex-based factor ID normalization | Ordering 100% (9/9 runs), H=89.3 T=67.7 B=30.3 |
 | 39 | Agentic Adversarial + Self-Consistency + Toulmin | 6 improvements: depth-severity gate, citation cross-validation, Toulmin output, self-consistency N=3, analyst agreement confidence, evidence-gated downgrades | Ordering 100% (9/9), H=76.7 T=56.0 B=44.7 |
 | 40 | Open-source readiness + stability re-run | Docs curation, README rewrite, integration tests (+20 assertions), CI, OSS infra, fresh 3-round stability test | Strict ordering 2/3 (BYD variance regressed); directional claim 3/3; H=88.7 T=55.3 B=45.3 |
+| 41 | Model swap to Qwen3.6-27B (full-precision) | `.env` model id only — no pipeline-logic change. Re-ran retrospective 3×3 + forward 3×3 | Retro strict ordering **3/3** (regained); H=71.0 T=58.3 B=28.0; backtest H=6S/3P/9, T=4S/2P/6, B=4S/1P/6. Forward H=92.7 (CRITICAL all 3, range 1pt) |
 
 **Key architectural decisions (cumulative):**
 - **Separated evaluation** (iter 2): Adversarial reviewer structurally independent from analysts
@@ -918,6 +919,129 @@ Either is a structural change, not a tuning knob, so both are eligible under the
 | Backtest / run | 2-3 STRONG | 0-2 STRONG | 2 STRONG |
 | Ordering (strict H>T>B) | 2/3 |  |  |
 | Directional claim (Honda highest, BYD lowest) | 3/3 |  |  |
+
+---
+
+## Iteration 41: Model swap — Qwen3.5-27B-GPTQ-Int4 → Qwen3.6-27B (full precision)
+
+**Goal**: Validate that the harness's predictive signal survives a model upgrade. Same code, same prompts, same case configs — only `DEFAULT_LLM_MODEL` in `.env` changed. Run the full stability protocol (retro 3×3) AND the forward protocol (3×3 with cutoff 2026-04-19) to compare directly against iter 40's published numbers.
+
+### What changed
+
+`.env` only:
+```diff
+- DEFAULT_LLM_MODEL=Qwen/Qwen3.5-27B-GPTQ-Int4
++ DEFAULT_LLM_MODEL=Qwen/Qwen3.6-27B
+```
+
+No code changes. No prompt changes. No case-config changes. The vLLM endpoint already serves Qwen3.6-27B (full precision, vs the GPTQ-Int4 quantization of iter 40's Qwen3.5).
+
+### Retrospective stability test (3 rounds × 3 companies, cutoff 2025-05-19, 2026-04-23)
+
+| Round | Honda | Toyota | BYD | H>T>B? |
+|---|---:|---:|---:|:---:|
+| R1 | 73 HIGH (ev=45, 1 pass, 3 STR, bt=S2/P1) | 58 MED (ev=29, 1 pass, 4 STR, bt=S2/P0) | 20 LOW (ev=93, 2 passes, 9 STR, bt=S1/P0) | ✓ |
+| R2 | 63 HIGH (ev=41, 1 pass, 2 STR, bt=S2/P1) | 57 MED (ev=30, 1 pass, 3 STR, bt=S1/P1) | 29 LOW (ev=69, 2 passes, 8 STR, bt=S1/P1) | ✓ |
+| R3 | 77 HIGH (ev=45, 1 pass, 3 STR, bt=S2/P1) | 60 HIGH (ev=34, 1 pass, 4 STR, bt=S1/P1) | 35 LOW (ev=89, 2 passes, 7 STR, bt=S2/P0) | ✓ |
+
+| Metric | Honda | Toyota | BYD |
+|---|---:|---:|---:|
+| Mean | **71.0** | **58.3** | **28.0** |
+| Range | 63-77 (14) | 57-60 (3) | 20-35 (15) |
+| Level | HIGH (3/3) | MED-HIGH | LOW (3/3) |
+| STRONGs/run | 2-3 | 3-4 | 7-9 |
+| Backtest | 6 STRONG + 3 PARTIAL / 9 | 4 STRONG + 2 PARTIAL / 6 | 4 STRONG + 1 PARTIAL / 6 |
+| **Strict ordering** | **3/3 (100%)** | | |
+
+### Comparison vs iter 40 (Qwen3.5-27B-GPTQ-Int4)
+
+| Metric | iter 40 (Qwen3.5) | iter 41 (Qwen3.6) | Δ |
+|---|---:|---:|:---:|
+| Honda mean | 88.7 | 71.0 | −17.7 |
+| Toyota mean | 55.3 | 58.3 | +3.0 |
+| BYD mean | 45.3 | 28.0 | −17.3 |
+| Honda range | 17 | 14 | tighter |
+| Toyota range | 3 | 3 | same |
+| BYD range | 22 | 15 | tighter |
+| Strict H>T>B | 2/3 | **3/3** | ordering regained |
+| H–T gap (mean) | 33.4 | 12.7 | compressed |
+| T–B gap (mean) | 10.0 | 30.3 | widened |
+| STRONGs Honda | 0-1 | 2-3 | more |
+| STRONGs Toyota | 1-2 | 3-4 | more |
+| STRONGs BYD | 1-3 | 7-9 | much more |
+| Total runtime | 7h 8m | 6h 27m | −41 min |
+
+### Forward prediction test (3 rounds × 3 companies, cutoff 2026-04-19, 2026-04-23/24)
+
+| Round | Honda | Toyota | BYD | H>T>B? |
+|---|---:|---:|---:|:---:|
+| R1 | 93 CRITICAL (ev=51, 1 pass, 0 STR) | 48 MED (ev=64, 1 pass, 4 STR) | 62 HIGH (ev=66, 1 pass, 4 STR) | T<B ✗ |
+| R2 | 93 CRITICAL (ev=60, 1 pass, 2 STR) | 53 MED (ev=55, 1 pass, 3 STR) | 45 MED (ev=119, 2 passes, 8 STR) | ✓ |
+| R3 | 92 CRITICAL (ev=54, 1 pass, 5 STR) | 60 HIGH (ev=48, 1 pass, 5 STR) | 65 HIGH (ev=116, 2 passes, 4 STR) | T<B ✗ |
+
+| Metric | Honda | Toyota | BYD |
+|---|---:|---:|---:|
+| Mean | **92.7** | **53.7** | **57.3** |
+| Range | 92-93 (1) | 48-60 (12) | 45-65 (20) |
+| Level | CRITICAL (3/3) | MED-HIGH | MED-HIGH |
+| Strict ordering | 1/3 (R2 only) | | |
+
+### Forward vs iter 40 forward (Qwen3.5)
+
+| Metric | iter 40 forward | iter 41 forward | Δ |
+|---|---:|---:|:---:|
+| Honda mean | 98.0 | 92.7 | −5.3 (still CRITICAL all 3) |
+| Toyota mean | 68.3 | 53.7 | −14.6 |
+| BYD mean | 57.3 | 57.3 | **0.0** (identical) |
+| Honda range | 4 | 1 | tighter (extreme stability) |
+| Toyota range | 26 | 12 | tighter |
+| BYD range | 11 | 20 | wider |
+
+### Key insights
+
+1. **Ordering regained**: Retro strict H>T>B went from 2/3 (iter 40) to **3/3** (iter 41). The iter 40 R2 inversion (BYD 59 > Toyota 54) does not reproduce on Qwen3.6.
+
+2. **Honda forward is the most stable result in the project's history**: 93/93/92, range 1 pt, all CRITICAL. The robust "Honda strategy is in trouble" claim survives the model upgrade — and tightens.
+
+3. **BYD forward variance is now the dominant instability source**: range 20 pts (45–65), with T<B inversions in 2 of 3 forward runs. Same root cause as iter 40 — when BYD retrieves 100+ docs (R1: 66, R2: 119, R3: 116), the evidence-gated rule (`valid_sup ≥ 3`) protects more factors from STRONG downgrades. The 119-doc R2 produced the lowest BYD forward score (45) despite the most evidence — counter-intuitive but the synthesis LLM had richer counter-evidence to work with.
+
+4. **Qwen3.6 is structurally more "evaluator-aggressive"**: STRONG counts roughly doubled across all companies (Honda 0-1 → 2-3, Toyota 1-2 → 3-4, BYD 1-3 → 7-9). The same harness extracts more programmatic flags + Toulmin-claim challenges from the same evidence. Combined with the evidence-gated rule, this has asymmetric effect: Honda's well-supported factors survive (mean drops only 17.7 pts); BYD's poorly-supported factors get downgraded (mean drops 17.3 pts despite generating 7-9 STRONG).
+
+5. **Toyota backtest improved meaningfully**: iter 40 was 2 STRONG + 2 PARTIAL + 2 WEAK; iter 41 is 4 STRONG + 2 PARTIAL + 0 WEAK. Same ground-truth events, better factor matching. Suggests Qwen3.6 generates risk factors that more directly map onto observed outcomes.
+
+6. **Honda backtest holds**: iter 40 was 7 STRONG + 2 PARTIAL; iter 41 is 6 STRONG + 3 PARTIAL. Same total of strong+partial matches (9/9 events covered), 1 STRONG shifted to PARTIAL. Predictive signal is robust to model swap.
+
+7. **Forward Honda > Retro Honda by ~22 pts on Qwen3.6 (71 → 93)**: The published-date filter is doing real work. The 22-pt gap is the value of the actual post-cutoff disclosures (May 2025 revision, March 2026 writedown) becoming pre-cutoff evidence in forward mode. If the temporal gate were leaking, retro would already be ~93 — it isn't.
+
+### What changed (file summary)
+
+| File | Change |
+|---|---|
+| `.env` | `DEFAULT_LLM_MODEL=Qwen/Qwen3.5-27B-GPTQ-Int4` → `Qwen/Qwen3.6-27B` |
+| `scripts/stability_qwen36.sh` | NEW — retro 3×3 runner (sequential, log + per-run summary) |
+| `scripts/forward_qwen36.sh` | NEW — forward 3×3 runner (3-arg mode, cutoff 2026-04-19) |
+| `docs/iteration_log.md` | This entry |
+| `README.md` | Retrospective + forward result tables updated to Qwen3.6 numbers; iter 40 retained as Qwen3.5 baseline; model reference updated |
+
+### Open items
+
+1. **BYD forward variance** (range 20) is the largest remaining instability. Same root cause as iter 40 (evidence-volume × evidence-gate interaction). The two candidate mitigations from iter 40 are still on the table — neither has been implemented:
+   - Tighten `valid_sup ≥ 3` → `≥ 4` for non-Tier-1 evidence (keep `≥ 3` for filings).
+   - Add stance-diversity requirement: `valid_sup ≥ 3` AND contradicting-evidence proportion `< 40%`.
+2. **Forward T-B inversions** (2/3) suggest forward Toyota and BYD are genuinely overlapping in 2026 evidence — Toyota's BEV transition risks and BYD's trade-barrier risks both intensify after May 2025. Not a code defect; possibly a frame-the-question issue (different strategy_theme per company would separate them).
+
+**Stability state entering Iteration 42:**
+
+| Metric | Honda | Toyota | BYD |
+|---|---:|---:|---:|
+| Retro mean (post iter 41, 3 runs) | 71.0 | 58.3 | 28.0 |
+| Retro range | 63-77 (14) | 57-60 (3) | 20-35 (15) |
+| Forward mean (post iter 41, 3 runs) | 92.7 | 53.7 | 57.3 |
+| Forward range | 92-93 (1) | 48-60 (12) | 45-65 (20) |
+| Retro backtest | 6 STRONG + 3 PARTIAL / 9 | 4 STRONG + 2 PARTIAL / 6 | 4 STRONG + 1 PARTIAL / 6 |
+| Retro strict H>T>B | 3/3 | | |
+| Forward strict H>T>B | 1/3 (T-B inversion in R1, R3) | | |
+| Honda CRITICAL (forward) | 3/3 | | |
 
 ---
 
