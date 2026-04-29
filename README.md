@@ -327,6 +327,14 @@ To save your time and avoid false expectations:
 
 ---
 
+## Regulated Finance Applicability
+
+SFEWA is not a credit decisioning, trading, AML, or investment recommendation system. Its finance relevance is at the **agent harness architecture** level: time-bounded evidence retrieval, source-attributed extraction, quality gating, adversarial review, confidence-bounded synthesis, and file-based audit artifacts.
+
+These patterns map naturally to regulated financial workflows such as counterparty due diligence, credit-watchlist research support, insurance underwriting research, and AI governance evaluation. See [Finance Applicability](docs/finance_applicability.md) for the exact mapping, boundaries, and roadmap.
+
+---
+
 ## Backtest FAQ
 
 **Q: Isn't backtesting with known outcomes circular?**
