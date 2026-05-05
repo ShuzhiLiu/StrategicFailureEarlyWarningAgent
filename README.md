@@ -24,6 +24,10 @@ The headline result: using only pre-May-2025 evidence, the harness flagged **Hon
 
 **The core claim is not *"an LLM can predict Honda."* The core claim is that with a deliberately designed ~1,000-line harness and disciplined evidence hygiene, a commodity open-weight model can produce a differentiated, auditable, reproducible risk assessment — and the differentiation lives in the harness, not the model.**
 
+![SFEWA Architecture — Planner-Generator-Evaluator pipeline with Iceberg Model depth routing, 3-phase adversarial review, and four cross-cutting concerns (temporal integrity, dead-loop protection, pipeline context injection, file-based audit trail).](docs/architecture_fig1.png)
+
+The shape of the system at a glance: four pipeline stages (Planner → Generator → Evaluator → Synthesis & Validation), two analytical scaffolds (Iceberg Model 4-layer deepening on the Generator, Independent Evaluator on the Evaluator), and four harness-level concerns that cut across every node. The result tables below are what this pipeline produced; [the Architecture section](#architecture) walks through the nodes and the LLM-driven routing edge.
+
 ---
 
 ## Stress test — Honda / Toyota / BYD
@@ -175,6 +179,8 @@ Full methodology: [docs/claude_code_benchmark.md](docs/claude_code_benchmark.md)
 ---
 
 ## Architecture
+
+The [pipeline diagram at the top of this README](#strategic-failure-early-warning-agent) is the at-a-glance view of the same architecture; the Mermaid flow below shows the explicit node-to-node transitions and the LLM-driven `proceed / reanalyze` routing edge.
 
 ```mermaid
 flowchart TD
