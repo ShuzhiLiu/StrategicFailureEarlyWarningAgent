@@ -191,6 +191,9 @@ chrome/
 # Local presentation drafts (not part of open-source distribution)
 presentations/
 
+# Private notes and roadmaps (career/strategy, not for public repo)
+private/
+
 # Pipeline run outputs (generated artifacts)
 outputs/
 

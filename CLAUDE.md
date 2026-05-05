@@ -4,23 +4,23 @@
 
 **An agent-harness engineering study.** The project frame: *Agent = Model + Harness*. Models commoditize; harnesses don't. This repo is a hands-on reference implementation of an agent harness (`liteagent`, ~1,000 LOC, 1 external dep) plus a domain application (`sfewa`) that pressure-tests the harness on a real prediction task — flagging a public company's strategic failure from timestamped pre-cutoff evidence.
 
-The architectural pattern is Planner-Generator-Evaluator. The domain task uses Qwen3.5-27B on local vLLM for reasoning, with strict evidence-driven analysis and three-layer temporal-integrity enforcement. See `docs/harness_engineering.md` for the thesis document; `docs/architecture.md` for the pipeline design; `docs/iteration_log.md` for the 40-iteration audit trail.
+The architectural pattern is Planner-Generator-Evaluator. The domain task uses Qwen3.6-27B on local vLLM for reasoning, with strict evidence-driven analysis and three-layer temporal-integrity enforcement. See `docs/harness_engineering.md` for the thesis document; `docs/architecture.md` for the pipeline design; `docs/iteration_log.md` for the 41-iteration audit trail.
 
-**Case studies** (all cutoff 2025-05-19):
-- **Honda** → HIGH-CRITICAL risk, mean 76.7 (ground truth: May 2025 target revision + March 2026 writedown)
-- **Toyota** → MEDIUM-HIGH risk, mean 56.0 (control: weak BEV execution but strong hybrid position)
-- **BYD** → MEDIUM risk, mean 44.7 (control: world's largest NEV maker, strategy succeeding)
+**Case studies** (all cutoff 2025-05-19, post iter 41 Qwen3.6-27B retrospective):
+- **Honda** → HIGH risk, mean 71.0 (ground truth: May 2025 target revision + March 2026 writedown)
+- **Toyota** → MEDIUM-HIGH risk, mean 58.3 (control: weak BEV execution but strong hybrid position)
+- **BYD** → LOW risk, mean 28.0 (control: world's largest NEV maker, strategy succeeding)
 
 **Demos**: pre-cached runs for Honda, Toyota, BYD available in `demo/` (self-contained HTML reports, no setup required).
 
-**Status**: 40 iterations complete. Pipeline v2 (agentic retrieval + 3-phase adversarial) is the primary path (`--agentic` flag). Iter 39 added self-consistency sampling (N=3), Toulmin-structured output, programmatic depth-severity + citation flags, analyst agreement confidence, and evidence-gated downgrades. Iter 40 was an open-source readiness pass with a fresh stability re-run — see `docs/iteration_log.md` for the full audit trail.
+**Status**: 41 iterations complete. Pipeline v2 (agentic retrieval + 3-phase adversarial) is the primary path (`--agentic` flag). Iter 39 added self-consistency sampling (N=3), Toulmin-structured output, programmatic depth-severity + citation flags, analyst agreement confidence, and evidence-gated downgrades. Iter 40 was an open-source readiness pass. Iter 41 swapped the reference model from Qwen3.5-27B-GPTQ-Int4 to Qwen3.6-27B (full precision) — strict H>T>B ordering recovered (3/3 retrospective rounds). See `docs/iteration_log.md` for the full audit trail.
 
 ## Tech Stack
-- **Agent framework**: `liteagent` (in-house, ~800 lines, plain Python + OpenAI SDK)
-- **LLM**: Qwen3.5-27B-GPTQ-Int4 on local vLLM (OpenAI-compatible API, no cloud dependency)
+- **Agent framework**: `liteagent` (in-house, ~1,000 lines, plain Python + OpenAI SDK)
+- **LLM**: Qwen3.6-27B on local vLLM (OpenAI-compatible API, no cloud dependency)
 - **Modes**: Thinking mode for adversarial + synthesis; non-thinking mode for extraction + analysis
 - **Package manager**: uv
-- **Testing**: pytest (51 tests)
+- **Testing**: pytest (71 tests)
 - **Linting**: ruff
 - **Type checking**: pyright
 
@@ -138,7 +138,7 @@ The system's conclusions must emerge from retrieved evidence, not LLM world know
 When results seem "too correct," suspect temporal leakage — the LLM may be using post-cutoff knowledge rather than reasoning from evidence.
 
 ### LLM structured output strategy
-Qwen3.5 may break Pydantic schemas. Each LLM-calling node should:
+Open-source LLMs may break Pydantic schemas. Each LLM-calling node should:
 1. Request structured output via explicit JSON schema in prompt
 2. On parse failure, retry once with the validation error appended
 3. On second failure, log the error, set `state["error"]`, and return partial results rather than crashing
@@ -158,16 +158,17 @@ python -m sfewa.main --case configs/cases/byd_ev_strategy.yaml --agentic
 # Repeat for rounds 2 and 3
 ```
 
-### Expected baselines (post iteration 39)
+### Expected baselines (post iteration 41, Qwen3.6-27B retrospective)
 
 | Metric | Honda | Toyota | BYD |
 |--------|-------|--------|-----|
-| **Mean** | ~77 | ~56 | ~45 |
-| **Level** | HIGH-CRITICAL | MEDIUM-HIGH | MEDIUM |
-| **Range** | 64-88 | 50-68 | 43-46 |
-| **STRONGs/run** | 4-6 | 1-4 | 4-7 |
-| **Resisted/run** | 4-6 | 0-3 | 0-2 |
-| **Adv. phases** | P1+2+3 | P1+2+3 | P1+2+3 |
+| **Mean** | ~71 | ~58 | ~28 |
+| **Level** | HIGH | MEDIUM-HIGH | LOW |
+| **Range** | 63-77 | 57-60 | 20-35 |
+| **STRONGs/run** | 2-3 | 3-4 | 7-9 |
+| **Adv. passes** | 1 | 1 | 1-2 |
+
+For the prior Qwen3.5-27B-GPTQ-Int4 baseline (iter 40, H≈89 / T≈55 / B≈45) see `docs/iteration_log.md`.
 
 **Pass criteria**: H>T>B ordering in ALL 3 rounds. A single inversion means the change introduced a regression.
 
@@ -229,15 +230,15 @@ for e in events:
 2. Check challenge counts — inflated challenge counts (>10) from dedup failure distort the synthesis LLM
 3. Check `target_factor_id` format in challenges.json — malformed IDs prevent STRONG downgrades
 
-**Score too high for BYD (>40)**:
-1. Check STRONG count — should be 1-3. If 0, check if Phase 2+3 triggered or if factor IDs are malformed
+**Score too high for BYD (>40 on Qwen3.6)**:
+1. Check STRONG count — should be 7-9. If much lower, Phase 1 isn't generating enough programmatic flags or factor IDs are malformed
 2. Check evidence stance distribution — BYD should have high contradicts_risk ratio
 3. Check if `technology_capability` claims are present — if 0, retrieval missed tech evidence
 
-**Score too low for Honda (<75)**:
-1. Check STRONG count — should be 0-1. If >2, adversarial is being too aggressive
-2. Check if EDINET filings were loaded — Honda's own disclosures drive the CRITICAL signal
-3. Check factor severity distribution — Honda should have 5+ HIGH/CRITICAL factors
+**Score too low for Honda (<60 on Qwen3.6)**:
+1. Check STRONG count — should be 2-3. If 5+, adversarial is being too aggressive and downgrading well-evidenced factors
+2. Check if EDINET filings were loaded — Honda's own disclosures drive the HIGH signal
+3. Check factor severity distribution — Honda should have 4+ HIGH/CRITICAL factors
 
 **All companies clustering at same level**:
 - All HIGH → evaluator too weak (not generating STRONG challenges for weak factors)
@@ -263,4 +264,3 @@ After confirming stability, update `docs/iteration_log.md`:
 @docs/liteagent_architecture.md
 @docs/cross_company_results.md
 @docs/iteration_log.md
-@.env
