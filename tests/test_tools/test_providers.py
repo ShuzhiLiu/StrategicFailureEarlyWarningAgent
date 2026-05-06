@@ -22,7 +22,7 @@ from sfewa.tools.filing_provider import (
     FilingRef,
     decide_cutoff,
 )
-from sfewa.tools.providers import CninfoProvider, EdinetProvider
+from sfewa.tools.providers import CninfoProvider, EdinetProvider, SecEdgarProvider
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 CORPUS = REPO_ROOT / "data" / "corpus"
@@ -39,9 +39,14 @@ def test_cninfo_provider_satisfies_protocol():
     assert isinstance(CninfoProvider(live=False), FilingProvider)
 
 
+def test_sec_edgar_provider_satisfies_protocol():
+    assert isinstance(SecEdgarProvider(live=False), FilingProvider)
+
+
 def test_provider_source_identifiers():
     assert EdinetProvider(live=False).source == "edinet"
     assert CninfoProvider(live=False).source == "cninfo"
+    assert SecEdgarProvider(live=False).source == "sec_edgar"
 
 
 # ── search() with live=False is empty (no network) ──
@@ -60,6 +65,15 @@ def test_cninfo_search_returns_empty_when_offline():
     p = CninfoProvider(live=False)
     refs = p.search(
         ticker=None, issuer_name="BYD", from_date=None,
+        to_date="2025-05-19", doc_types=None, language=None,
+    )
+    assert refs == []
+
+
+def test_sec_edgar_search_returns_empty_when_offline():
+    p = SecEdgarProvider(live=False)
+    refs = p.search(
+        ticker="TSLA", issuer_name="Tesla, Inc.", from_date=None,
         to_date="2025-05-19", doc_types=None, language=None,
     )
     assert refs == []
@@ -132,6 +146,92 @@ def test_pre_cutoff_doc_is_kept_for_edinet():
     decision = decide_cutoff(ref, cutoff_date="2025-05-19")
     assert decision == "kept"
     assert p.emit_manifest_entry(ref, decision).cutoff_decision == "kept"
+
+
+def test_post_cutoff_doc_is_rejected_for_sec_edgar():
+    """Required fixture-level assertion for SEC EDGAR. A 10-K filed AFTER
+    the cutoff must fall through `decide_cutoff` as `rejected_post_cutoff`."""
+    p = SecEdgarProvider(live=False)
+    ref = FilingRef(
+        source="sec_edgar", doc_id="0001628280-26-003952",
+        ticker="TSLA", issuer_id="0001318605",
+        issuer_name="Tesla, Inc.",
+        title="10-K (post-cutoff)",
+        doc_type="annual_report",
+        language="en",
+        release_time="2026-01-29",  # AFTER 2025-05-19 cutoff
+    )
+    decision = decide_cutoff(ref, cutoff_date="2025-05-19")
+    assert decision == "rejected_post_cutoff"
+    entry = p.emit_manifest_entry(ref, decision)
+    assert entry.cutoff_decision == "rejected_post_cutoff"
+    assert entry.source == "sec_edgar"
+
+
+def test_pre_cutoff_doc_is_kept_for_sec_edgar():
+    p = SecEdgarProvider(live=False)
+    ref = FilingRef(
+        source="sec_edgar", doc_id="0001628280-25-003063",
+        ticker="TSLA", issuer_id="0001318605",
+        issuer_name="Tesla, Inc.",
+        title="10-K (FY2024)",
+        doc_type="annual_report",
+        language="en",
+        release_time="2025-01-30",
+    )
+    decision = decide_cutoff(ref, cutoff_date="2025-05-19")
+    assert decision == "kept"
+    assert p.emit_manifest_entry(ref, decision).cutoff_decision == "kept"
+
+
+# ── SEC EDGAR extract on fixture HTML ──
+
+
+def test_sec_edgar_extract_on_fixture_html(tmp_path):
+    """Round-trip an SEC HTML fixture through SecEdgarProvider.extract():
+    every chunk has valid global offsets and the chunk text matches the
+    full text at those offsets exactly."""
+    fixture = (
+        Path(__file__).resolve().parents[1]
+        / "fixtures"
+        / "sec_edgar"
+        / "tesla_10k_excerpt.htm"
+    )
+    ref = FilingRef(
+        source="sec_edgar", doc_id="0001628280-25-003063",
+        ticker="TSLA", issuer_id="0001318605",
+        issuer_name="Tesla, Inc.",
+        title="10-K (FY2024)",
+        doc_type="annual_report",
+        language="en",
+        release_time="2025-01-30",
+    )
+    p = SecEdgarProvider(live=False, company_key="tesla", cache_dir=tmp_path)
+    doc = p.extract(fixture, ref)
+    assert len(doc.text) > 100
+    assert "Tesla" in doc.text
+    assert len(doc.chunks) >= 1
+    for c in doc.chunks:
+        assert c.doc_id == ref.doc_id
+        assert c.evidence_id.startswith("sec_edgar:0001628280-25-003063#c")
+        assert c.global_char_start >= 0
+        assert c.global_char_end > c.global_char_start
+        assert doc.text[c.global_char_start : c.global_char_end] == c.text
+
+
+def test_sec_edgar_offline_download_with_no_cache_raises(tmp_path):
+    p = SecEdgarProvider(live=False, cache_dir=tmp_path)
+    ref = FilingRef(
+        source="sec_edgar", doc_id="0000000000-00-000000",
+        ticker="TSLA", issuer_id="0001318605",
+        issuer_name="Tesla, Inc.",
+        title="missing",
+        doc_type="annual_report",
+        language="en",
+        release_time="2024-01-01",
+    )
+    with pytest.raises(FileNotFoundError):
+        p.download(ref)
 
 
 # ── Extract on cached fixtures (skip if not present) ──

@@ -8,13 +8,14 @@ For the underlying framework design, see [liteagent Architecture](liteagent_arch
 
 ## 1. System Overview
 
-SFEWA is a Planner-Generator-Evaluator system for strategic-failure early warning on public companies. Given a company, strategy theme, and temporal cutoff, it autonomously retrieves evidence, produces risk assessments from three specialist perspectives using the Iceberg Model analytical framework, challenges those assessments adversarially via Chain of Verification, and synthesizes a continuous risk score (0-100). L1 (the audit-grade pass) wraps the result in an audit envelope that proves no post-cutoff information leaked, every claim traces back to a source document, and the run is fully reproducible.
+SFEWA is a Planner-Generator-Evaluator system for strategic-failure early warning on public companies. Given a company and a temporal cutoff (and optionally a strategy theme — auto-discovered if omitted), it autonomously retrieves evidence, produces risk assessments from three specialist perspectives using the Iceberg Model analytical framework, challenges those assessments adversarially via Chain of Verification, and synthesizes a continuous risk score (0-100). The audit envelope wraps the result with proofs that no post-cutoff information leaked, every claim traces back to a source document, and the run is fully reproducible.
 
 ```
 ┌──────────────────────────────────────────────────────────────────┐
 │                SFEWA: Planner-Generator-Evaluator                │
 │                                                                  │
 │  PLANNER: Autonomous Information Gathering                       │
+│    strategy_discovery (optional — runs when theme omitted)       │
 │    init_case (LLM generates dimensions, regions, peers)          │
 │    agentic_retrieval (ToolLoopAgent: search + filings)           │
 │    → evidence_extraction (batched, temporal-filtered)            │
@@ -35,9 +36,10 @@ SFEWA is a Planner-Generator-Evaluator system for strategic-failure early warnin
 │    risk_synthesis (programmatic base + causal loop + pre-mortem) │
 │    backtest                                                      │
 │                                                                  │
-│  AUDIT ENVELOPE (L1):                                            │
+│  AUDIT ENVELOPE:                                                 │
 │    source_manifest.json   per-doc kept/rejected decisions        │
 │    citation_check         every claim → resolvable evidence      │
+│    sentence_citations     per-sentence span resolution (L2)      │
 │    provenance.json        model + commit + sha + tokens          │
 │    case/truth split       physical separation, sentinel test     │
 │    report.html            three-pillar static audit report       │
@@ -267,18 +269,20 @@ Each dimension carries: `name` (snake_case), `description`, `structural_hint` (d
 
 ### Regulatory Filing Discovery
 
-Before web search begins, the pipeline discovers and loads official regulatory filings based on the company's jurisdiction. As of L1, three jurisdictions sit behind a uniform `FilingProvider` Protocol (`sfewa/tools/filing_provider.py`):
+Before web search begins, the pipeline discovers and loads official regulatory filings based on the company's jurisdiction. Four jurisdictions sit behind a uniform `FilingProvider` Protocol (`sfewa/tools/filing_provider.py`):
 
 ```
 1. Identify jurisdiction from company name + regions + explicit case.jurisdiction
-   Honda Motor Co.   → Japan
-   BYD Company Ltd.  → China
-   Ping An (2318)    → Hong Kong (explicit jurisdiction wins over name patterns)
+   Honda Motor Co.    → Japan
+   BYD Company Ltd.   → China
+   Country Garden     → Hong Kong  (explicit jurisdiction wins over name patterns)
+   The Boeing Company → United States  (resolved via case.ticker = "BA")
 
 2. Dispatch to the appropriate FilingProvider:
-   Japan       → EdinetProvider     (FSA Electronic Disclosure)
-   China       → CninfoProvider     (巨潮资讯网, A-share market)
-   Hong Kong   → HkexProvider       (HKEXnews — see L1.2 caveat below)
+   Japan          → EdinetProvider     (FSA Electronic Disclosure)
+   China          → CninfoProvider     (巨潮资讯网, A-share market)
+   Hong Kong      → HkexProvider       (HKEXnews via DDG site search + URL auto-promotion)
+   United States  → SecEdgarProvider   (SEC EDGAR JSON API)
 
 3. Each provider implements four methods:
    search()                discover filings matching ticker/date/type/language
@@ -295,7 +299,7 @@ Before web search begins, the pipeline discovers and loads official regulatory f
    On subsequent runs, cached files load directly without API calls.
 ```
 
-The `FilingProvider` Protocol abstraction is the value-add — it lets HKEX, EDINET, CNINFO drop into the pipeline behind one interface, and the audit primitives (manifest, claim citation, provenance) operate uniformly across jurisdictions. Each adapter is intentionally *thin* — it wraps the legacy per-system module without deep refactoring.
+The `FilingProvider` Protocol abstraction is the value-add — it lets EDINET, CNINFO, HKEX, and SEC EDGAR drop into the pipeline behind one interface, and the audit primitives (manifest, claim citation, provenance) operate uniformly across jurisdictions. Each adapter is intentionally *thin* — it wraps the legacy per-system module without deep refactoring.
 
 ### Jurisdiction Status
 
@@ -303,8 +307,8 @@ The `FilingProvider` Protocol abstraction is the value-add — it lets HKEX, EDI
 |---|---|---|---|
 | EDINET (JP) | ✅ live | Scan filing dates in June/Nov windows, match by Japanese filer name, download via document API | Used live for Honda, Toyota |
 | CNINFO (CN) | ✅ live | orgId from active stock list (Chinese name or pinyin match), search annual + semi-annual by category | Used live for BYD |
-| HKEXnews (HK) | ⚠️ cache-first only | Live HKEXnews title-search is JSF/PrimeFaces; servlet endpoint returns empty for headless requests. Provider falls back to "no filings found" gracefully. | Cache-mode verified by 36 unit tests; live discovery is L2.1. To use HK filings today, manually stage PDFs under `data/corpus/{company}/hkex/`. |
-| SEC EDGAR (US) | ⛔ not implemented | — | L2.2 — `data.sec.gov` exposes a clean JSON API; easiest of the four to add. |
+| HKEXnews (HK) | ✅ live | DDG `site:hkexnews.hk filetype:pdf` queries surface the direct PDF URL pattern, which is publicly downloadable. URLs the agent surfaces during normal search are also auto-promoted to Tier-1 evidence. Optional Playwright fallback for cases DDG hasn't indexed. | Used live for Country Garden (10 filings, 92 CRITICAL) |
+| SEC EDGAR (US) | ✅ live | Ticker → CIK via `company_tickers.json`, walk `submissions/` feed, filter by date + form type (10-K → annual_report, 10-Q → interim_report, 8-K → inside_information, DEF 14A → circulars). Free JSON API, no auth. | Used live for Boeing (8 filings, 76 HIGH) |
 
 ### Page-Anchored EvidenceChunks
 
@@ -499,7 +503,7 @@ Phase 1: Chain of Verification (thinking mode)
   Produces preliminary challenges + recommendation.
 
 Phase 2: Independent Verification Search (ToolLoopAgent, non-thinking)
-  GATED by case.verifier_corpus (L1.5):
+  GATED by case.verifier_corpus:
     - "open_web"             → Phase 2 runs (DDGS text + news)
     - "allowed_sources_only" → Phase 2 SKIPPED (retrospective default)
   When running: extracts key claims from HIGH/CRITICAL factors with
@@ -549,7 +553,7 @@ For EACH risk factor, the adversarial reviewer performs:
 
 The verification agent is a `ToolLoopAgent` with a single `search()` tool that reuses `_search_web()` and `_search_news()` from the retrieval module. It receives Phase 1's key claims and autonomously searches for contradicting evidence. Selection prioritizes critical-before-high and weak-before-moderate. Budget: 8 queries.
 
-**Skipped by L1.5 gate** when the case envelope is `allowed_sources_only` (retrospective default) — visible in the audit log as `Phase 2 skipped — verifier_corpus=allowed_sources_only`.
+**Skipped** when the case envelope is `allowed_sources_only` (retrospective default) — visible in the audit log as `Phase 2 skipped — verifier_corpus=allowed_sources_only`.
 
 ### Phase 3 — Challenge Refinement
 
@@ -636,28 +640,30 @@ The synthesis prompt uses a 5-band scale (including 0-19 MINIMAL) as a calibrati
 
 ---
 
-## 9. Audit Architecture (L1)
+## 9. Audit Architecture
 
-L1 turns SFEWA from "an agent that produces a score" into "an audit-grade agent that produces a self-auditable bundle". Five primitives are computed end-to-end on every run; all live under `sfewa/tools/`:
+The audit envelope turns SFEWA from "an agent that produces a score" into "an audit-grade agent that produces a self-auditable bundle". Six primitives are computed end-to-end on every run; all live under `sfewa/tools/`:
 
 ```
 filing_provider.py     FilingRef, EvidenceChunk, ManifestEntry, FilingProvider Protocol
-providers/             EdinetProvider, CninfoProvider, HkexProvider — adapter wrappers
+providers/             EdinetProvider, CninfoProvider, HkexProvider, SecEdgarProvider
 manifest.py            build_manifest_from_docs, assert_manifest_clean, manifest_summary
-citation_check.py      validate_top_level_claims, citation_summary
+citation_check.py      validate_top_level_claims, citation_summary  (L1: per-factor)
+sentence_citation.py   validate_sentence_citations                  (L2.3: per-sentence)
 provenance.py          build_provenance (model + git + sha + tokens + manifest counts)
 html_report.py         render_report → outputs/{run_id}/report.html
 ```
 
-### The Five Audit Primitives
+### The Audit Primitives
 
 | Primitive | Artifact | Invariant | Where computed |
 |---|---|---|---|
 | **Source manifest** | `source_manifest.json` | Zero entries with `cutoff_decision == "kept"` AND `release_time > cutoff_date` | Built by retrieval node; assertion in `manifest.assert_manifest_clean()`; violations recorded in `run_summary.json` |
-| **Claim citation** | `risk_factors.json` + `evidence.json` | Every top-level claim references ≥1 `evidence_id` that resolves to evidence with a real `source_url` / `doc_id` / (`source_title`+`published_at`) | `citation_check.validate_top_level_claims()`; violations recorded as data |
+| **Claim citation (per-factor)** | `risk_factors.json` + `evidence.json` | Every top-level claim references ≥1 `evidence_id` that resolves to evidence with a real `source_url` / `doc_id` / (`source_title`+`published_at`) | `citation_check.validate_top_level_claims()`; violations recorded as data |
+| **Sentence citation (L2.3)** | `sentence_citations.json` | Each sentence in a factor's `claim`+`description` is fuzzy-matched against the cited evidence's text; resolved spans get `(doc_id, char_start, char_end)`, unresolved sentences logged | `sentence_citation.validate_sentence_citations()`; soft enforcement (data, not exception) |
 | **Provenance** | `provenance.json` | Records model id + git commit + dirty flag + case-config sha256 + truth-config sha256 + token totals + wall-clock + manifest counts | `provenance.build_provenance()` runs at end-of-pipeline |
-| **Verifier corpus (L1.5)** | adversarial Phase 2 log | Retrospective cases default to `allowed_sources_only` (no open-web verification); forward defaults to `open_web` | `apply_verifier_corpus_default()` at load + Phase 2 gate in `adversarial_review_node` |
-| **Case/truth split (L1.3)** | `configs/cases/*.yaml` ↔ `configs/truth/*.yaml` | Truth content (sentinel + ground-truth events) MUST NOT appear in any agent-visible prompt or state field | Static grep + runtime sentinel test (defense in depth) |
+| **Verifier corpus** | adversarial Phase 2 log | Retrospective cases default to `allowed_sources_only` (no open-web verification); forward defaults to `open_web` | `apply_verifier_corpus_default()` at load + Phase 2 gate in `adversarial_review_node` |
+| **Case/truth split** | `configs/cases/*.yaml` ↔ `configs/truth/*.yaml` | Truth content (sentinel + ground-truth events) MUST NOT appear in any agent-visible prompt or state field | Static grep + runtime sentinel test (defense in depth) |
 
 ### Source Manifest Detail
 
@@ -677,12 +683,11 @@ The production invariant (`assert_manifest_clean`) requires zero `kept` rows wit
 
 ### Claim-Citation Enforcement
 
-`validate_top_level_claims()` walks each `risk_factor.supporting_evidence` list and resolves each id against the evidence index. A factor passes when at least one cited id resolves to evidence carrying a real document reference. Violation modes:
-- `phantom`: cited id not in evidence
-- `no_doc_ref`: cited id resolves but evidence has no `source_url` / `doc_id` / (`source_title`+`published_at`)
-- `empty`: `supporting_evidence` is `[]`
+Two layers, in increasing strictness:
 
-L1 scope: top-level (the 10 risk factors). L2 will tighten to sentence-level + `(doc_id, global_char_start, global_char_end)` offsets.
+**Per-factor (L1)** — `validate_top_level_claims()` walks each `risk_factor.supporting_evidence` list and resolves each id against the evidence index. A factor passes when at least one cited id resolves to evidence carrying a real document reference. Violation modes: `phantom` (cited id not in evidence), `no_doc_ref` (resolves but no source reference), `empty` (no citations at all).
+
+**Per-sentence (L2.3)** — `validate_sentence_citations()` splits each factor's `claim` + `description` into sentences, then for each sentence walks the cited evidence's text looking for the longest contiguous matching block (≥25% of sentence length, ≥12 chars). Matched sentences record a `(doc_id, char_start, char_end)` span; unresolved sentences land in `audit_violations.sentence_citations_unresolved`. This is *soft enforcement* — the matcher is fuzzy (analysts paraphrase synthesized claims rather than quote verbatim) and the data is logged for the audit trail rather than raising. Resolution rates of 1-10% are typical; the value is honest signal about how traceable each conclusion is.
 
 ### Provenance Header
 
@@ -697,19 +702,19 @@ L1 scope: top-level (the 10 risk factors). L2 will tighten to sentence-level + `
 
 Two runs with identical provenance hashes will produce identical artifacts (modulo LLM sampling variance).
 
-### Verifier Corpus Propagation (L1.5)
+### Verifier Corpus Propagation
 
-A subtle leakage path that L1.5 closes: SFEWA's adversarial Phase 2 searches the open web. Pre-L1.5, retrospective runs could theoretically use post-cutoff news to verify pre-cutoff claims — much harder to spot than retrieval-side leakage.
+A subtle leakage path: SFEWA's adversarial Phase 2 searches the open web. Without this gate, retrospective runs could theoretically use post-cutoff news to verify pre-cutoff claims — much harder to spot than retrieval-side leakage.
 
 `apply_verifier_corpus_default()` runs at load time and applies the default:
 - Retrospective → `allowed_sources_only` (Phase 2 web-search disabled)
 - Forward → `open_web`
 
-Cases can override explicitly. The existing Honda/Toyota/BYD configs pin `verifier_corpus: open_web` to preserve the iter-41 baseline; new retrospective cases (Ping An, etc.) get the stricter default automatically.
+Cases can override explicitly. The existing Honda/Toyota/BYD configs pin `verifier_corpus: open_web` to preserve the iter-41 baseline; new retrospective cases (Country Garden, Boeing) get the stricter default automatically.
 
 When the gate fires, the adversarial node logs `Phase 2 skipped — verifier_corpus=allowed_sources_only` to the audit trail.
 
-### Case/Truth Split (L1.3)
+### Case/Truth Split
 
 `configs/cases/{name}.yaml` is **agent-visible**: every field can flow into prompts.
 `configs/truth/{case_id}.yaml` is **evaluation-only**: read by `backtest.py` and the loader only.
@@ -726,22 +731,21 @@ The `load_case_and_truth()` loader enforces:
 
 ### Audit Violations Are Data, Not Exceptions
 
-A late mid-stability-run discovery: assertions inside `save_run_artifacts` would kill 30+ minute runs after scoring already completed, losing all artifacts. Redesign:
+Assertions inside `save_run_artifacts` would kill 30+ minute runs after scoring already completed, losing all artifacts. The audit primitives instead record violations as data:
 
 ```python
 {
     "audit_violations": {
-        "manifest_kept_post_cutoff": [...],   # empty when clean
-        "citations_unresolved":     [...]     # empty when clean
+        "manifest_kept_post_cutoff":      [...],   # empty when clean
+        "citations_unresolved":           [...],   # empty when clean
+        "sentence_citations_unresolved":  [...]    # honest fuzzy-match signal
     }
 }
 ```
 
-The CI gate becomes a separate test that reads `run_summary.json` and asserts the violation lists are empty. Pipeline runs always complete; the audit trail is always saved. The 9-run stability re-verification + 2 new-case runs all show empty `audit_violations` arrays.
+The CI gate becomes a separate test that reads `run_summary.json`. Pipeline runs always complete; the audit trail is always saved. The standalone `assert_manifest_clean()` and `assert_claim_citations()` functions remain available — used by unit tests and as the post-hoc CI gate.
 
-The standalone `assert_manifest_clean()` and `assert_claim_citations()` functions remain available — used by unit tests (`tests/test_tools/test_manifest.py`, `test_citation_check.py`) and as the post-hoc CI gate.
-
-### The HTML Report (L1.7)
+### The HTML Report
 
 `outputs/{run_id}/report.html` is a single-file static report (embedded CSS, no external dependencies) with three pillars visible above the fold:
 
@@ -751,22 +755,21 @@ The standalone `assert_manifest_clean()` and `assert_claim_citations()` function
 
 Forward cases display `"Forward surveillance case. Not a retrospective validation."` as a banner above the verdict — the report cannot be mistaken for retrospective validation.
 
-### What L1 Does NOT Yet Enforce
+### Known Limitations
 
-- **HKEX live discovery (L2.1)** — see `private/ROADMAP.md`. HK runs use cache-first with graceful fallback to web-only evidence. JSF UI scraping requires a headless browser (Playwright); manual pre-staging of HKEX PDFs works today.
-- **Sentence-level claim citation (L2.3)** — L1 enforces top-level claim → ≥1 resolvable evidence id. Mapping each sentence to a `(doc_id, global_char_start, global_char_end)` location is L2.
-- **SEC EDGAR provider (L2.2)** — US filings not yet accessible. Easy to add — `data.sec.gov` is a clean JSON API.
+- **DDG-driven HKEX coverage is partial.** When DuckDuckGo's index doesn't surface a company's HKEX PDFs, the optional Playwright fallback kicks in if installed; otherwise HK runs fall back to web-search-only evidence. Coverage varies per issuer — Country Garden ✓, others may not surface depending on DDG's index state.
+- **Sentence-level matcher is fuzzy.** Analysts paraphrase synthesized claims; the longest-block matcher catches verbatim quotes but misses heavy paraphrases. Resolution rates of 1-10% are typical and reported honestly. Tightening would require either embedding similarity or asking the analyst LLM to emit explicit sentence→evidence_id maps.
 
 ---
 
 ## 10. Cross-Cutting Concerns
 
-### Temporal Integrity (4 layers — L1.5)
+### Temporal Integrity (4 layers)
 
 1. **Retrieval**: `published_at > cutoff_date` → hard reject in temporal filter; rejection recorded in `source_manifest.json` as `cutoff_decision: rejected_post_cutoff`
 2. **Extraction**: temporal filter on evidence items, fiscal year validation
 3. **Prompts**: "Do NOT use knowledge about events after {cutoff_date}" in all prompt templates
-4. **Adversarial verifier (L1.5)**: when `case.verifier_corpus == "allowed_sources_only"` (retrospective default), Phase 2 web-search is **skipped entirely** — no open-web verification can introduce post-cutoff news. See §9 for the full gate.
+4. **Adversarial verifier**: when `case.verifier_corpus == "allowed_sources_only"` (retrospective default), Phase 2 web-search is **skipped entirely** — no open-web verification can introduce post-cutoff news. See §9 for the full gate.
 
 ### Pipeline Context Injection
 
@@ -804,8 +807,10 @@ Dead-loop counters (`MAX_ADVERSARIAL_PASSES=2`) are safety bounds only — the L
 
 | Dimension | Static Pipeline | SFEWA (Agentic) |
 |---|---|---|
+| **Strategy theme** | **User must author** | **Optional — `strategy_discovery` agent reads filings + light web search and proposes 1-3 candidate themes ranked by scrutiny target** |
 | Analysis dimensions | Hardcoded ontology | LLM generates dimensions from case context |
-| Filing sources | Hardcoded per company | Jurisdiction routing through `FilingProvider` Protocol |
+| Filing sources | Hardcoded per company | Jurisdiction routing through `FilingProvider` Protocol (JP/CN/HK/US) |
+| **HK filing discovery** | **Manual PDF staging** | **DDG `site:hkexnews.hk` site search + URL auto-promotion: any HKEX URL the agent surfaces during normal search becomes Tier-1 evidence transparently** |
 | Search queries | Config-defined topics | Agent derives queries from dimensions + case context |
 | Technology coverage | No tech-specific search | Agent reads dimension names, searches for company tech + industry benchmarks |
 | Evidence sufficiency | Fixed threshold | Agent self-assesses against 9 criteria, stops when satisfied |
@@ -813,13 +818,13 @@ Dead-loop counters (`MAX_ADVERSARIAL_PASSES=2`) are safety bounds only — the L
 | Adversarial verification | Review available evidence only | Phase 2 ToolLoopAgent independently searches (when corpus permits) |
 | Severity calibration | Fixed rules | Emerges from depth + structural forces + programmatic flags |
 | Analyst reliability | Single LLM call per analyst | Self-consistency sampling (N=3, modal severity, dynamic early-stop) |
-| Citation integrity | Trust analyst citations | Programmatic cross-validation (phantom + stance-mismatch detection) |
+| Citation integrity | Trust analyst citations | Programmatic cross-validation: per-factor phantom/stance-mismatch + per-sentence span resolution |
 | Confidence calibration | Verbalized confidence | Empirical analyst agreement (HHI concentration, ordinal range) |
 | Risk scoring | Categorical labels | Programmatic base + LLM causal-loop adjustment (0-100) |
 | Context awareness | Each node isolated | Pipeline context injected — downstream knows upstream history |
-| **Audit envelope (L1)** | **No machine-checkable proof** | **Manifest + citation + provenance + verifier corpus + case/truth split** |
+| **Audit envelope** | **No machine-checkable proof** | **Manifest + per-factor citation + per-sentence citation + provenance + verifier corpus + case/truth split** |
 
-10+ autonomous decisions per run that alter behavior. Different companies trigger different paths and different analytical depths through the same architecture, and every run produces machine-checkable evidence that the temporal gate held and every claim is traceable.
+12+ autonomous decisions per run that alter behavior. Different companies trigger different paths and different analytical depths through the same architecture, and every run produces machine-checkable evidence that the temporal gate held and every claim is traceable to a source document.
 
 ---
 
@@ -837,27 +842,29 @@ src/sfewa/
     routing.py            LLM-driven routing functions + dead-loop constants
 
   agents/
-    init_case.py          Case expansion (LLM generates regions, peers, dimensions)
-    retrieval.py          3-pass agentic retrieval (DDGS + filings) [v1]
-    agentic_retrieval.py  Tool-loop agent retrieval (ToolLoopAgent) [v2]
-    evidence_extraction.py  LLM extraction + temporal filter (batched)
-    quality_gate.py       Evidence sufficiency gate (LLM-driven) [v1 only]
-    _analyst_base.py      Shared analyst implementation, depth/citation validation
-    industry_analyst.py   External dimensions
-    company_analyst.py    Internal dimensions
-    peer_analyst.py       Comparative dimensions
-    adversarial.py        Independent evaluator (3-phase, verifier-corpus-gated)
-    risk_synthesis.py     Programmatic + LLM scoring (causal loop analysis)
-    backtest.py           Ground truth matching (only reader of truth files)
+    init_case.py             Case expansion (LLM generates regions, peers, dimensions)
+    strategy_discovery.py    Optional pre-step: infer 1-3 candidate themes when YAML omits one
+    retrieval.py             3-pass agentic retrieval (DDGS + filings) [v1]
+    agentic_retrieval.py     Tool-loop agent retrieval (ToolLoopAgent, HKEX URL auto-promote) [v2]
+    evidence_extraction.py   LLM extraction + temporal filter (batched)
+    quality_gate.py          Evidence sufficiency gate (LLM-driven) [v1 only]
+    _analyst_base.py         Shared analyst implementation, depth/citation validation
+    industry_analyst.py      External dimensions
+    company_analyst.py       Internal dimensions
+    peer_analyst.py          Comparative dimensions
+    adversarial.py           Independent evaluator (3-phase, verifier-corpus-gated)
+    risk_synthesis.py        Programmatic + LLM scoring (causal loop analysis)
+    backtest.py              Ground truth matching (only reader of truth files)
 
   prompts/
-    init_case.py          Case expansion + dimension generation
-    retrieval.py          Seed, gap analysis, counternarrative [v1]
-    agentic_retrieval.py  Tool-loop agent system prompt + 9 coverage criteria [v2]
-    extraction.py         Evidence extraction + stance guidance
-    analysis.py           Iceberg Model framework, dimension defs, scope boundaries
-    adversarial.py        Chain of Verification, severity grading
-    synthesis.py          Scoring guidelines, calibration anchors, pre-mortem
+    init_case.py             Case expansion + dimension generation
+    strategy_discovery.py    Discovery agent system + user prompts
+    retrieval.py             Seed, gap analysis, counternarrative [v1]
+    agentic_retrieval.py     Tool-loop agent system prompt + 9 coverage criteria [v2]
+    extraction.py            Evidence extraction + stance guidance
+    analysis.py              Iceberg Model framework, dimension defs, scope boundaries
+    adversarial.py           Chain of Verification, severity grading
+    synthesis.py             Scoring guidelines, calibration anchors, pre-mortem
 
   schemas/
     config.py             CaseConfig, TruthConfig, load_case_and_truth (case/truth split)
@@ -866,30 +873,36 @@ src/sfewa/
 
   tools/
     # Core pipeline support
-    chat_log.py           Wrapper around liteagent.CallLog
-    artifacts.py          File-based artifact saving (manifest + citation + provenance + report)
-    temporal_filter.py    Date comparison utilities
+    chat_log.py             Wrapper around liteagent.CallLog
+    artifacts.py            File-based artifact saving (manifest + citations + provenance + report)
+    temporal_filter.py      Date comparison utilities
 
-    # Audit primitives (L1.4)
-    manifest.py           Source manifest builder + production invariant
-    citation_check.py     Top-level claim → resolvable evidence enforcement
-    provenance.py         Run provenance header
-    html_report.py        Single-file static HTML report (three-pillar L1.7)
+    # Audit primitives
+    manifest.py             Source manifest builder + production invariant
+    citation_check.py       Per-factor claim → resolvable evidence (L1)
+    sentence_citation.py    Per-sentence span resolution + audit-violation logging (L2.3)
+    provenance.py           Run provenance header
+    html_report.py          Single-file static HTML report (three-pillar)
 
-    # FilingProvider Protocol (L1.1)
-    filing_provider.py    FilingRef, EvidenceChunk, ManifestEntry, FilingProvider Protocol,
-                          decide_cutoff(), chunk_with_offsets()
-    filing_discovery.py   Jurisdiction detection + dispatch (JP→EDINET, CN→CNINFO, HK→HKEX)
+    # FilingProvider Protocol
+    filing_provider.py      FilingRef, EvidenceChunk, ManifestEntry, FilingProvider Protocol,
+                            decide_cutoff(), chunk_with_offsets()
+    filing_discovery.py     Jurisdiction detection + dispatch (JP→EDINET, CN→CNINFO,
+                            HK→HKEX live, US→SEC EDGAR)
+    hkex_live_discovery.py  HKEXnews live: DDG `site:hkexnews.hk` queries +
+                            URL auto-promotion + optional Playwright fallback
     providers/
-      edinet_provider.py  Japan adapter (live discovery)
-      cninfo_provider.py  China adapter (live discovery)
-      hkex_provider.py    HK adapter (cache-first; live discovery is L2.1)
+      edinet_provider.py    Japan adapter (live discovery)
+      cninfo_provider.py    China adapter (live discovery)
+      hkex_provider.py      HK adapter (live via DDG; manual cache also supported)
+      sec_edgar_provider.py US adapter (live via data.sec.gov JSON API)
 
     # Per-system clients (legacy modules wrapped by providers)
-    edinet.py             EDINET API client (Japan FSA)
-    cninfo.py             CNINFO API client (China A-share)
-    hkex.py               HKEXnews helpers (issuer resolver, taxonomy, TZ, parser)
-    corpus_loader.py      Legacy EDINET PDF loader
+    edinet.py               EDINET API client (Japan FSA)
+    cninfo.py               CNINFO API client (China A-share)
+    hkex.py                 HKEXnews helpers (issuer resolver, taxonomy, TZ, parser)
+    sec_edgar.py            SEC EDGAR client (CIK lookup, submissions feed, HTML extract)
+    corpus_loader.py        Legacy EDINET PDF loader
 
 configs/
   cases/                  Agent-visible case YAMLs (case_id, jurisdiction, ticker,

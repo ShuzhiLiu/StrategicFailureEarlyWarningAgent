@@ -31,6 +31,11 @@ from sfewa.tools.manifest import (
     manifest_summary,
 )
 from sfewa.tools.provenance import build_provenance
+from sfewa.tools.sentence_citation import (
+    sentence_citation_summary,
+    unresolved_violations,
+    validate_sentence_citations,
+)
 
 
 def get_run_dir(run_id: str, base_dir: str = "outputs") -> Path:
@@ -146,6 +151,15 @@ def save_run_artifacts(
 
     save_artifact(run_id, "evidence.json", state.get("evidence", []))
 
+    # ── Strategy discovery audit (L2.4) ──
+    # When strategy_discovery ran (case YAML had no strategy_theme, or
+    # --discover-strategies was passed), record the full candidate list
+    # so a reviewer can see what alternatives existed and why the chosen
+    # primary was used.
+    discovered = state.get("discovered_strategies")
+    if discovered:
+        save_artifact(run_id, "discovered_strategies.json", discovered)
+
     # ── Claim-citation check (L1.4-C) ──
     # Records violations as data; never raises (artifact saving must
     # always complete so the user has the full audit trail).
@@ -153,6 +167,15 @@ def save_run_artifacts(
     citation_violations = validate_top_level_claims(
         deduped_factors, state.get("evidence", []) or []
     )
+    # ── Sentence-level citation check (L2.3) ──
+    # Soft validator: per-sentence walk of each factor's claim+description,
+    # fuzzy-matching against cited evidence text. Records violations as data;
+    # the `sentence_citations.json` artifact is the full per-sentence audit.
+    sentence_results = validate_sentence_citations(
+        deduped_factors, state.get("evidence", []) or []
+    )
+    save_artifact(run_id, "sentence_citations.json", sentence_results)
+    sentence_violations = unresolved_violations(sentence_results)
     save_artifact(run_id, "risk_factors.json", deduped_factors)
     # Deduplicate challenges: cross-pass accumulation creates duplicates
     deduped_challenges = dedup_by_key(
@@ -187,12 +210,14 @@ def save_run_artifacts(
         "iteration_count": state.get("iteration_count", 0),
         "manifest": manifest_summary(manifest),
         "citations": citation_summary(deduped_factors, state.get("evidence", [])),
-        # L1.4 audit violations recorded as data. CI gate fails when these
-        # are non-empty; pipeline runs always complete so the audit trail
-        # is available for inspection.
+        "sentence_citations": sentence_citation_summary(sentence_results),
+        # L1.4 + L2.3 audit violations recorded as data. CI gate fails when
+        # these are non-empty; pipeline runs always complete so the audit
+        # trail is available for inspection.
         "audit_violations": {
             "manifest_kept_post_cutoff": manifest_violations,
             "citations_unresolved": citation_violations,
+            "sentence_citations_unresolved": sentence_violations,
         },
     }
     save_artifact(run_id, "run_summary.json", summary)

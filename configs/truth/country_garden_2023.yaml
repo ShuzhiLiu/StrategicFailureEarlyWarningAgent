@@ -1,0 +1,105 @@
+# Truth file for Country Garden retrospective case (cutoff 2023-07-31).
+# EVALUATION-ONLY — never loaded by retrieval, extraction, analyst,
+# adversarial, or synthesis code. Read by sfewa.agents.backtest only.
+
+case_id: "country_garden_2023"
+
+sentinel: "__TRUTH_SENTINEL_country_garden_2023_d4b9e1__"
+
+known_outcome: >
+  Country Garden's aggressive land-bank-funded property growth model collapsed
+  through H2 2023 and 2024. From a ~RMB 357.5B 2022 contracted-sales base
+  (already down ~35% YoY) and first-ever annual loss of RMB 6.07B in 2022,
+  the company missed two USD bond coupon payments on 2023-08-08, declared
+  inability to meet offshore obligations on 2023-10-09, and faced a
+  Hong Kong court wind-up petition from Ever Credit on 2024-01-30. Total
+  offshore debt under restructuring exceeds USD ~10B; total liabilities
+  including domestic exceed RMB ~1.4 trillion (~USD 190B equivalent).
+
+# Anchor disclosure: 2022 annual results announcement publication on
+# 2023-03-31 carried the going-concern signal in PWC's audit qualifications.
+# Cutoff 2023-07-31 leaves both the 2022 annual report and 2022 H1 interim
+# in scope — the agent reads them; the failure events all post-date 2023-08.
+outcome_disclosed_at: "2023-08-08"
+
+validation_notes: >
+  Selection rationale (per roadmap rev 4 four-criteria test):
+
+    1. Outcome has clear public disclosure date — YES, USD bond coupon
+       default 2023-08-08 → official offshore-debt default 2023-10-09 →
+       wind-up petition filed 2024-01-30.
+    2. Pre-cutoff HKEX filings contain enough signal — YES, 2022 annual
+       report (filed 2023-03-31) shows first-ever annual loss + 35%
+       contracted-sales drop + auditor going-concern qualification +
+       collapsed land-bank acquisition pace + cash-to-short-debt-ratio
+       deterioration.
+    3. Outcome is a strategic event, not pure stock-price noise — YES,
+       the leveraged land-bank-funded growth model was the declared
+       strategic moat; its collapse is a direct strategic-failure signal.
+    4. Agent does not need external news to understand the primary risk —
+       YES, the 2022 annual report alone carries the signal. Industry
+       context (China property downturn) is in the management discussion.
+
+  Pre-cutoff 10-month lead-time: cutoff 2023-07-31 vs. liquidation petition
+  2024-01-30 = 6 months. vs. official default 2023-10-09 = 2.3 months.
+  Honda's 10-month-ahead claim is comparable.
+
+ground_truth_events:
+  - event_id: "gt_001"
+    event_date: "2023-08-08"
+    description: >
+      Country Garden misses interest payments totaling ~USD 22.5M on two
+      USD-denominated senior notes due 2026 and 2030. First public default
+      signal; 30-day grace period begins.
+    event_type: "narrative_shift"
+    source_url: "https://www1.hkexnews.hk/listedco/listconews/sehk/2023/0808/"
+
+  - event_id: "gt_002"
+    event_date: "2023-08-30"
+    description: >
+      Country Garden reports H1 2023 net loss of approximately RMB 48.9
+      billion (vs. RMB 1.9 billion profit prior-year period). Contracted
+      sales fall further; net assets impaired. Profit-warning tone in
+      management commentary marks formal strategic reset.
+    event_type: "asset_writedown"
+    source_url: "https://www1.hkexnews.hk/listedco/listconews/sehk/2023/0830/"
+
+  - event_id: "gt_003"
+    event_date: "2023-09-05"
+    description: >
+      Country Garden requests onshore RMB-bond payment extension via
+      bondholder vote. Domestic debt restructuring de facto begins.
+    event_type: "target_revision"
+
+  - event_id: "gt_004"
+    event_date: "2023-10-09"
+    description: >
+      Country Garden formally announces it expects to be unable to meet
+      all offshore debt obligations on time. Signals offshore debt
+      restructuring; ~USD 11B of offshore debt enters scope.
+    event_type: "capex_reset"
+
+  - event_id: "gt_005"
+    event_date: "2024-01-30"
+    description: >
+      Hong Kong High Court wind-up petition filed by creditor Ever Credit
+      Limited over USD 205M unpaid term loan. First creditor-led
+      liquidation move; share trading halted.
+    event_type: "project_cancellation"
+
+  - event_id: "gt_006"
+    event_date: "2024-08-21"
+    description: >
+      Country Garden misses payment on RMB 970M onshore yuan-denominated
+      bond after extension period expires. Domestic bond default confirms
+      cross-currency strategic-failure spread.
+    event_type: "narrative_shift"
+
+  - event_id: "gt_007"
+    event_date: "2025-01-09"
+    description: >
+      Country Garden publishes initial offshore-debt restructuring proposal:
+      conversion of USD ~11B of debt to mandatory convertible bonds plus
+      new long-dated notes, signalling permanent equity-dilution path
+      rather than orderly debt service.
+    event_type: "capex_reset"

@@ -1,0 +1,43 @@
+# Country Garden (碧桂园) — Property-development cross-cycle growth strategy
+# Retrospective case (cutoff 2023-07-31, end-of-day Asia/Hong_Kong).
+# 8 days before the first public default signal (missed USD bond coupons on 2023-08-08).
+# Truth file: configs/truth/country_garden_2023.yaml
+#
+# Why this case: clearest strategic-failure retrospective on HKEX over the last
+# few years. Pre-cutoff signals (2022 annual report filed 2023-03-31, 2022
+# interim filed 2022-08, plus 2022 contracted-sales weakness widely covered)
+# are unambiguous. Outcome is dated and quantified: USD bond default
+# 2023-10-09 → ~$190B liquidation petition filed 2024-01-30.
+
+case_id: "country_garden_2023"
+case_type: "retrospective"
+company: "Country Garden Holdings Company Limited"
+jurisdiction: "HK"
+ticker: "2007"
+strategy_theme: "Aggressive land-bank-funded property development at scale"
+cutoff_date: "2023-07-31"
+
+# L1.5: retrospective + allowed_sources_only is the loader default;
+# pinned explicitly so the audit envelope is unambiguous.
+verifier_corpus: "allowed_sources_only"
+allowed_sources:
+  - "hkexnews"
+doc_types:
+  - "annual_report"
+  - "interim_report"
+  - "results_announcement"
+  - "inside_information"
+  - "circular"
+
+regions:
+  - "china"
+  - "hong_kong"
+  - "global"
+
+peers:
+  - "China Vanke Co., Ltd."
+  - "Longfor Group Holdings Limited"
+  - "Sunac China Holdings Limited"
+  - "China Evergrande Group"
+  - "Sino-Ocean Group Holding Limited"
+  - "Country Garden Services Holdings Company Limited"

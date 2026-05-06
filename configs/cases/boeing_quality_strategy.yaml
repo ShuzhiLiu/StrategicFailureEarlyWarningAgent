@@ -1,0 +1,48 @@
+# Boeing — Quality / Manufacturing Strategy Pre-2024 Crisis Analysis
+# Cutoff: 2023-12-31 (5 days before Alaska Airlines 1282 door-plug blowout 2024-01-05)
+# Truth file: configs/truth/boeing_quality_2024.yaml
+# Jurisdiction: US (SEC EDGAR — L2.2 acceptance case)
+
+case_id: "boeing_quality_2024"
+case_type: "retrospective"
+company: "The Boeing Company"
+jurisdiction: "US"
+ticker: "BA"
+strategy_theme: "Commercial-aerospace quality, certification, and capital strategy"
+cutoff_date: "2023-12-31"
+
+# L1.5 default for retrospective is "allowed_sources_only" (Phase 2 web-search disabled).
+# This case adopts the strict default — Boeing's pre-cutoff 10-K disclosures
+# already carry the strategic-risk signal (FAA scrutiny, supply-chain quality,
+# cost-overrun fixed-price defense contracts), so verifier need not touch
+# the open web.
+verifier_corpus: "allowed_sources_only"
+
+# Optional — LLM generates these if omitted
+regions:
+  - "united_states"
+  - "global"
+  - "europe"
+
+peers:
+  - "Airbus SE"
+  - "Lockheed Martin Corporation"
+  - "Northrop Grumman Corporation"
+  - "RTX Corporation"
+  - "General Dynamics Corporation"
+  - "Spirit AeroSystems Holdings Inc."
+  - "Embraer S.A."
+
+# Allowed source classes (used by adversarial Phase 2 when verifier_corpus
+# permits open web; here it's allowed_sources_only so this just documents
+# what counts as Tier-1).
+allowed_sources:
+  - "sec_edgar"
+  - "company_press_release"
+  - "regulatory_disclosure"
+
+allowed_doc_types:
+  - "annual_report"
+  - "interim_report"
+  - "inside_information"
+  - "circulars"

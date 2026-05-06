@@ -1,0 +1,88 @@
+# Truth file for Boeing strategic-risk retrospective case (cutoff 2023-12-31).
+# EVALUATION-ONLY — never loaded by retrieval, extraction, analyst,
+# adversarial, or synthesis code. Read by sfewa.agents.backtest only.
+
+case_id: "boeing_quality_2024"
+
+# Sentinel: unique string used by tests/test_integration/test_label_leakage.py
+# to verify no truth content reaches agent-visible prompts.
+sentinel: "__TRUTH_SENTINEL_boeing_quality_2024_e7a2f4__"
+
+known_outcome: >
+  Boeing's quality-and-execution erosion crystallized in early 2024. The
+  Alaska Airlines 1282 door-plug blowout on 2024-01-05 triggered FAA-imposed
+  production caps, leadership change, multibillion-dollar losses, and a
+  multi-month machinists strike that halted 737 / 767 / 777 production.
+  By Q3 2024 Boeing had withdrawn its 2024 free-cash-flow guidance and
+  raised $24 billion in capital to shore up its balance sheet.
+outcome_disclosed_at: "2024-01-05"
+validation_notes: >
+  A successful prediction should flag commercial-aerospace quality / FAA
+  scrutiny / supply-chain integrity as a HIGH/CRITICAL risk before the
+  Alaska 1282 incident. The pre-cutoff signal is unambiguous in 10-K
+  risk-factor disclosures (737 MAX / 787 certification status, supply
+  partner quality, fixed-price defense cost overruns, workforce gaps).
+  Forecasting the precise event is not required; flagging the strategic
+  fragility is.
+
+ground_truth_events:
+  - event_id: "gt_001"
+    event_date: "2024-01-05"
+    description: >
+      Alaska Airlines flight 1282 door-plug blowout mid-flight on a 737
+      MAX 9 aircraft. Triggers FAA grounding of the MAX 9 fleet and
+      multi-month investigation into Boeing manufacturing quality.
+    event_type: "narrative_shift"
+    source_url: "https://www.faa.gov/newsroom/faa-statement-alaska-airlines-flight-1282"
+
+  - event_id: "gt_002"
+    event_date: "2024-02-28"
+    description: >
+      FAA caps Boeing 737 MAX production at 38 aircraft per month and
+      blocks additional production-rate increases until Boeing demonstrates
+      manufacturing quality compliance. Boeing's 2024 delivery plan and
+      cash-flow trajectory materially impaired.
+    event_type: "capex_reset"
+    source_url: "https://www.faa.gov/newsroom/faa-statement-boeing-737-max-production-cap"
+
+  - event_id: "gt_003"
+    event_date: "2024-03-25"
+    description: >
+      Boeing announces CEO Dave Calhoun will step down by year-end 2024.
+      Larry Kellner steps down as Chairman; Stan Deal resigns as Boeing
+      Commercial Airplanes CEO. Comprehensive leadership reset.
+    event_type: "narrative_shift"
+    source_url: "https://boeing.mediaroom.com/2024-03-25-Boeing-Announces-Leadership-Changes"
+
+  - event_id: "gt_004"
+    event_date: "2024-04-24"
+    description: >
+      Boeing reports Q1 2024 net loss of $355M and free-cash-flow outflow
+      of $3.9B. Withdraws prior 2024 free-cash-flow targets. Confirms
+      production rate constraints will persist through 2024.
+    event_type: "target_revision"
+    source_url: "https://investors.boeing.com/investors/news/press-release-details/2024/Boeing-Reports-First-Quarter-Results/default.aspx"
+
+  - event_id: "gt_005"
+    event_date: "2024-09-13"
+    description: >
+      33,000 International Association of Machinists workers strike at
+      Boeing's Pacific Northwest facilities. Production of 737, 767, and
+      777 aircraft halts. Strike runs ~7 weeks.
+    event_type: "narrative_shift"
+
+  - event_id: "gt_006"
+    event_date: "2024-10-23"
+    description: >
+      Boeing reports Q3 2024 net loss of $6.17B (largest quarterly loss in
+      Boeing history) on $2.6B charge for 777X program delay and ~$3B
+      defense charges. Announces ~10% workforce reduction (17,000 jobs).
+    event_type: "asset_writedown"
+
+  - event_id: "gt_007"
+    event_date: "2024-10-31"
+    description: >
+      Boeing raises ~$24B in equity + mandatory convertibles to recapitalize
+      the balance sheet. Largest equity raise in Boeing history; signals
+      strategic capital-stress reset.
+    event_type: "capex_reset"

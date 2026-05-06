@@ -4,8 +4,9 @@
 
 ![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)
 ![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)
-![Tests](https://img.shields.io/badge/tests-197%20passing-brightgreen)
+![Tests](https://img.shields.io/badge/tests-302%20passing-brightgreen)
 ![liteagent](https://img.shields.io/badge/liteagent-~1%2C000%20LOC%2C%201%20dep-brightgreen)
+![Jurisdictions](https://img.shields.io/badge/jurisdictions-JP%20%C2%B7%20CN%20%C2%B7%20HK%20%C2%B7%20US-blue)
 
 ---
 
@@ -99,6 +100,17 @@ python -m sfewa.main "Honda Motor Co., Ltd." "EV electrification strategy" 2026-
 
 Skip the setup: **[Honda](demo/honda/report.html) · [Toyota](demo/toyota/report.html) · [BYD](demo/byd/report.html)** — pre-cached self-contained HTML reports, work offline.
 
+### Beyond EV — two more retrospectives, two more jurisdictions
+
+The same harness was pointed at two different strategic-failure cases in different industries and regulatory regimes. Both cases were chosen so the failure signal is in pre-cutoff primary-source filings; the agent fetches its own filings end-to-end (no manual staging).
+
+| Case | Cutoff | Score | Backtest | Tier-1 source |
+|---|---|---:|---|---|
+| **Boeing** (BA) — commercial-aerospace quality + capital strategy | 2023-12-31 (5 days before Alaska Air 1282 door-plug blowout) | **76 HIGH** | 6 STRONG + 1 PARTIAL + 1 MISS / 7 | **8 SEC EDGAR filings** (10-K, 10-Q ×2, 8-K, DEF 14A) — 159 chunks, all `source: sec_edgar` |
+| **Country Garden** (2007 HK) — leveraged property-development at scale | 2023-07-31 (8 days before USD bond coupon default) | **92 CRITICAL** | 4 STRONG + 3 PARTIAL / 7 (zero MISS) | **10 HKEX filings** auto-discovered via DuckDuckGo `site:hkexnews.hk filetype:pdf` + URL auto-promotion — all `source: hkexnews` |
+
+Boeing's pre-cutoff 10-K explicitly disclosed the 737 MAX certification + supply-chain quality risks that materialized in the 2024 Alaska Air incident, the FAA-imposed production cap, the leadership reset, and the $24B equity raise. Country Garden's 2022 annual + 2022 H1 interim already showed the first-ever annual loss + 35% contracted-sales decline + auditor going-concern qualification — pre-cutoff signal six months before the offshore default. The harness flagged both correctly with full Tier-1 audit envelope.
+
 ---
 
 ## What's in the harness — and what isn't
@@ -124,9 +136,11 @@ Scope is explicit. Production harnesses like [Claude Code](https://www.anthropic
 | **Self-consistency** | N=3 analyst sampling, modal severity + median depth, dynamic early-stop | `_analyst_base.py` |
 | **Empirical confidence** | HHI severity concentration + ordinal range across analyst outputs, injected into synthesis prompt | `graph/pipeline.py` |
 | **Evidence-gated adjustment** | STRONG challenges only downgrade factors with weak supporting-evidence quality (`valid_sup < 3`) | `agents/risk_synthesis.py` |
-| **`FilingProvider` Protocol** | Uniform interface across jurisdictions (JP→EDINET, CN→CNINFO, HK→HKEXnews); page-anchored `EvidenceChunk` with global + page-local char offsets | `sfewa/tools/filing_provider.py`, `tools/providers/*` |
+| **`FilingProvider` Protocol** | Uniform interface across **4 live jurisdictions** (JP→EDINET, CN→CNINFO, HK→HKEXnews via DDG site search + URL auto-promotion, US→SEC EDGAR JSON API); page-anchored `EvidenceChunk` with global + page-local char offsets | `sfewa/tools/filing_provider.py`, `tools/providers/*`, `tools/sec_edgar.py`, `tools/hkex_live_discovery.py` |
+| **Strategy auto-discovery** | When the case YAML omits `strategy_theme`, a discovery agent reads filings + light web search and proposes 1-3 candidate themes ranked by scrutiny target — top-1 becomes the working theme, full list saved to audit trail | `sfewa/agents/strategy_discovery.py` |
 | **Source manifest** | Per-doc audit log with `cutoff_decision ∈ {kept, rejected_post_cutoff, rejected_doc_type, rejected_language}`; production invariant: zero `kept` entries with `release_time > cutoff` | `sfewa/tools/manifest.py` |
-| **Claim-citation enforcement** | Every top-level claim must reference ≥1 `evidence_id` resolving to evidence with a real source reference; violations recorded as data, not exceptions | `sfewa/tools/citation_check.py` |
+| **Claim-citation enforcement (per-factor)** | Every top-level claim must reference ≥1 `evidence_id` resolving to evidence with a real source reference; violations recorded as data, not exceptions | `sfewa/tools/citation_check.py` |
+| **Sentence-level citation audit** | Per-sentence walk of each factor's claim text against cited evidence; resolved sentences record `(doc_id, char_start, char_end)` spans, unresolved sentences logged in `audit_violations` | `sfewa/tools/sentence_citation.py` |
 | **Provenance header** | Per-run record of model id + git commit + dirty flag + case/truth sha256 + token totals + manifest counts; reproducibility receipt | `sfewa/tools/provenance.py` |
 | **Case/truth physical split** | Agent-visible `configs/cases/` separated from eval-only `configs/truth/`; static grep + runtime sentinel test enforce no leakage | `schemas/config.py`, `tests/test_integration/test_label_leakage.py` |
 | **Static HTML report** | Single-file `report.html` with three pillars (evidence trace, provenance, controls applied); forward cases carry "Forward surveillance" banner above the fold | `sfewa/tools/html_report.py` |
@@ -159,7 +173,7 @@ Same LLM, same prompts, three companies, three different conclusions. The differ
 
 **4. Programmatic flags — counting the countable.** Seven deterministic checks (`[DEPTH_SEVERITY_MISMATCH]`, `[PHANTOM_CITATION]`, `[STANCE_MISMATCH]`, `[THIN_EVIDENCE]`, `[EVIDENCE IMBALANCE]`, `[MISSING_FORCES]`, `[MISSING_ASSUMPTION]`) are injected into the adversarial prompt as STRONG-challenge triggers. Design rule: **delegate counting to code, delegate reasoning to the LLM.** Citation existence, stance alignment, depth-severity consistency — all deterministic. Causal-loop identification, severity judgment — LLM.
 
-**5. Audit envelope — make the run prove itself.** Every run emits a self-auditable bundle so a reviewer doesn't need to trust the score. Five primitives: (a) `source_manifest.json` records each retrieved document with `cutoff_decision ∈ {kept, rejected_post_cutoff, rejected_doc_type, rejected_language}` — production invariant: zero `kept` rows past cutoff; (b) every top-level claim in `risk_factors.json` must reference ≥1 `evidence_id` that resolves to evidence with a real source URL or doc id (phantom citations recorded as data in `audit_violations`); (c) `provenance.json` carries the model id, git commit, dirty flag, case + truth file sha256, token totals, and wall-clock — two runs with identical provenance hashes produce identical artifacts modulo sampling; (d) ground-truth events live in `configs/truth/` and are *physically* separate from agent-visible `configs/cases/` — defended by both static grep and a runtime sentinel test that walks the entire pipeline state for a unique per-case sentinel string; (e) `report.html` is a single-file static surface where a reviewer can verify all of the above without running anything. Violations record as data (in `run_summary.json["audit_violations"]`), not as exceptions — long runs always finish; the audit trail is always saved. Audit architecture detail: [docs/architecture.md §9](docs/architecture.md).
+**5. Audit envelope — make the run prove itself.** Every run emits a self-auditable bundle so a reviewer doesn't need to trust the score. Six primitives: (a) `source_manifest.json` records each retrieved document with `cutoff_decision ∈ {kept, rejected_post_cutoff, rejected_doc_type, rejected_language}` — production invariant: zero `kept` rows past cutoff; (b) every top-level claim in `risk_factors.json` must reference ≥1 `evidence_id` that resolves to evidence with a real source URL or doc id (phantom citations recorded as data in `audit_violations`); (c) **per-sentence citation** — each sentence in a factor's claim is fuzzy-matched against the cited evidence's text; resolved sentences record `(doc_id, char_start, char_end)` spans, unresolved sentences logged so reviewers can see which conclusions trace cleanly to source spans and which are synthesis (resolution rates 1-10% — analysts paraphrase; the data is honest signal not failure); (d) `provenance.json` carries the model id, git commit, dirty flag, case + truth file sha256, token totals, and wall-clock — two runs with identical provenance hashes produce identical artifacts modulo sampling; (e) ground-truth events live in `configs/truth/` and are *physically* separate from agent-visible `configs/cases/` — defended by both static grep and a runtime sentinel test that walks the entire pipeline state for a unique per-case sentinel string; (f) `report.html` is a single-file static surface where a reviewer can verify all of the above without running anything. Violations record as data (in `run_summary.json["audit_violations"]`), not as exceptions — long runs always finish; the audit trail is always saved. Audit architecture detail: [docs/architecture.md §9](docs/architecture.md).
 
 Full technical reference: [docs/harness_engineering.md](docs/harness_engineering.md) maps these layers back to the production-agent literature.
 
@@ -214,7 +228,7 @@ flowchart TD
 
 **Planner** (retrieval) — **Generator** (3 parallel analysts) — **Evaluator** (3-phase adversarial) — **Synthesizer** (continuous score) — **Validator** (backtest).
 
-8 pipeline nodes; 1 LLM-driven routing decision; 2 tool-loop sub-agents (retrieval + adversarial Phase 2); 10+ autonomous depth and coverage decisions per run. Full system design: [docs/architecture.md](docs/architecture.md). Framework-internal design: [docs/liteagent_architecture.md](docs/liteagent_architecture.md).
+8 pipeline nodes (+ optional `strategy_discovery` preprocessing when the case YAML omits a theme); 1 LLM-driven routing decision; 3 tool-loop sub-agents (retrieval + adversarial Phase 2 + strategy discovery); 12+ autonomous depth and coverage decisions per run. Full system design: [docs/architecture.md](docs/architecture.md). Framework-internal design: [docs/liteagent_architecture.md](docs/liteagent_architecture.md).
 
 ---
 
@@ -260,26 +274,43 @@ PYTHONPATH=src uv run python -m sfewa.main \
 PYTHONPATH=src uv run python -m sfewa.main \
     --case configs/cases/honda_ev_pre_reset.yaml --agentic
 
-# HK retrospective (Ping An, verifier_corpus=allowed_sources_only — Phase 2 web-search disabled)
+# US retrospective — Boeing, autoresolves CIK from ticker, fetches SEC EDGAR filings
 PYTHONPATH=src uv run python -m sfewa.main \
-    --case configs/cases/ping_an_integrated_finance.yaml --agentic
+    --case configs/cases/boeing_quality_strategy.yaml --agentic
+
+# HK retrospective — Country Garden, agent fetches HKEX filings via DDG site search
+# (verifier_corpus=allowed_sources_only — Phase 2 web-search disabled for retrospectives)
+PYTHONPATH=src uv run python -m sfewa.main \
+    --case configs/cases/country_garden_property_strategy.yaml --agentic
 
 # HK forward surveillance (Tencent, no truth file, "Forward surveillance" banner in report)
 PYTHONPATH=src uv run python -m sfewa.main \
     --case configs/cases/tencent_ai_strategic_transformation.yaml --agentic
 
-PYTHONPATH=src uv run pytest   # 197 tests, <10s
+# Strategy auto-discovery — when the case YAML omits `strategy_theme`, the agent
+# reads filings + light web search and proposes 1-3 candidate themes. Top-1
+# becomes the working theme, full candidate list saved to discovered_strategies.json.
+PYTHONPATH=src uv run python -m sfewa.main \
+    --case configs/cases/some_case_without_theme.yaml --agentic
+
+# Or force re-discovery on a case that already has a theme (audit-only — primary kept):
+PYTHONPATH=src uv run python -m sfewa.main \
+    --case configs/cases/honda_ev_pre_reset.yaml --agentic --discover-strategies
+
+PYTHONPATH=src uv run pytest   # 302 tests, <10s
 ```
 
 Each run drops a self-auditable bundle under `outputs/{case_id}_{timestamp}/`:
 
 ```
-risk_factors.json   evidence.json        challenges.json     backtest_events.json
-risk_memo.md        run_summary.json     run_metadata.json   llm_history.jsonl
-source_manifest.json   provenance.json   report.html
+risk_factors.json       evidence.json        challenges.json    backtest.json
+risk_memo.md            run_summary.json     run_metadata.json  llm_history.jsonl
+source_manifest.json    provenance.json      sentence_citations.json
+discovered_strategies.json   (only when discovery ran)
+report.html
 ```
 
-`run_summary.json["audit_violations"]` carries the post-hoc audit gate (manifest cleanliness + citation resolution); a CI check reads that field and fails the build if it isn't empty. `report.html` is the reviewer-facing surface — open it to verify the run before trusting the score.
+`run_summary.json["audit_violations"]` carries the post-hoc audit gate (manifest cleanliness, per-factor citation resolution, per-sentence span resolution); a CI check reads that field and fails the build if it isn't empty. `report.html` is the reviewer-facing surface — open it to verify the run before trusting the score.
 
 ### 3. LLM backend
 
@@ -312,7 +343,8 @@ src/liteagent/       # Harness toolkit. 10 modules, ~1,000 LOC, 1 external dep (
 src/sfewa/           # Domain application built on the harness.
   graph/pipeline.py  # 8-node pipeline (v2, --agentic)
   agents/            # One file per node
-    agentic_retrieval.py
+    strategy_discovery.py   # Optional pre-step: infer 1-3 themes when YAML omits one
+    agentic_retrieval.py    # ToolLoopAgent: search + filings, with HKEX URL auto-promote
     _analyst_base.py        # Iceberg Model + self-consistency sampling
     adversarial.py          # 3-phase: CoVe + search + refinement (verifier-corpus-gated)
     risk_synthesis.py       # Programmatic base + LLM adjustment
@@ -320,36 +352,41 @@ src/sfewa/           # Domain application built on the harness.
     ...
   prompts/           # Prompt templates (not inline strings)
   schemas/
-    config.py        #   CaseConfig, TruthConfig, load_case_and_truth (case/truth split)
+    config.py        #   CaseConfig (strategy_theme optional), TruthConfig, load_case_and_truth
     state.py         #   PipelineState (case_type, audit_meta, source_manifest)
   tools/
-    filing_provider.py      # FilingProvider Protocol + EvidenceChunk (page + global offsets)
-    providers/{edinet,cninfo,hkex}_provider.py
-    filing_discovery.py     # Jurisdiction routing (JP→EDINET, CN→CNINFO, HK→HKEXnews)
-    {edinet,cninfo,hkex}.py # Per-system clients (legacy modules wrapped by providers)
-    manifest.py             # Source manifest + cutoff invariant
-    citation_check.py       # Top-level claim → resolvable evidence
-    provenance.py           # Per-run reproducibility receipt
-    html_report.py          # Single-file three-pillar audit report
-    artifacts.py            # Bundle save (audit_violations as data, never exceptions)
+    filing_provider.py        # FilingProvider Protocol + EvidenceChunk (page + global offsets)
+    providers/{edinet,cninfo,hkex,sec_edgar}_provider.py
+    filing_discovery.py       # Jurisdiction routing (JP→EDINET, CN→CNINFO, HK→HKEX, US→SEC EDGAR)
+    hkex_live_discovery.py    # HKEXnews live: DDG site search + URL auto-promote + Playwright fallback
+    sec_edgar.py              # SEC EDGAR client (CIK lookup, submissions feed, HTML extract)
+    {edinet,cninfo,hkex}.py   # Per-system clients (legacy modules wrapped by providers)
+    manifest.py               # Source manifest + cutoff invariant
+    citation_check.py         # Per-factor claim → resolvable evidence
+    sentence_citation.py      # Per-sentence span resolution (L2.3, soft enforcement)
+    provenance.py             # Per-run reproducibility receipt
+    html_report.py            # Single-file three-pillar audit report
+    artifacts.py              # Bundle save (audit_violations as data, never exceptions)
     chat_log.py temporal_filter.py corpus_loader.py
 
 configs/cases/       # Agent-visible case YAMLs (case_id, jurisdiction, ticker,
                      # allowed_sources, doc_types, verifier_corpus, ...)
                      #   honda_ev_pre_reset.yaml, toyota_ev_strategy.yaml, byd_ev_strategy.yaml
-                     #   ping_an_integrated_finance.yaml (HK retrospective, 2024-12-31)
+                     #   boeing_quality_strategy.yaml (US retrospective, 2023-12-31)
+                     #   country_garden_property_strategy.yaml (HK retrospective, 2023-07-31)
                      #   tencent_ai_strategic_transformation.yaml (HK forward, 2026-04-19)
 configs/truth/       # EVAL-ONLY truth YAMLs (sentinel + ground-truth events).
                      # Read by backtest.py only; runtime sentinel test enforces no leakage.
 demo/                # Pre-cached runs for immediate review (incl. report.html)
 docs/                # architecture.md (12 sections incl. §9 Audit Architecture),
-                     # iteration_log.md (42 iterations), harness_engineering.md, ...
-tests/               # 197 tests (all pass in <10s)
-  test_tools/        #   filing_provider, providers, manifest, citation_check,
-                     #   provenance, html_report, hkex (36), ...
+                     # iteration_log.md (43 iterations), harness_engineering.md, ...
+tests/               # 302 tests (all pass in <10s; +1 skipped for optional Playwright)
+  test_tools/        #   filing_provider, providers, manifest, citation_check, sec_edgar,
+                     #   sentence_citation, hkex_live_discovery, provenance, html_report, ...
+  test_agents/       #   test_strategy_discovery.py (parser + integration via mocked LLM)
   test_integration/  #   test_label_leakage.py (static grep + runtime sentinel)
   test_schemas/      #   test_verifier_corpus_default.py
-  fixtures/hkex/     #   stocklist + titlesearch fixtures (live-network-free)
+  fixtures/{hkex,sec_edgar}/  # cached HTML/JSON fixtures (live-network-free)
 ```
 
 ---
@@ -366,7 +403,7 @@ To save your time and avoid false expectations:
 **Where this harness is designed to work:**
 - Capital-intensive, multi-year strategic bets (EV transition, cloud platform, M&A integration, pharma pipeline).
 - Public companies with ≥20 findable pieces of pre-cutoff evidence.
-- Jurisdictions with accessible primary filings (Japan via EDINET, China via CNINFO, Hong Kong via HKEXnews — cache-first; live HKEXnews discovery and SEC EDGAR are not yet implemented; other markets fall back to web search).
+- Four jurisdictions with live primary-filing discovery: Japan via EDINET, China via CNINFO, Hong Kong via HKEXnews (DuckDuckGo `site:hkexnews.hk` queries surface the public PDF archive; URL auto-promotion during regular search also Tier-1-promotes any HKEX URL the agent surfaces), United States via SEC EDGAR (free `data.sec.gov` JSON API). Other markets fall back to web search.
 
 **Where it will underperform or fail:**
 - **Fraud / forensic accounting** — requires statement-level analysis, not strategic reasoning.
@@ -393,8 +430,8 @@ A: Only if the model can see post-cutoff data. It can't. Temporal integrity is e
 **Q: Isn't ground-truth events in the case config leaking the answer?**
 A: No, and the L1 audit envelope makes this enforceable rather than just stated. Ground-truth events live in `configs/truth/{case_id}.yaml` — a *physically separate* file from the agent-visible `configs/cases/{case_id}.yaml`. The truth file is read by exactly one module (`src/sfewa/agents/backtest.py`, the scorer), never by any reasoning node. Two layers of defense: (a) **static grep** scans `agents/`, `prompts/`, and `tools/` for forbidden tokens (`configs/truth`, `TruthConfig`, `load_truth`) and fails CI if anything but `backtest.py` references them; (b) **runtime sentinel test** — each truth YAML carries a unique string like `__TRUTH_SENTINEL_honda_ev_2025_b91c3d__`; the test calls `build_initial_state_from_case()` and walks every string in the resulting state, asserting the sentinel does not appear anywhere except inside the truth file. Verified to fail loudly when leakage is injected (negative-case test). Code: [tests/test_integration/test_label_leakage.py](tests/test_integration/test_label_leakage.py).
 
-**Q: 42 iterations on Honda — isn't this overfit?**
-A: Iterations 1–32 used Honda as primary signal. Iteration 33 introduced Toyota + BYD as held-out companies. Post-iteration 33, no change targets a specific company — all changes are structural (agentic retrieval, filing discovery, tech-aware search, audit envelope, FilingProvider Protocol) or generic (Toulmin output, self-consistency sampling, evidence-gated downgrades). Iteration 42 (the L1 audit envelope) makes overfitting *machine-checkable*: every run now emits `source_manifest.json` (cutoff invariant), `audit_violations` in `run_summary.json` (citation invariant), and `provenance.json` (model + commit + sha). Pre-cutoff leakage now fails an assertion; phantom citations now fail an assertion; runs that would have looked plausible without these checks now have to prove they're legitimate. See [docs/iteration_log.md](docs/iteration_log.md) for the before/after on each change.
+**Q: 43 iterations on Honda — isn't this overfit?**
+A: Iterations 1–32 used Honda as primary signal. Iteration 33 introduced Toyota + BYD as held-out companies. Post-iteration 33, no change targets a specific company — all changes are structural (agentic retrieval, filing discovery, tech-aware search, audit envelope, FilingProvider Protocol, HKEX live, SEC EDGAR, sentence-level citation, strategy auto-discovery) or generic (Toulmin output, self-consistency sampling, evidence-gated downgrades). Iterations 42–43 (the audit envelope + Layer 2) make overfitting *machine-checkable*: every run now emits `source_manifest.json` (cutoff invariant), `audit_violations` in `run_summary.json` (per-factor + per-sentence citation invariants), and `provenance.json` (model + commit + sha). Pre-cutoff leakage records as data; phantom citations record as data; runs that would have looked plausible without these checks now have to *prove* they're legitimate. The Boeing (US) and Country Garden (HK) cases added in iter 43 are independent retrospectives validating that the same harness works on jurisdictions and industries Honda didn't shape. See [docs/iteration_log.md](docs/iteration_log.md) for the before/after on each change.
 
 **Q: How do you know "STRONG" is a true positive, not a generous label?**
 A: STRONG is defined narrowly: the analyst-generated factor's description must causally predict the post-cutoff event. For Honda, `COM001 capital_allocation: $4.48B EV losses vs 10T yen commitment` matches the May 2025 target revision (target cut from 10T → 7T yen). PARTIAL means the factor covers the same risk class but differs on specifics (e.g., scale or timing). The backtest matcher is in `src/sfewa/agents/backtest.py` and is auditable.
@@ -414,7 +451,7 @@ A: This has been benchmarked on Qwen3.5-27B *and* Qwen3.6-27B — the [retrospec
 - **[docs/architecture.md](docs/architecture.md)** — System design, node contracts, Iceberg Model, 3-phase adversarial, state management.
 - **[docs/liteagent_architecture.md](docs/liteagent_architecture.md)** — Framework design, module map, patterns encoded, comparison vs LangChain/LangGraph.
 - **[docs/cross_company_results.md](docs/cross_company_results.md)** — Honda / Toyota / BYD risk profiles, evidence stance distributions, backtest details.
-- **[docs/iteration_log.md](docs/iteration_log.md)** — All 42 iterations: what we tried, what we learned, what we changed. Iter 42 is the L1 audit envelope (FilingProvider Protocol, source manifest, claim-citation, provenance, verifier-corpus gate, HKEX provider, two new cases).
+- **[docs/iteration_log.md](docs/iteration_log.md)** — All 43 iterations: what we tried, what we learned, what we changed. Iter 42 shipped the audit envelope (FilingProvider Protocol, source manifest, per-factor citation, provenance, verifier-corpus gate, HKEX provider, case/truth split). Iter 43 closed Layer 2: HKEX live discovery via DDG site search + URL auto-promotion, SEC EDGAR provider (4th jurisdiction), per-sentence citation audit, optional `strategy_theme` with auto-discovery, plus Boeing (US) and Country Garden (HK) retrospectives.
 - **[docs/claude_code_benchmark.md](docs/claude_code_benchmark.md)** — Independent-agent benchmark methodology and results.
 - **[docs/essays/](docs/essays/)** — Supplementary: `framework_anti_patterns.md` (why not LangChain/LangGraph), `agentic_architecture_research.md` (production-agent survey that informs the harness design).
 

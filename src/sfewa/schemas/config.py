@@ -73,9 +73,12 @@ class CaseConfig(BaseModel):
     NOT a field on this model — it lives in TruthConfig in configs/truth/.
     """
 
-    # Required — the minimum input
+    # Required — minimum input is now (company, cutoff_date). strategy_theme
+    # is optional as of L2.4: when omitted, the strategy_discovery agent
+    # infers it from filings + recent news (top-1 candidate becomes the
+    # working theme; full candidate list logged to run audit trail).
     company: str
-    strategy_theme: str
+    strategy_theme: str | None = None
     cutoff_date: str  # ISO YYYY-MM-DD
 
     @field_validator("cutoff_date", mode="before")

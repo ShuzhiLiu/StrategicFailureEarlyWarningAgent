@@ -60,6 +60,34 @@ _HONGKONG_PATTERNS = [
     "jd.com", "alibaba group", "xiaomi corporation",
 ]
 
+# Hong Kong company → HKEX ticker map. Used by L2.1 live discovery to
+# resolve a company name to the stock_id needed for HKEXnews title-search.
+# Add entries when new HK retrospective / forward cases land. Production
+# code should prefer reading `audit_meta.ticker` from the case YAML when
+# available — this map is the fallback for tickerless code paths.
+_HONGKONG_TICKER_MAP: dict[str, str] = {
+    "ping an": "2318",
+    "hsbc": "0005",
+    "aia": "1299",
+    "prudential": "2378",
+    "hong kong exchanges": "0388",
+    "tencent holdings": "0700",
+    "meituan": "3690",
+    "jd.com": "9618",
+    "alibaba group": "9988",
+    "xiaomi corporation": "1810",
+}
+
+# Patterns for identifying US-listed companies (NYSE / NASDAQ).
+# A small set of EV / tech / industrial peers; SEC EDGAR's CIK lookup
+# handles the long tail since search() can resolve any ticker.
+_US_PATTERNS = [
+    "tesla", "ford", "general motors", "rivian", "lucid",
+    "apple", "microsoft", "alphabet", "amazon", "meta platforms",
+    "nvidia", "intel", "qualcomm", "boeing",
+    "exxon", "chevron",
+]
+
 # Keywords for filtering EV-relevant pages from large filings
 # Bilingual: English + Japanese + Chinese
 _STRATEGY_KEYWORDS = [
@@ -122,6 +150,9 @@ def identify_jurisdiction(
     for pattern in _CHINA_PATTERNS:
         if pattern in name_lower:
             return "china"
+    for pattern in _US_PATTERNS:
+        if pattern in name_lower:
+            return "united_states"
 
     # Fall back to region hints
     if "hong_kong" in regions_lower or "hong kong" in regions_lower or "hongkong" in regions_lower:
@@ -130,6 +161,14 @@ def identify_jurisdiction(
         return "japan"
     if "china" in regions_lower or "shenzhen" in regions_lower or "shanghai" in regions_lower:
         return "china"
+    if (
+        "united_states" in regions_lower
+        or "united states" in regions_lower
+        or "usa" in regions_lower
+        or "us" in regions_lower
+        or "north america" in regions_lower
+    ):
+        return "united_states"
 
     return None
 
@@ -417,6 +456,8 @@ def discover_and_load_filings(
     company: str,
     cutoff_date: str,
     regions: list[str] | None = None,
+    *,
+    ticker: str | None = None,
 ) -> list[dict]:
     """Discover and load regulatory filings for a company.
 
@@ -424,6 +465,12 @@ def discover_and_load_filings(
     2. Searches the appropriate filing system for company filings
     3. Downloads PDFs to local cache
     4. Extracts text, filters for relevant content, chunks
+
+    Args:
+        ticker: Stock ticker from `case.ticker` (audit_meta.ticker). When
+            present, used as the primary issuer lookup key (more stable
+            than corporate-name fuzzy matching). Currently consumed by
+            the SEC EDGAR provider.
 
     Returns:
         List of document dicts compatible with retrieved_docs format.
@@ -446,22 +493,233 @@ def discover_and_load_filings(
     if jurisdiction == "hong_kong":
         return _discover_and_load_hkex(company, cutoff_date)
 
+    if jurisdiction == "united_states":
+        return _discover_and_load_sec_edgar(company, cutoff_date, ticker=ticker)
+
     return []
+
+
+def _discover_and_load_sec_edgar(
+    company: str, cutoff_date: str, *, ticker: str | None = None
+) -> list[dict]:
+    """SEC EDGAR discovery for US-listed companies (L2.2).
+
+    Cache-first: any HTML files already in data/corpus/{company_key}/sec_edgar/
+    are loaded and chunked. Live discovery uses the SEC EDGAR JSON API
+    (`data.sec.gov/submissions/`) — no scraping, no auth.
+    """
+    from sfewa.tools.providers.sec_edgar_provider import SecEdgarProvider, sha256_of_file
+    from sfewa.tools.sec_edgar import (
+        classify_filing,
+        extract_text_from_html,
+        find_filings,
+        get_submissions,
+        lookup_cik,
+        primary_document_url,
+    )
+
+    name_lower = company.lower()
+    company_key = "unknown"
+    for pattern in _US_PATTERNS:
+        if pattern in name_lower:
+            company_key = pattern.replace(" ", "_")
+            break
+
+    cache_dir = CORPUS_BASE / company_key / "sec_edgar"
+
+    # Cache-first path: load any HTMLs that look like SEC EDGAR primary docs.
+    cached_html = list(cache_dir.glob("*.htm")) if cache_dir.exists() else []
+    if cached_html:
+        reporting.log_action(f"Found {len(cached_html)} cached SEC EDGAR filings", {
+            "company": company_key,
+            "dir": str(cache_dir),
+        })
+        return _load_cached_sec_filings(cache_dir, cached_html, company_key)
+
+    # Live discovery via SEC EDGAR JSON API.
+    # Try `ticker` first (most stable lookup key), then fall back to company name.
+    reporting.log_action(f"Discovering SEC EDGAR CIK for {company}")
+    cik: str | None = None
+    if ticker:
+        cik = lookup_cik(ticker)
+        if cik is not None:
+            reporting.log_action(f"Resolved CIK by ticker: {ticker} → {cik}")
+    if cik is None:
+        cik = lookup_cik(company)
+    if cik is None:
+        reporting.log_action("SEC EDGAR CIK not found — skipping regulatory filings", {
+            "company": company,
+            "ticker": ticker,
+        })
+        return []
+    reporting.log_action(f"Found SEC EDGAR CIK: {cik}")
+
+    submissions = get_submissions(cik)
+    if not submissions:
+        reporting.log_action("No SEC EDGAR submissions feed available")
+        return []
+
+    filings = find_filings(cik, cutoff_date=cutoff_date, submissions_payload=submissions)
+    if not filings:
+        reporting.log_action("No SEC EDGAR filings found before cutoff")
+        return []
+
+    reporting.log_action(f"Found {len(filings)} SEC EDGAR filings", {
+        "forms": sorted(set(f["form"] for f in filings)),
+    })
+
+    # Use the provider's download() so we benefit from rate limiting + cache layout
+    provider = SecEdgarProvider(company_key=company_key, live=True)
+    docs: list[dict] = []
+    for f in filings:
+        doc_id = f["accession_number"]
+        provider._meta[doc_id] = f  # noqa: SLF001 — populating cache for download
+        from sfewa.tools.filing_provider import FilingRef
+
+        our_doc_type = classify_filing(f["form"])
+        url = primary_document_url(f["cik"], doc_id, f["primary_document"])
+        ref = FilingRef(
+            source="sec_edgar",
+            doc_id=doc_id,
+            ticker=None,
+            issuer_id=f["cik"],
+            issuer_name=submissions.get("name", company),
+            title=f.get("primary_doc_description") or f["form"],
+            doc_type=our_doc_type,
+            language="en",
+            release_time=f["filing_date"],
+            url=url,
+        )
+
+        try:
+            html_path = provider.download(ref)
+        except Exception as e:
+            reporting.log_action("SEC EDGAR download failed", {"acc": doc_id, "err": str(e)[:100]})
+            continue
+
+        text = extract_text_from_html(html_path)
+        if not text:
+            reporting.log_action(f"No text extracted from {doc_id}")
+            continue
+
+        # Chunk identically to other providers
+        chunks: list[str] = []
+        chunk_size = 4000
+        if len(text) > chunk_size + 500:
+            for start in range(0, len(text), chunk_size):
+                chunk = text[start : start + chunk_size]
+                if chunk.strip():
+                    chunks.append(chunk)
+        else:
+            chunks = [text]
+
+        for i, chunk in enumerate(chunks):
+            suffix = f" (Section {i + 1}/{len(chunks)})" if len(chunks) > 1 else ""
+            docs.append({
+                "title": f"[SEC EDGAR] {ref.title}{suffix}",
+                "snippet": chunk,
+                "link": url,
+                "source": "sec_edgar",
+                "source_type": "company_filing",
+                "credibility_tier": "tier1_primary",
+                "published_at": f["filing_date"],
+            })
+
+        reporting.log_action("Loaded SEC EDGAR filing", {
+            "form": f["form"],
+            "type": our_doc_type,
+            "filed": f["filing_date"],
+            "chunks": len(chunks),
+            "sha256": sha256_of_file(html_path)[:12],
+        })
+
+    return docs
+
+
+def _load_cached_sec_filings(
+    cache_dir: Path,
+    html_files: list[Path],
+    company_key: str,
+) -> list[dict]:
+    """Load previously cached SEC EDGAR filings.
+
+    Filename pattern: {accession}_{doc_type}_{filing_date}.htm
+        e.g., 0001628280-25-003063_annual_report_2025-01-30.htm
+    """
+    from sfewa.tools.sec_edgar import extract_text_from_html
+
+    docs: list[dict] = []
+    for html_path in sorted(html_files):
+        filename = html_path.name
+        # Infer doc type from filename
+        if "annual_report" in filename:
+            doc_type = "annual_report"
+        elif "interim_report" in filename:
+            doc_type = "interim_report"
+        elif "inside_information" in filename:
+            doc_type = "inside_information"
+        elif "circulars" in filename:
+            doc_type = "circulars"
+        else:
+            doc_type = "other"
+
+        filed_date = _infer_date_from_filename(filename)
+
+        text = extract_text_from_html(html_path)
+        if not text:
+            continue
+
+        # Chunk identically to other cached loaders
+        chunks: list[str] = []
+        chunk_size = 4000
+        if len(text) > chunk_size + 500:
+            for start in range(0, len(text), chunk_size):
+                chunk = text[start : start + chunk_size]
+                if chunk.strip():
+                    chunks.append(chunk)
+        else:
+            chunks = [text]
+
+        title = f"{company_key.replace('_', ' ').title()} {doc_type.replace('_', ' ').title()}"
+
+        for i, chunk in enumerate(chunks):
+            suffix = f" (Section {i + 1}/{len(chunks)})" if len(chunks) > 1 else ""
+            docs.append({
+                "title": f"[SEC EDGAR] {title}{suffix}",
+                "snippet": chunk,
+                "link": f"sec_edgar:{html_path.stem}",
+                "source": "sec_edgar",
+                "source_type": "company_filing",
+                "credibility_tier": "tier1_primary",
+                "published_at": filed_date,
+            })
+
+        reporting.log_action("Loaded cached SEC EDGAR filing", {
+            "file": filename,
+            "type": doc_type,
+            "chunks": len(chunks),
+        })
+
+    return docs
 
 
 def _discover_and_load_hkex(company: str, cutoff_date: str) -> list[dict]:
     """HKEXnews discovery for HK-listed companies.
 
-    Cache-first: any PDFs already in data/corpus/{company}/hkex/ are loaded
-    and chunked. Live HKEXnews title-search is JSF-form-driven and resists
-    headless scraping; live discovery is intentionally a no-op until the
-    Layer 2 hardening pass adds a stable fetch path.
+    Two-stage discovery (L2.1):
+        1. Cache-first: load any PDFs already in data/corpus/{company}/hkex/.
+        2. Live discovery: when no cache exists AND Playwright is installed,
+           drive the HKEXnews titlesearch.xhtml JSF UI to discover filings,
+           download the PDFs, then return chunked content.
+
+    When neither path yields results (no cache + Playwright unavailable),
+    returns []. The agent's web-search retrieval still covers external
+    perspectives in this case.
 
     To stage HKEX filings manually, place PDFs under data/corpus/{company}/hkex/
     with filenames like:
         {company}_annual_report_2024-03-21.pdf
         {company}_interim_report_2024-08-22.pdf
-    The standard filename → (doc_type, filed_date) inference applies.
     """
     name_lower = company.lower()
     company_key = "unknown"
@@ -479,11 +737,58 @@ def _discover_and_load_hkex(company: str, cutoff_date: str) -> list[dict]:
         })
         return _load_cached_filings(cache_dir, cached_pdfs, company_key, source="hkexnews")
 
-    reporting.log_action("HKEX live discovery not yet implemented", {
-        "company": company_key,
-        "note": "Stage PDFs manually under " + str(cache_dir) + " for now",
-    })
-    return []
+    # ── Live discovery (L2.1) ──
+    return _live_discover_hkex(company, company_key, cache_dir, cutoff_date)
+
+
+def _live_discover_hkex(
+    company: str,
+    company_key: str,
+    cache_dir: Path,
+    cutoff_date: str,
+) -> list[dict]:
+    """Live HKEXnews discovery (L2.1, DDG-driven).
+
+    Calls `live_discover_filings()` which tries DDG site-search first
+    (no extra deps) then falls back to Playwright when available.
+    Downloads each discovered PDF to `cache_dir` and returns docs in the
+    cached-loader format. The agent fetches its own evidence — manual
+    pre-staging is not required.
+    """
+    from sfewa.tools.hkex_live_discovery import is_playwright_available, live_discover_filings
+
+    # Best-effort stock_id (used only by the optional Playwright fallback).
+    name_lower = company.lower()
+    ticker_raw: str | None = None
+    for pattern, t in _HONGKONG_TICKER_MAP.items():
+        if pattern in name_lower:
+            ticker_raw = t
+            break
+    stock_id: str | None = (
+        ticker_raw.lstrip("0").zfill(5) if ticker_raw else None
+    )
+
+    # Discovery window: 2 years before cutoff. URL pattern encodes the
+    # date so we filter post-discovery on YYYY/MMDD.
+    cutoff_d = date.fromisoformat(cutoff_date)
+    from_d = cutoff_d.replace(year=cutoff_d.year - 2)
+    rows = live_discover_filings(
+        company=company,
+        stock_id=stock_id,
+        from_date=from_d.isoformat(),
+        to_date=cutoff_date,
+    )
+    if not rows:
+        reporting.log_action("HKEX live discovery returned 0 rows", {
+            "company": company_key,
+            "stock_id": stock_id,
+            "playwright_available": is_playwright_available(),
+        })
+        return []
+
+    # Delegate to the shared loader (used by URL auto-promotion too).
+    from sfewa.tools.hkex_live_discovery import load_hkex_pdfs
+    return load_hkex_pdfs(rows, company_key=company_key, cutoff_date=cutoff_date)
 
 
 def _discover_and_load_edinet(company: str, cutoff_date: str) -> list[dict]:

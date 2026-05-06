@@ -50,15 +50,28 @@ MAX_DOCS = 150
 def _make_search_tool(
     seen_links: set[str],
     all_docs: list[dict],
+    *,
+    company_key: str | None = None,
+    cutoff_date: str | None = None,
+    jurisdiction: str | None = None,
 ) -> Tool:
     """Create a search tool with shared accumulation state.
 
     Each call runs DuckDuckGo text + news search, deduplicates against
     previously seen links, and appends new docs to the shared list.
     The LLM sees a concise summary; the node has access to full data.
+
+    L2.1 (β) — URL auto-promotion: when the search results include an
+    HKEXnews archive URL and the run is HK-jurisdiction, the matching
+    PDFs are automatically downloaded + extracted as Tier-1 filing
+    evidence. Transparent to the LLM — the agent issues normal queries;
+    HKEX URLs that surface get audit-graded for free.
     """
     ddgs = DDGS()
     call_count = [0]
+    promote_hkex = (
+        jurisdiction == "hong_kong" and company_key and cutoff_date
+    )
 
     def search(query: str) -> str:
         """Search the web (text + news) for a query."""
@@ -100,6 +113,29 @@ def _make_search_tool(
         unique = _deduplicate(results, seen_links)
         docs = [_to_doc(r, source="agentic") for r in unique]
         all_docs.extend(docs)
+
+        # ── L2.1 (β): HKEX URL auto-promotion ──
+        # Scan the search results for HKEXnews archive URLs and Tier-1-promote
+        # them as filing evidence. Defensive: catches its own errors so a
+        # download failure can never break a search.
+        if promote_hkex and unique:
+            try:
+                from sfewa.tools.hkex_live_discovery import promote_hkex_urls_from_results
+                promoted = promote_hkex_urls_from_results(
+                    unique,
+                    company_key=company_key,  # type: ignore[arg-type]
+                    cutoff_date=cutoff_date,  # type: ignore[arg-type]
+                )
+                if promoted:
+                    all_docs.extend(promoted)
+                    reporting.log_action(
+                        f"HKEX URL auto-promotion [{call_count[0]}]",
+                        {"chunks_added": len(promoted)},
+                    )
+            except Exception as e:  # noqa: BLE001
+                reporting.log_action("HKEX promotion error (non-fatal)", {
+                    "error": str(e)[:120],
+                })
 
         reporting.log_action(f"Search [{call_count[0]}]: {query[:60]}", {
             "new": len(unique),
@@ -150,16 +186,20 @@ def _make_filing_tool(
     regions: list[str],
     all_docs: list[dict],
     explicit_jurisdiction: str | None = None,
+    ticker: str | None = None,
 ) -> Tool:
     """Create a regulatory filing discovery and loading tool.
 
     The tool discovers the company's jurisdiction, finds the appropriate
     filing system (EDINET for Japan, CNINFO for China, HKEXnews for Hong
-    Kong), and loads official filings.
+    Kong, SEC EDGAR for US), and loads official filings.
 
-    `explicit_jurisdiction` is the case YAML's `jurisdiction` field (HK/JP/CN)
-    when set — wins over name-pattern inference (avoids cross-listing
-    ambiguity for companies like Tencent that pattern-match both CN and HK).
+    `explicit_jurisdiction` is the case YAML's `jurisdiction` field
+    (HK/JP/CN/US) when set — wins over name-pattern inference (avoids
+    cross-listing ambiguity for companies like Tencent that pattern-match
+    both CN and HK). `ticker` is the case YAML's `ticker` — used by SEC
+    EDGAR / HKEX for stable issuer resolution (the corporate-name
+    matcher is fragile for "The Boeing Company" vs SEC's "BOEING CO").
     """
     loaded = [False]
 
@@ -177,7 +217,7 @@ def _make_filing_tool(
                 "Rely on web search for evidence."
             )
 
-        docs = discover_and_load_filings(company, cutoff, regions)
+        docs = discover_and_load_filings(company, cutoff, regions, ticker=ticker)
         if not docs:
             return (
                 f"Jurisdiction: {jurisdiction}. "
@@ -253,6 +293,7 @@ def agentic_retrieval_node(state: PipelineState) -> dict:
     analysis_dims = state.get("analysis_dimensions", {})
     audit_meta = state.get("audit_meta") or {}
     explicit_jurisdiction = audit_meta.get("jurisdiction")
+    explicit_ticker = audit_meta.get("ticker")
 
     reporting.enter_node("agentic_retrieval", {
         "company": company,
@@ -264,11 +305,37 @@ def agentic_retrieval_node(state: PipelineState) -> dict:
     all_docs: list[dict] = []
     seen_links: set[str] = set()
 
+    # Resolve jurisdiction once (for the URL auto-promotion gate inside
+    # the search tool). Same logic the filing tool uses.
+    from sfewa.tools.filing_discovery import _HONGKONG_PATTERNS
+    auto_jurisdiction = identify_jurisdiction(
+        company, regions, explicit=explicit_jurisdiction,
+    )
+    company_key_for_promotion: str | None = None
+    if auto_jurisdiction == "hong_kong":
+        name_lower = company.lower()
+        for pattern in _HONGKONG_PATTERNS:
+            if pattern in name_lower:
+                company_key_for_promotion = pattern.replace(" ", "_")
+                break
+        if company_key_for_promotion is None:
+            # Fall back to slugified company name
+            import re as _re
+            company_key_for_promotion = _re.sub(
+                r"[^a-z0-9]+", "_", company.lower()
+            ).strip("_")[:40]
+
     # Build tools
-    search_tool = _make_search_tool(seen_links, all_docs)
+    search_tool = _make_search_tool(
+        seen_links, all_docs,
+        company_key=company_key_for_promotion,
+        cutoff_date=cutoff,
+        jurisdiction=auto_jurisdiction,
+    )
     filing_tool = _make_filing_tool(
         company, cutoff, regions, all_docs,
         explicit_jurisdiction=explicit_jurisdiction,
+        ticker=explicit_ticker,
     )
 
     # Format case context for the prompt

@@ -11,5 +11,6 @@ from __future__ import annotations
 from sfewa.tools.providers.cninfo_provider import CninfoProvider
 from sfewa.tools.providers.edinet_provider import EdinetProvider
 from sfewa.tools.providers.hkex_provider import HkexProvider
+from sfewa.tools.providers.sec_edgar_provider import SecEdgarProvider
 
-__all__ = ["EdinetProvider", "CninfoProvider", "HkexProvider"]
+__all__ = ["EdinetProvider", "CninfoProvider", "HkexProvider", "SecEdgarProvider"]

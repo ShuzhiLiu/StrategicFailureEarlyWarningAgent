@@ -43,12 +43,22 @@ def _make_case_id(company: str, cutoff: str) -> str:
     return f"{slug}_{cutoff.replace('-', '')}"
 
 
-def build_initial_state_from_case(case_path: Path) -> dict:
+def build_initial_state_from_case(
+    case_path: Path,
+    *,
+    discover_strategies: bool = False,
+) -> dict:
     """Build the pipeline initial_state dict from a case YAML.
 
     Routes truth content via configs/truth/{case_id}.yaml using the
     load_case_and_truth() loader — the only sanctioned path for ground
     truth to enter the pipeline.
+
+    L2.4: when the case YAML omits `strategy_theme` (or when
+    `discover_strategies=True` is passed explicitly), the strategy
+    discovery agent runs first and supplies the working theme. The full
+    candidate list is added to state["discovered_strategies"] so the
+    audit trail records what alternatives existed.
 
     Used by the CLI and by the runtime sentinel test.
     """
@@ -74,10 +84,33 @@ def build_initial_state_from_case(case_path: Path) -> dict:
         if truth_cfg
         else []
     )
-    return {
+
+    # ── L2.4: strategy discovery ──
+    # Trigger when:
+    #   - `case.strategy_theme` is missing/empty, OR
+    #   - caller explicitly requested `discover_strategies=True` (CLI flag).
+    # Audit-grade: the chosen primary becomes `state["strategy_theme"]`,
+    # the full candidate list goes to `state["discovered_strategies"]`.
+    strategy_theme = (case_cfg.strategy_theme or "").strip()
+    discovery_payload: dict | None = None
+    if not strategy_theme or discover_strategies:
+        from sfewa.agents.strategy_discovery import discover_strategies as _discover
+        discovery_payload = _discover(
+            company=company,
+            cutoff_date=cutoff_date,
+            regions=list(case_cfg.regions),
+            audit_meta=audit_meta,
+        )
+        # If the case YAML had a theme AND the caller forced re-discovery,
+        # we keep the human-authored theme as primary (override-friendly)
+        # but log the discovered candidates anyway.
+        if not strategy_theme:
+            strategy_theme = discovery_payload.get("primary") or "primary corporate strategy"
+
+    state = {
         "case_id": case_id,
         "company": company,
-        "strategy_theme": case_cfg.strategy_theme,
+        "strategy_theme": strategy_theme,
         "cutoff_date": cutoff_date,
         "regions": list(case_cfg.regions),
         "peers": peers,
@@ -85,6 +118,9 @@ def build_initial_state_from_case(case_path: Path) -> dict:
         "case_type": case_cfg.case_type,
         "audit_meta": audit_meta,
     }
+    if discovery_payload is not None:
+        state["discovered_strategies"] = discovery_payload
+    return state
 
 
 @app.command()
@@ -119,6 +155,12 @@ def run(
         "-a",
         help="Use agentic retrieval (tool-loop agent for evidence gathering)",
     ),
+    discover_strategies: bool = typer.Option(
+        False,
+        "--discover-strategies",
+        help="Force strategy-discovery agent even when strategy_theme is set "
+             "(useful for seeing what alternative themes a company has).",
+    ),
 ) -> None:
     """Analyze strategic risk for a company.
 
@@ -141,12 +183,22 @@ def run(
                 "Truth files for --case live under configs/truth/{case_id}.yaml.[/red]"
             )
             raise typer.Exit(1)
-        initial_state = build_initial_state_from_case(case)
+        initial_state = build_initial_state_from_case(
+            case, discover_strategies=discover_strategies,
+        )
         company = initial_state["company"]
         strategy_theme = initial_state["strategy_theme"]
         cutoff_date = initial_state["cutoff_date"]
         gt_events = initial_state["ground_truth_events"]
         case_type = initial_state["case_type"]
+        if "discovered_strategies" in initial_state:
+            ds = initial_state["discovered_strategies"]
+            console.print(f"  Discovery: [cyan]{len(ds.get('candidates', []))} candidate themes[/cyan]")
+            for c in ds.get("candidates", []):
+                star = "★" if c["name"] == ds.get("primary") else "·"
+                console.print(f"    {star} [{c.get('confidence',0):.2f}] {c['name'][:80]}")
+            if ds.get("rationale"):
+                console.print(f"  Rationale: [dim]{ds['rationale'][:200]}[/dim]")
     elif not company or not strategy_theme or not cutoff_date:
         console.print("[red]Error: Provide company, strategy_theme, cutoff_date "
                       "or use --case config.yaml[/red]")
