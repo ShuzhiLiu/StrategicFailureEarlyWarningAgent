@@ -558,6 +558,10 @@ def retrieval_node(state: PipelineState) -> dict:
 
     total_web = len(seed_web_docs) + len(gap_web_docs) + len(counter_web_docs)
 
+    # ── Source manifest (L1.4) ──
+    from sfewa.tools.manifest import build_manifest_from_docs
+    source_manifest = build_manifest_from_docs(retrieved_docs, cutoff_date=cutoff)
+
     reporting.exit_node("retrieval", {
         "total_docs": len(retrieved_docs),
         "edinet": len(edinet_docs),
@@ -565,9 +569,11 @@ def retrieval_node(state: PipelineState) -> dict:
         "web_gap_fill": len(gap_web_docs),
         "web_counter": len(counter_web_docs),
         "total_web": total_web,
+        "manifest_entries": len(source_manifest),
     }, next_node="evidence_extraction")
 
     return {
         "retrieved_docs": retrieved_docs,
+        "source_manifest": source_manifest,
         "current_stage": "retrieval",
     }

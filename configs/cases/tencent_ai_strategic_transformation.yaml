@@ -1,0 +1,43 @@
+# Tencent — AI / cloud strategic transformation
+# FORWARD case (no truth file). Cutoff: 2026-04-19, end-of-day Asia/Hong_Kong.
+#
+# This case exercises forward surveillance — the agent assesses risk using
+# only pre-cutoff evidence and the outcome is unknown at run time. Reports
+# generated from this case MUST display "Forward surveillance case. Not a
+# retrospective validation." above the fold (per L1.7 hosted-demo MVP).
+
+case_id: "tencent_ai_2026"
+case_type: "forward"
+company: "Tencent Holdings Limited"
+jurisdiction: "HK"
+ticker: "0700"
+strategy_theme: "AI / cloud strategic transformation"
+cutoff_date: "2026-04-19"
+
+# Forward → verifier_corpus: open_web (loader default; explicit here for clarity)
+verifier_corpus: "open_web"
+allowed_sources:
+  - "hkexnews"
+  - "duckduckgo"
+  - "news"
+doc_types:
+  - "annual_report"
+  - "interim_report"
+  - "results_announcement"
+  - "inside_information"
+  - "circular"
+
+regions:
+  - "china"
+  - "hong_kong"
+  - "global"
+  - "southeast_asia"
+
+peers:
+  - "Alibaba Group Holding Limited"
+  - "Baidu, Inc."
+  - "Meituan"
+  - "JD.com, Inc."
+  - "ByteDance Ltd."
+  - "Microsoft Corporation"
+  - "Alphabet Inc."

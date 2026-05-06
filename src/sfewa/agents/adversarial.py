@@ -463,13 +463,30 @@ def adversarial_review_node(state: PipelineState) -> dict:
     reporting.log_action("Phase 1 challenges", phase1_severity)
 
     # ── Phase 2: Independent verification search ──
+    # L1.5 verifier cutoff propagation. The audit envelope on the case
+    # decides whether Phase 2 may use open-web search:
+    #   - allowed_sources_only (retrospective default) → SKIP Phase 2
+    #     (Phase 1 already saw all evidence including filings; we don't
+    #     leak post-cutoff news into the audit)
+    #   - open_web (forward default + iter-41 baseline) → run Phase 2
+    audit_meta = state.get("audit_meta") or {}
+    verifier_corpus = audit_meta.get("verifier_corpus") or "open_web"
+
     claims = _extract_claims_to_verify(valid_challenges, risk_factors)
     phases_run = "1"
+
+    if verifier_corpus == "allowed_sources_only":
+        reporting.log_action(
+            "Phase 2 skipped — verifier_corpus=allowed_sources_only",
+            {"reason": "audit envelope forbids open-web verification"},
+        )
+        claims = []  # makes the elif below land on the skip branch
 
     if claims:
         reporting.log_action("Phase 2: Independent verification search", {
             "claims_to_verify": len(claims),
             "factors": [c["factor_id"] for c in claims],
+            "verifier_corpus": verifier_corpus,
         })
         findings = _run_verification_search(claims, company, theme, cutoff)
         phases_run = "1+2"

@@ -149,11 +149,17 @@ def _make_filing_tool(
     cutoff: str,
     regions: list[str],
     all_docs: list[dict],
+    explicit_jurisdiction: str | None = None,
 ) -> Tool:
     """Create a regulatory filing discovery and loading tool.
 
     The tool discovers the company's jurisdiction, finds the appropriate
-    filing system (EDINET for Japan, etc.), and loads official filings.
+    filing system (EDINET for Japan, CNINFO for China, HKEXnews for Hong
+    Kong), and loads official filings.
+
+    `explicit_jurisdiction` is the case YAML's `jurisdiction` field (HK/JP/CN)
+    when set — wins over name-pattern inference (avoids cross-listing
+    ambiguity for companies like Tencent that pattern-match both CN and HK).
     """
     loaded = [False]
 
@@ -162,7 +168,9 @@ def _make_filing_tool(
         if loaded[0]:
             return "Regulatory filings already loaded."
 
-        jurisdiction = identify_jurisdiction(company, regions)
+        jurisdiction = identify_jurisdiction(
+            company, regions, explicit=explicit_jurisdiction,
+        )
         if jurisdiction is None:
             return (
                 "Could not determine filing jurisdiction for this company. "
@@ -243,6 +251,8 @@ def agentic_retrieval_node(state: PipelineState) -> dict:
     regions = state.get("regions", [])
     peers = state.get("peers", [])
     analysis_dims = state.get("analysis_dimensions", {})
+    audit_meta = state.get("audit_meta") or {}
+    explicit_jurisdiction = audit_meta.get("jurisdiction")
 
     reporting.enter_node("agentic_retrieval", {
         "company": company,
@@ -256,7 +266,10 @@ def agentic_retrieval_node(state: PipelineState) -> dict:
 
     # Build tools
     search_tool = _make_search_tool(seen_links, all_docs)
-    filing_tool = _make_filing_tool(company, cutoff, regions, all_docs)
+    filing_tool = _make_filing_tool(
+        company, cutoff, regions, all_docs,
+        explicit_jurisdiction=explicit_jurisdiction,
+    )
 
     # Format case context for the prompt
     peer_names = ", ".join(
@@ -270,7 +283,7 @@ def agentic_retrieval_node(state: PipelineState) -> dict:
     cutoff_year = int(cutoff[:4])
     prior_year = cutoff_year - 1
 
-    jurisdiction = identify_jurisdiction(company, regions)
+    jurisdiction = identify_jurisdiction(company, regions, explicit=explicit_jurisdiction)
     filing_note = (
         f"Regulatory filings may be available ({jurisdiction.upper()} jurisdiction). "
         f"Call load_regulatory_filings() FIRST to get primary source data."
@@ -326,14 +339,23 @@ def agentic_retrieval_node(state: PipelineState) -> dict:
             "text": result.content[:200],
         })
 
+    # ── Source manifest (L1.4) ──
+    # Doc-level audit log built from everything the retrieval layer touched.
+    # The production invariant (zero kept post-cutoff) is asserted at
+    # save_run_artifacts() time.
+    from sfewa.tools.manifest import build_manifest_from_docs
+    source_manifest = build_manifest_from_docs(all_docs, cutoff_date=cutoff)
+
     reporting.exit_node("agentic_retrieval", {
         "total_docs": len(all_docs),
         "filings": filing_count,
         "web": web_count,
         "search_queries": result.tool_call_count,
+        "manifest_entries": len(source_manifest),
     }, next_node="evidence_extraction")
 
     return {
         "retrieved_docs": all_docs,
+        "source_manifest": source_manifest,
         "current_stage": "agentic_retrieval",
     }

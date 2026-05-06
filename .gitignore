@@ -196,6 +196,7 @@ private/
 
 # Pipeline run outputs (generated artifacts)
 outputs/
+stability_logs/
 
 # Cached regulatory filings (downloaded PDFs, re-fetched on demand)
 data/corpus/

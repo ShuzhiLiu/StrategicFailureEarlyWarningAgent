@@ -22,6 +22,15 @@ from pathlib import Path
 
 from liteagent import dedup_by_key
 from sfewa.tools.chat_log import get_log
+from sfewa.tools.citation_check import (
+    citation_summary,
+    validate_top_level_claims,
+)
+from sfewa.tools.manifest import (
+    build_manifest_from_docs,
+    manifest_summary,
+)
+from sfewa.tools.provenance import build_provenance
 
 
 def get_run_dir(run_id: str, base_dir: str = "outputs") -> Path:
@@ -75,16 +84,75 @@ def save_run_metadata(
     return save_artifact(run_id, "run_metadata.json", metadata)
 
 
-def save_run_artifacts(state: dict) -> Path:
-    """Save all pipeline outputs from a completed run."""
+def save_run_artifacts(
+    state: dict,
+    *,
+    case_path: str | Path | None = None,
+    truth_path: str | Path | None = None,
+    started_at: float | None = None,
+    elapsed_seconds: float | None = None,
+) -> Path:
+    """Save all pipeline outputs from a completed run.
+
+    Computes the L1.4 audit invariants but RECORDS violations as data in
+    run_summary.json rather than raising — saving artifacts is more
+    important than punishing the run. The CI gate (a separate test that
+    reads run_summary.json) is the place where violations fail the build.
+
+    Args:
+        state: completed pipeline state.
+        case_path: path to the case YAML used for the run (for provenance sha).
+        truth_path: path to the truth YAML, if any (for provenance sha).
+        started_at: UNIX epoch seconds when the run began.
+        elapsed_seconds: wall-clock duration.
+    """
     case_id = state.get("case_id", "unknown")
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     run_id = f"{case_id}_{timestamp}"
 
+    # ── Source manifest (L1.4-A) ──
+    # Prefer the manifest accumulated in state by retrieval; fall back to
+    # building it from retrieved_docs.
+    cutoff_date = state.get("cutoff_date") or ""
+    manifest = state.get("source_manifest") or build_manifest_from_docs(
+        state.get("retrieved_docs", []),
+        cutoff_date=cutoff_date,
+    )
+    save_artifact(run_id, "source_manifest.json", manifest)
+
+    # Compute manifest violations as data (kept docs with release_time > cutoff).
+    manifest_violations: list[dict] = []
+    if cutoff_date:
+        from sfewa.tools.manifest import _iso_date_part
+        try:
+            cutoff_d = _iso_date_part(cutoff_date)
+            for e in manifest:
+                if e.get("cutoff_decision") != "kept":
+                    continue
+                rt = e.get("release_time") or ""
+                if not rt:
+                    continue
+                try:
+                    if _iso_date_part(rt) > cutoff_d:
+                        manifest_violations.append({
+                            "title": e.get("title"),
+                            "source": e.get("source"),
+                            "release_time": rt,
+                        })
+                except ValueError:
+                    pass
+        except ValueError:
+            pass
+
     save_artifact(run_id, "evidence.json", state.get("evidence", []))
 
-    # Deduplicate risk factors using liteagent utility
+    # ── Claim-citation check (L1.4-C) ──
+    # Records violations as data; never raises (artifact saving must
+    # always complete so the user has the full audit trail).
     deduped_factors = dedup_by_key(state.get("risk_factors", []), "dimension")
+    citation_violations = validate_top_level_claims(
+        deduped_factors, state.get("evidence", []) or []
+    )
     save_artifact(run_id, "risk_factors.json", deduped_factors)
     # Deduplicate challenges: cross-pass accumulation creates duplicates
     deduped_challenges = dedup_by_key(
@@ -107,6 +175,7 @@ def save_run_artifacts(state: dict) -> Path:
         "company": state.get("company"),
         "strategy_theme": state.get("strategy_theme"),
         "cutoff_date": state.get("cutoff_date"),
+        "case_type": state.get("case_type", "retrospective"),
         "risk_score": state.get("risk_score"),
         "overall_risk_level": state.get("overall_risk_level"),
         "overall_confidence": state.get("overall_confidence"),
@@ -116,6 +185,15 @@ def save_run_artifacts(state: dict) -> Path:
         "backtest_events": len(state.get("backtest_events", [])),
         "adversarial_pass_count": state.get("adversarial_pass_count", 0),
         "iteration_count": state.get("iteration_count", 0),
+        "manifest": manifest_summary(manifest),
+        "citations": citation_summary(deduped_factors, state.get("evidence", [])),
+        # L1.4 audit violations recorded as data. CI gate fails when these
+        # are non-empty; pipeline runs always complete so the audit trail
+        # is available for inspection.
+        "audit_violations": {
+            "manifest_kept_post_cutoff": manifest_violations,
+            "citations_unresolved": citation_violations,
+        },
     }
     save_artifact(run_id, "run_summary.json", summary)
 
@@ -126,5 +204,30 @@ def save_run_artifacts(state: dict) -> Path:
     if chat_log:
         lines = [json.dumps(entry, ensure_ascii=False, default=str) for entry in chat_log]
         save_artifact(run_id, "llm_history.jsonl", "\n".join(lines))
+
+    # ── Provenance header (L1.4) ──
+    provenance = build_provenance(
+        state,
+        case_path=case_path,
+        truth_path=truth_path,
+        started_at=started_at,
+        elapsed_seconds=elapsed_seconds,
+    )
+    save_artifact(run_id, "provenance.json", provenance)
+
+    # ── Static HTML report (L1.7) ──
+    # Generated last so it can read every other artifact off disk. Failures
+    # in the report generator are non-fatal — the JSON artifacts remain
+    # the authoritative output.
+    try:
+        from sfewa.tools.html_report import generate_report
+        generate_report(get_run_dir(run_id))
+    except Exception as e:  # noqa: BLE001
+        # Don't break artifact saving if templating throws; log via reporting.
+        try:
+            from sfewa import reporting
+            reporting.log_action("HTML report generation failed", {"error": str(e)[:200]})
+        except Exception:
+            pass
 
     return get_run_dir(run_id)

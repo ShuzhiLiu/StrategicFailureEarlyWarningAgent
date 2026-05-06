@@ -1,0 +1,35 @@
+# Ping An Insurance — Integrated finance + technology platform strategy
+# Retrospective case (cutoff 2024-12-31, end-of-day Asia/Hong_Kong).
+# Truth file: configs/truth/ping_an_2024.yaml
+
+case_id: "ping_an_2024"
+case_type: "retrospective"
+company: "Ping An Insurance (Group) Company of China, Ltd."
+jurisdiction: "HK"
+ticker: "2318"
+strategy_theme: "Integrated finance + technology platform strategy"
+cutoff_date: "2024-12-31"
+
+# L1.5: retrospective + allowed_sources_only is the loader default; we
+# pin it explicitly here so the audit envelope is unambiguous.
+verifier_corpus: "allowed_sources_only"
+allowed_sources:
+  - "hkexnews"
+doc_types:
+  - "annual_report"
+  - "interim_report"
+  - "results_announcement"
+  - "inside_information"
+  - "circular"
+
+regions:
+  - "china"
+  - "hong_kong"
+  - "global"
+
+peers:
+  - "China Life Insurance Company Limited"
+  - "AIA Group Limited"
+  - "Prudential plc"
+  - "PICC Group"
+  - "Manulife Financial Corporation"

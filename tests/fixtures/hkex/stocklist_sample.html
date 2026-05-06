@@ -1,0 +1,19 @@
+<!--
+  Synthetic fixture mimicking the HKEX stock_list_active_main.htm shape.
+  Real HKEX page is JS-rendered; this minimal HTML preserves the layout
+  the parser expects: a <table> where each row has a stock-code cell and
+  a name cell. When the parser is paired with the live response, this
+  fixture may need updating — keep it shape-faithful.
+-->
+<html>
+<body>
+<table>
+  <tr><th>Code</th><th>Name</th><th>Short Name</th></tr>
+  <tr><td>00005</td><td>HSBC HOLDINGS PLC</td><td>HSBC HOLDINGS</td></tr>
+  <tr><td>00700</td><td>TENCENT HOLDINGS LIMITED</td><td>TENCENT</td></tr>
+  <tr><td>01299</td><td>AIA GROUP LIMITED</td><td>AIA</td></tr>
+  <tr><td>02318</td><td>PING AN INSURANCE (GROUP) COMPANY OF CHINA, LTD.</td><td>PING AN</td></tr>
+  <tr><td>02378</td><td>PRUDENTIAL PLC</td><td>PRUDENTIAL</td></tr>
+</table>
+</body>
+</html>

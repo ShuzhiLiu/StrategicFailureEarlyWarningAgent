@@ -1,10 +1,18 @@
 # Honda EV Strategy Pre-Reset Analysis
 # Cutoff: 2025-05-19 (day before Honda's May 2025 business briefing)
-# Ground truth: May 2025 target revision + March 2026 writedown
+# Truth file: configs/truth/honda_ev_2025.yaml
 
+case_id: "honda_ev_2025"
+case_type: "retrospective"
 company: "Honda Motor Co., Ltd."
+jurisdiction: "JP"
 strategy_theme: "EV electrification strategy"
 cutoff_date: "2025-05-19"
+
+# Default verifier corpus for retrospective cases is "allowed_sources_only"
+# (L1.5). Pinned to "open_web" here to preserve iter 41 baseline behavior
+# until the verifier-corpus switch ships.
+verifier_corpus: "open_web"
 
 # Optional — LLM generates these if omitted
 regions:
@@ -21,43 +29,3 @@ peers:
   - "Volkswagen AG"
   - "General Motors Company"
   - "Ford Motor Company"
-
-# Ground truth events (post-cutoff, for backtesting only)
-ground_truth_events:
-  - event_id: "gt_001"
-    event_date: "2025-05-20"
-    description: >
-      Honda revises 2030 EV/FCEV sales ratio target from ~30% to ~20%.
-      Cuts EV and software investment from 10 trillion to 7 trillion yen.
-      Emphasizes HEV as primary transition vehicle.
-    event_type: "target_revision"
-    source_url: "https://global.honda/en/newsroom/news/2025/c250520eng.html"
-    key_figures:
-      - metric: "2030 EV sales ratio"
-        old_value: "~30%"
-        new_value: "~20%"
-      - metric: "EV/software investment"
-        old_value: "10 trillion yen"
-        new_value: "7 trillion yen"
-
-  - event_id: "gt_002"
-    event_date: "2026-03-12"
-    description: >
-      Honda cancels multiple North American EV models (0 SUV, 0 Saloon,
-      Acura RSX). Records 820 billion to 1.12 trillion yen operating expense
-      for EV strategy reassessment. Total losses including equity method
-      investment losses up to 2.5 trillion yen.
-    event_type: "project_cancellation"
-    source_url: "https://global.honda/en/investors/library/filings/auto_20260312580604/pdfFile.pdf"
-    key_figures:
-      - metric: "Operating expense"
-        value: "820B - 1.12T yen"
-      - metric: "Total loss (incl equity method)"
-        value: "up to 2.5T yen"
-
-  - event_id: "gt_003"
-    event_date: "2026-03-25"
-    description: >
-      Sony Honda Mobility (Afeela) project effectively cancelled or
-      significantly restructured.
-    event_type: "project_cancellation"

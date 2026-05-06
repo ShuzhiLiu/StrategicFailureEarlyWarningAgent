@@ -1,0 +1,59 @@
+# Truth file for Ping An integrated-finance retrospective case.
+# Cutoff: 2024-12-31. EVALUATION-ONLY — not loaded by retrieval, extraction,
+# analyst, adversarial, or synthesis code. Read by sfewa.agents.backtest only.
+
+case_id: "ping_an_2024"
+sentinel: "__TRUTH_SENTINEL_ping_an_2024_a3f1c8__"
+
+known_outcome: >
+  Through 2024-2025, Ping An's integrated finance + technology platform
+  strategy showed strain at multiple seams: the technology segment (Lufax,
+  PingAn Healthcare/HealthKonnect) underperformed expectations, P&C
+  insurance margins compressed under auto-insurance loss-ratio pressure,
+  and real-estate exposure (legacy investments) continued to drag book
+  value. The pre-cutoff filings carried explicit risk disclosures around
+  each of these areas.
+
+# When the outcome became publicly disclosed in a way that retrospective
+# evaluation can anchor on. 2025-03-21 is Ping An's 2024 annual-results
+# announcement window (typical timing).
+outcome_disclosed_at: "2025-03-21"
+
+validation_notes: >
+  Selection rationale (per roadmap rev 4 four-criteria test):
+
+    1. Outcome has clear public disclosure date — YES, 2024 annual results
+       publication anchors the strategic-failure narrative.
+    2. Pre-cutoff HKEX filings contain enough signal — YES, 2023 annual
+       report + 2024 interim already disclose tech-segment headwinds and
+       auto-insurance loss-ratio pressure.
+    3. Outcome is a strategic event, not pure stock-price noise — YES,
+       the technology-platform strategy was the declared moat; its
+       underperformance is a strategic question, not a market timing one.
+    4. Agent does not need external news to understand the primary risk —
+       YES, HKEX disclosures are sufficient.
+
+  IMPORTANT: ground_truth_events below are scaffolded based on the
+  publicly known direction of disclosures. They MUST be validated against
+  actual HKEX filings before this case is used as a publishable demo.
+  Treat the events as "expected outcome direction" until backtesting
+  against live HKEX data confirms the dates and magnitudes.
+
+ground_truth_events:
+  - event_id: "gt_001"
+    event_date: "2025-03-21"
+    description: >
+      Ping An reports 2024 annual results. Technology segment (Lufax + PingAn
+      Healthcare) shows continued losses / impairment. P&C combined ratio
+      pressured by auto insurance. Strategy commentary acknowledges the
+      tech platform's slower-than-expected monetization path.
+    event_type: "financial_metric"
+    source_url: "https://www1.hkexnews.hk/listedco/listconews/sehk/2025/0321/"
+  - event_id: "gt_002"
+    event_date: "2025-08-22"
+    description: >
+      2025 interim results confirm continued strain in technology and P&C
+      segments. Strategic narrative shifts toward stabilization rather
+      than growth in the tech platform.
+    event_type: "financial_metric"
+    source_url: "https://www1.hkexnews.hk/listedco/listconews/sehk/2025/0822/"

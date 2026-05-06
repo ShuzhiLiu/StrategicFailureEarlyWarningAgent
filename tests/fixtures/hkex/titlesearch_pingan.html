@@ -1,0 +1,50 @@
+<!--
+  Synthetic fixture mimicking HKEXnews title-search response shape.
+  Each <tr> is one filing row with cells for release time, stock code,
+  doc title (with PDF link), and doc-type label. Real HKEXnews HTML may
+  differ in class names or layout — when paired with live response,
+  tighten the parser, not the fixture.
+
+  This fixture intentionally INCLUDES one post-cutoff row (the 2025-08
+  interim results) so the cutoff-rejection assertion has something to
+  bite on. The L1 audit gate requires this.
+-->
+<html>
+<body>
+<table>
+  <thead><tr><th>Release Time</th><th>Stock Code/Name</th><th>Title</th><th>Type</th></tr></thead>
+  <tbody>
+    <tr>
+      <td>14:30 28/03/2024</td>
+      <td>Stock Code: 02318 | Stock Short Name: PING AN</td>
+      <td><a href="https://www1.hkexnews.hk/listedco/listconews/sehk/2024/0328/2024032801234.pdf">2023 ANNUAL REPORT</a></td>
+      <td>Financial Statements/ESG Information</td>
+    </tr>
+    <tr>
+      <td>22:01 22/08/2024</td>
+      <td>Stock Code: 02318 | Stock Short Name: PING AN</td>
+      <td><a href="https://www1.hkexnews.hk/listedco/listconews/sehk/2024/0822/2024082205678.pdf">ANNOUNCEMENT - 2024 INTERIM RESULTS</a></td>
+      <td>Financial Statements/ESG Information</td>
+    </tr>
+    <tr>
+      <td>16:45 15/12/2024</td>
+      <td>Stock Code: 02318 | Stock Short Name: PING AN</td>
+      <td><a href="https://www1.hkexnews.hk/listedco/listconews/sehk/2024/1215/2024121501122.pdf">INSIDE INFORMATION - PROFIT WARNING</a></td>
+      <td>Inside Information</td>
+    </tr>
+    <tr>
+      <td>09:00 05/01/2025</td>
+      <td>Stock Code: 02318 | Stock Short Name: PING AN</td>
+      <td><a href="https://www1.hkexnews.hk/listedco/listconews/sehk/2025/0105/2025010500001.pdf">MONTHLY RETURN OF EQUITY ISSUER</a></td>
+      <td>Monthly Return</td>
+    </tr>
+    <tr>
+      <td>17:00 22/08/2025</td>
+      <td>Stock Code: 02318 | Stock Short Name: PING AN</td>
+      <td><a href="https://www1.hkexnews.hk/listedco/listconews/sehk/2025/0822/2025082209999.pdf">ANNOUNCEMENT - 2025 INTERIM RESULTS</a></td>
+      <td>Financial Statements/ESG Information</td>
+    </tr>
+  </tbody>
+</table>
+</body>
+</html>

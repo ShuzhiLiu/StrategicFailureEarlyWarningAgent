@@ -24,7 +24,7 @@ load_dotenv()
 
 from sfewa import reporting
 from sfewa.graph.pipeline import run_pipeline, run_pipeline_v2
-from sfewa.schemas.config import CaseConfig
+from sfewa.schemas.config import load_case_and_truth
 from sfewa.tools.artifacts import save_run_artifacts
 from sfewa.tools.chat_log import clear_log
 
@@ -41,6 +41,50 @@ def _make_case_id(company: str, cutoff: str) -> str:
     slug = re.sub(r"[^a-z0-9]+", "_", company.lower()).strip("_")
     slug = "_".join(slug.split("_")[:3])
     return f"{slug}_{cutoff.replace('-', '')}"
+
+
+def build_initial_state_from_case(case_path: Path) -> dict:
+    """Build the pipeline initial_state dict from a case YAML.
+
+    Routes truth content via configs/truth/{case_id}.yaml using the
+    load_case_and_truth() loader — the only sanctioned path for ground
+    truth to enter the pipeline.
+
+    Used by the CLI and by the runtime sentinel test.
+    """
+    from sfewa.schemas.config import apply_verifier_corpus_default
+    case_cfg, truth_cfg = load_case_and_truth(case_path)
+    case_cfg = apply_verifier_corpus_default(case_cfg)
+    company = case_cfg.company
+    cutoff_date = case_cfg.cutoff_date
+    case_id = case_cfg.case_id or _make_case_id(company, cutoff_date)
+    peers = [
+        p.get("company", str(p)) if isinstance(p, dict) else str(p)
+        for p in case_cfg.peers
+    ]
+    audit_meta = {
+        "jurisdiction": case_cfg.jurisdiction,
+        "ticker": case_cfg.ticker,
+        "allowed_sources": list(case_cfg.allowed_sources),
+        "doc_types": list(case_cfg.doc_types),
+        "verifier_corpus": case_cfg.verifier_corpus,
+    }
+    gt_events = (
+        [e.model_dump() for e in truth_cfg.ground_truth_events]
+        if truth_cfg
+        else []
+    )
+    return {
+        "case_id": case_id,
+        "company": company,
+        "strategy_theme": case_cfg.strategy_theme,
+        "cutoff_date": cutoff_date,
+        "regions": list(case_cfg.regions),
+        "peers": peers,
+        "ground_truth_events": gt_events,
+        "case_type": case_cfg.case_type,
+        "audit_meta": audit_meta,
+    }
 
 
 @app.command()
@@ -86,40 +130,55 @@ def run(
 
         python -m sfewa.main "BYD Company Limited" "EV electrification strategy" 2025-05-19
     """
-    # Load from YAML config if --case provided
+    # ── Load case (and optional truth) ──
+    # Truth content lives in configs/truth/{case_id}.yaml and is loaded ONLY
+    # via load_case_and_truth() — agents never read it directly. The loader
+    # enforces the case_type ↔ truth-file relationship (see L1.3).
     if case:
-        with open(case) as f:
-            cfg = yaml.safe_load(f)
-        company = cfg["company"]
-        strategy_theme = cfg["strategy_theme"]
-        cutoff_date = cfg["cutoff_date"]
-        regions = cfg.get("regions", [])
-        peers = cfg.get("peers", [])
-        # Normalize peer dicts to strings
-        peers = [
-            p.get("company", str(p)) if isinstance(p, dict) else str(p)
-            for p in peers
-        ]
-        gt_events = cfg.get("ground_truth_events", [])
+        if ground_truth:
+            console.print(
+                "[red]Error: --ground-truth cannot be combined with --case. "
+                "Truth files for --case live under configs/truth/{case_id}.yaml.[/red]"
+            )
+            raise typer.Exit(1)
+        initial_state = build_initial_state_from_case(case)
+        company = initial_state["company"]
+        strategy_theme = initial_state["strategy_theme"]
+        cutoff_date = initial_state["cutoff_date"]
+        gt_events = initial_state["ground_truth_events"]
+        case_type = initial_state["case_type"]
     elif not company or not strategy_theme or not cutoff_date:
         console.print("[red]Error: Provide company, strategy_theme, cutoff_date "
                       "or use --case config.yaml[/red]")
         raise typer.Exit(1)
     else:
-        regions = []
-        peers = []
         gt_events = []
-
-    # Load ground truth from separate file if provided
-    if ground_truth:
-        with open(ground_truth) as f:
-            gt_raw = yaml.safe_load(f)
-        gt_list = gt_raw if isinstance(gt_raw, list) else gt_raw.get("ground_truth_events", [])
-        gt_events = gt_list
+        case_type = "retrospective"
+        case_id = _make_case_id(company, cutoff_date)
+        # Positional-args path: optional sidecar truth file (legacy --ground-truth).
+        if ground_truth:
+            with open(ground_truth) as f:
+                gt_raw = yaml.safe_load(f)
+            gt_events = (
+                gt_raw if isinstance(gt_raw, list)
+                else gt_raw.get("ground_truth_events", [])
+            )
+        initial_state = {
+            "case_id": case_id,
+            "company": company,
+            "strategy_theme": strategy_theme,
+            "cutoff_date": cutoff_date,
+            "regions": [],
+            "peers": [],
+            "ground_truth_events": gt_events,
+            "case_type": case_type,
+            "audit_meta": {},
+        }
 
     console.print(Panel(
         f"[bold]{company}[/bold]\n"
-        f"{strategy_theme} | cutoff: [red]{cutoff_date}[/red]",
+        f"{strategy_theme} | cutoff: [red]{cutoff_date}[/red] | "
+        f"case_type: [cyan]{case_type}[/cyan]",
         title="SFEWA", style="blue",
     ))
 
@@ -127,19 +186,6 @@ def run(
         console.print(f"  Backtest: {len(gt_events)} ground truth events loaded")
     else:
         console.print("  Backtest: [dim](no ground truth — skipped)[/dim]")
-
-    # Build and run pipeline
-    case_id = _make_case_id(company, cutoff_date)
-
-    initial_state: dict = {
-        "case_id": case_id,
-        "company": company,
-        "strategy_theme": strategy_theme,
-        "cutoff_date": cutoff_date,
-        "regions": regions,
-        "peers": peers,
-        "ground_truth_events": gt_events,
-    }
 
     clear_log()  # Reset chat log before each run
     t0 = time.time()
@@ -170,7 +216,21 @@ def run(
         console.print(Panel(result["risk_memo"], title="Risk Memo"))
 
     # ── Save artifacts ──
-    run_dir = save_run_artifacts(result)
+    # Resolve the truth path (if any) for provenance hashing — same logic
+    # the loader uses, just to compute the hash.
+    truth_path = None
+    if case:
+        case_id_for_truth = result.get("case_id")
+        candidate = case.parent.parent / "truth" / f"{case_id_for_truth}.yaml"
+        if candidate.exists():
+            truth_path = candidate
+    run_dir = save_run_artifacts(
+        result,
+        case_path=case if case else None,
+        truth_path=truth_path,
+        started_at=t0,
+        elapsed_seconds=elapsed,
+    )
     console.print()
     minutes = int(elapsed // 60)
     seconds = int(elapsed % 60)

@@ -24,6 +24,11 @@ class PipelineState(TypedDict):
     # Either ["Toyota Motor", "BYD", ...] or [{"name": "Toyota Motor", ...}, ...]
     peers: list[str | dict[str, Any]]
     ground_truth_events: list[dict[str, Any]]
+    # L1.3 audit envelope (added 2026-05-05). case_type drives loader and
+    # verifier behavior; audit_meta carries jurisdiction / ticker /
+    # allowed_sources / doc_types / verifier_corpus from CaseConfig.
+    case_type: Literal["retrospective", "forward"]
+    audit_meta: dict[str, Any]
     # LLM-generated per-analyst dimensions, e.g.
     # {"industry": [{"name": "...", "description": "...", ...}], "company": [...], "peer": [...]}
     analysis_dimensions: dict[str, list[dict[str, str]]]
@@ -36,6 +41,10 @@ class PipelineState(TypedDict):
 
     # ── Overwriting fields ──
     retrieved_docs: list[dict[str, Any]]
+    # Doc-level audit log (L1.4). Populated by retrieval; saved as
+    # source_manifest.json. The production invariant is enforced at
+    # artifact-save time (zero kept docs with release_time > cutoff_date).
+    source_manifest: list[dict[str, Any]]
     risk_score: int | None  # 0-100 continuous risk score
     overall_risk_level: Literal["critical", "high", "medium", "low"] | None
     overall_confidence: float | None

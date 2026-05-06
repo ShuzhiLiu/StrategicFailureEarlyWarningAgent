@@ -43,12 +43,21 @@ _JAPAN_PATTERNS = [
     "sumitomo", "mitsui", "marubeni", "itochu",
 ]
 
-# Patterns for identifying Chinese companies
+# Patterns for identifying Chinese companies (mainland-listed)
 _CHINA_PATTERNS = [
     "byd", "nio", "xpeng", "li auto", "geely", "changan",
     "saic", "great wall", "chery", "dongfeng",
     "alibaba", "tencent", "baidu", "xiaomi", "huawei",
-    "catl", "sinopec", "petrochina", "icbc", "ping an",
+    "catl", "sinopec", "petrochina", "icbc",
+]
+
+# Patterns for identifying Hong Kong-listed companies. Some companies (e.g.
+# Tencent, Alibaba) appear here AND in _CHINA_PATTERNS — for those, an
+# explicit jurisdiction in the case YAML wins (CaseConfig.jurisdiction).
+_HONGKONG_PATTERNS = [
+    "ping an", "hsbc", "aia", "prudential",
+    "hong kong exchanges", "tencent holdings", "meituan",
+    "jd.com", "alibaba group", "xiaomi corporation",
 ]
 
 # Keywords for filtering EV-relevant pages from large filings
@@ -77,19 +86,36 @@ def _page_relevance(text: str) -> int:
 # ── Jurisdiction identification ──
 
 
-def identify_jurisdiction(company: str, regions: list[str] | None = None) -> str | None:
+def identify_jurisdiction(
+    company: str,
+    regions: list[str] | None = None,
+    *,
+    explicit: str | None = None,
+) -> str | None:
     """Determine a company's primary filing jurisdiction.
 
-    Uses company name patterns and case regions to infer where the company
-    files regulatory disclosures.
+    Args:
+        company: Company name (used for pattern matching).
+        regions: Case regions (used as fallback hint).
+        explicit: Explicit jurisdiction code from CaseConfig.jurisdiction
+            ("JP", "CN", "HK", "US"). Wins over inference when set —
+            avoids the multi-jurisdiction ambiguity for cross-listed
+            companies (e.g., Tencent is listed on HKEX but matches the
+            China name pattern).
 
     Returns:
-        "japan", "china", or None (unknown/unsupported).
+        "japan", "china", "hong_kong", or None (unknown/unsupported).
     """
+    if explicit:
+        return _JURISDICTION_CODE_TO_NAME.get(explicit.upper())
+
     name_lower = company.lower()
     regions_lower = [r.lower() for r in (regions or [])]
 
-    # Check company name patterns first (most reliable)
+    # HK pattern check first (most specific — these are HKEX-listed)
+    for pattern in _HONGKONG_PATTERNS:
+        if pattern in name_lower:
+            return "hong_kong"
     for pattern in _JAPAN_PATTERNS:
         if pattern in name_lower:
             return "japan"
@@ -98,12 +124,22 @@ def identify_jurisdiction(company: str, regions: list[str] | None = None) -> str
             return "china"
 
     # Fall back to region hints
+    if "hong_kong" in regions_lower or "hong kong" in regions_lower or "hongkong" in regions_lower:
+        return "hong_kong"
     if "japan" in regions_lower or "tokyo" in regions_lower:
         return "japan"
     if "china" in regions_lower or "shenzhen" in regions_lower or "shanghai" in regions_lower:
         return "china"
 
     return None
+
+
+_JURISDICTION_CODE_TO_NAME = {
+    "JP": "japan",
+    "CN": "china",
+    "HK": "hong_kong",
+    "US": "united_states",  # not yet supported by a provider
+}
 
 
 # ── EDINET discovery (Japan) ──
@@ -407,6 +443,46 @@ def discover_and_load_filings(
     if jurisdiction == "china":
         return _discover_and_load_cninfo(company, cutoff_date)
 
+    if jurisdiction == "hong_kong":
+        return _discover_and_load_hkex(company, cutoff_date)
+
+    return []
+
+
+def _discover_and_load_hkex(company: str, cutoff_date: str) -> list[dict]:
+    """HKEXnews discovery for HK-listed companies.
+
+    Cache-first: any PDFs already in data/corpus/{company}/hkex/ are loaded
+    and chunked. Live HKEXnews title-search is JSF-form-driven and resists
+    headless scraping; live discovery is intentionally a no-op until the
+    Layer 2 hardening pass adds a stable fetch path.
+
+    To stage HKEX filings manually, place PDFs under data/corpus/{company}/hkex/
+    with filenames like:
+        {company}_annual_report_2024-03-21.pdf
+        {company}_interim_report_2024-08-22.pdf
+    The standard filename → (doc_type, filed_date) inference applies.
+    """
+    name_lower = company.lower()
+    company_key = "unknown"
+    for pattern in _HONGKONG_PATTERNS:
+        if pattern in name_lower:
+            company_key = pattern.replace(" ", "_")
+            break
+
+    cache_dir = CORPUS_BASE / company_key / "hkex"
+    cached_pdfs = list(cache_dir.glob("*.pdf")) if cache_dir.exists() else []
+    if cached_pdfs:
+        reporting.log_action(f"Found {len(cached_pdfs)} cached HKEX PDFs", {
+            "company": company_key,
+            "dir": str(cache_dir),
+        })
+        return _load_cached_filings(cache_dir, cached_pdfs, company_key, source="hkexnews")
+
+    reporting.log_action("HKEX live discovery not yet implemented", {
+        "company": company_key,
+        "note": "Stage PDFs manually under " + str(cache_dir) + " for now",
+    })
     return []
 
 
