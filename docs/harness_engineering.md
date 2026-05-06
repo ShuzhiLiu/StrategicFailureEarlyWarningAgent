@@ -105,15 +105,15 @@ Source: [docs/essays/agentic_architecture_research.md](essays/agentic_architectu
 
 ## 4. What's deliberately not in this harness — and what each omission costs
 
-The scope is explicit. Every omission is tracked with a concrete motivation on [ROADMAP.md](../ROADMAP.md).
+The scope is explicit. The omissions are the gap between a reference harness and a production one; each is listed with the cost it imposes.
 
 | Component | Claude Code has | This harness has | What the omission costs |
 |---|:---:|:---:|---|
-| **Persistent memory across runs** | ✓ | ✗ | No research-cost compression across sessions. Claude Code benchmark R2 used ~120 tool calls *seeded by prior-run memory `sector_auto_ev_risk.md`*. Direct empirical evidence memory has value. **Highest-ROI next addition.** [v0.2] |
-| **Skill library** | ✓ | ✗ | Iceberg Model + 3-phase adversarial are SFEWA-specific. Factoring them as loadable skills enables cross-domain reuse (pharma pipeline, cloud strategy). [v0.3] |
-| **Permission model / sandbox** | ✓ (7 layers) | ✗ | Fine for local single-user trust. Required once the tool catalog grows to external writes. [v0.4] |
-| **Hook system** (27 event types) | ✓ | ✗ | No policy enforcement. Pre/post-tool hooks are the standard extensibility pattern for production harnesses. [v0.4] |
-| **Progressive context compression** (5 stages) | ✓ | partial | `truncate()` only. Long multi-turn sessions will hit the context wall before compressing. [v0.5] |
+| **Persistent memory across runs** | ✓ | ✗ | No research-cost compression across sessions. Claude Code benchmark R2 used ~120 tool calls *seeded by prior-run memory `sector_auto_ev_risk.md`*. Direct empirical evidence memory has value. **The highest-ROI gap left on the table.** |
+| **Skill library** | ✓ | ✗ | Iceberg Model + 3-phase adversarial are SFEWA-specific. Factoring them as loadable skills would enable cross-domain reuse (pharma pipeline, cloud strategy). |
+| **Permission model / sandbox** | ✓ (7 layers) | ✗ | Fine for local single-user trust. Required once the tool catalog grows to external writes. |
+| **Hook system** (27 event types) | ✓ | ✗ | No policy enforcement. Pre/post-tool hooks are the standard extensibility pattern for production harnesses. |
+| **Progressive context compression** (5 stages) | ✓ | partial | `truncate()` only. Long multi-turn sessions will hit the context wall before compressing. |
 | **Prompt-cache optimization** | ✓ | ✗ | Vital for production economics; not the bottleneck at vLLM-local development scale. |
 | **Streaming with parallel tool execution** | ✓ | ✗ | Pipeline is batch, not interactive. Streaming unlocks the "hide tool latency inside generation window" trick. |
 | **Multi-LLM fallback chain** | ✓ (Hermes) | ✗ | Single-provider. Fine for research; a production deployment wants per-turn provider failover. |

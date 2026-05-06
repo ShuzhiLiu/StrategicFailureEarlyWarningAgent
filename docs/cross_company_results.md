@@ -1,6 +1,6 @@
 # Cross-Company Experiment Results
 
-Three companies analyzed with the same pipeline, same prompts, same model (Qwen3.5-27B-GPTQ-Int4). Cutoff: 2025-05-19. Results demonstrate the system produces meaningfully different risk assessments based on evidence, not configuration.
+Three companies analyzed with the same pipeline, same prompts, same model (Qwen3.5-27B). Cutoff: 2025-05-19. Results demonstrate the system produces meaningfully different risk assessments based on evidence, not configuration.
 
 Demo-ready outputs cached in `demo/{company}/`.
 
