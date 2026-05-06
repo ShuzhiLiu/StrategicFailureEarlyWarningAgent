@@ -1,0 +1,51 @@
+# AIA Group — Mainland China expansion via bancassurance + Greater Bay Area
+# FORWARD case (no truth file). Cutoff: 2026-04-30, end-of-day Asia/Hong_Kong.
+#
+# This case exercises forward surveillance — the agent assesses strategic
+# risk using only pre-cutoff evidence and the outcome is unknown at run
+# time. Reports generated from this case MUST display "Forward
+# surveillance case. Not a retrospective validation." above the fold
+# (per L1.7 hosted-demo MVP).
+#
+# Strategic theme: AIA's largest growth bet is its mainland China
+# expansion — agency-led in core provinces, bancassurance partnerships
+# (with Citi mainland, ICBC, etc.) for breadth, and cross-border
+# Greater Bay Area health/wealth products for HK-mainland integration.
+# Forward risks include mainland interest-rate compression, regulatory
+# bancassurance commission caps, and longevity/mortality assumption
+# revisions.
+
+case_id: "aia_mainland_expansion_2026"
+case_type: "forward"
+company: "AIA Group Limited"
+jurisdiction: "HK"
+ticker: "1299"
+strategy_theme: "Mainland China expansion via bancassurance partnerships and Greater Bay Area cross-border health/wealth products"
+cutoff_date: "2026-04-30"
+
+# Forward → verifier_corpus: open_web (loader default; explicit for clarity).
+verifier_corpus: "open_web"
+allowed_sources:
+  - "hkexnews"
+  - "duckduckgo"
+  - "news"
+doc_types:
+  - "annual_report"
+  - "interim_report"
+  - "results_announcement"
+  - "inside_information"
+  - "circular"
+
+regions:
+  - "china"
+  - "hong_kong"
+  - "southeast_asia"
+  - "global"
+
+peers:
+  - "Prudential plc"
+  - "Manulife Financial Corporation"
+  - "Ping An Insurance (Group) Company of China, Ltd."
+  - "China Life Insurance Company Limited"
+  - "Hong Kong Life Insurance Limited"
+  - "FWD Group Holdings Limited"

@@ -123,6 +123,7 @@ def live_discover_filings(
     if company:
         rows = _ddg_discover(
             company=company,
+            stock_id=stock_id,
             from_date=from_date,
             to_date=to_date,
             max_results=max_results,
@@ -173,22 +174,121 @@ def live_discover_filings(
 # ── Path 1: DDG-based discovery ──
 
 
+def _build_ddg_queries(
+    *, short_name: str, stock_id: str | None, cutoff_year: int, lookback_years: int,
+) -> list[str]:
+    """Construct the ranked DDG query list for HKEX discovery.
+
+    DDG indexing is highly verbosity-sensitive. The L2.1 probe found
+    that short company names plus a year and `site:hkexnews.hk
+    filetype:pdf` surface HKEX archive URLs reliably for Country Garden
+    but not for Tencent or Ping An. Broadening the query set with
+    doc-type variants and a 4-digit ticker anchor materially improves
+    coverage on the harder issuers without paid API access.
+
+    Query priority order:
+        1. Year + doc-type + short name + site/filetype  (most selective)
+        2. Year + doc-type + short name + site (no filetype)
+        3. Stock-id-anchored when ticker known
+        4. Generic short-name + site/filetype (no year, no doc-type)
+        5. Doc-type-only fallbacks (no year, no name precision)
+
+    Doc-type variants cover the actual title patterns HKEX uses:
+    "annual report", "interim report", "annual results", "interim
+    results", "results announcement", "circular".
+    """
+    # Trim ticker to 4-digit form ("00700" → "700"). DDG indexes both
+    # zero-padded and bare forms; bare form has higher recall.
+    ticker_short: str | None = None
+    if stock_id:
+        ticker_short = stock_id.lstrip("0") or stock_id
+
+    # Year range — search backward from cutoff_year. lookback_years=2 by
+    # default covers the agent's standard 2-year window without
+    # over-querying.
+    year_window = list(range(cutoff_year, cutoff_year - lookback_years - 1, -1))
+
+    # Doc-type variants — these are the actual title forms HKEX uses.
+    # Keep order consistent with how often they appear in practice.
+    doc_terms = (
+        "annual report",
+        "interim report",
+        "annual results",
+        "interim results",
+        "results announcement",
+    )
+
+    queries: list[str] = []
+
+    # Tier 1: year + doc-type + short_name + site/filetype
+    for year in year_window:
+        for term in doc_terms[:3]:  # core 3 only (annual/interim report + annual results)
+            queries.append(
+                f'{short_name} {year} {term} site:hkexnews.hk filetype:pdf'
+            )
+
+    # Tier 2: year + doc-type + short_name + site (drop filetype hint)
+    for year in year_window[:2]:
+        for term in doc_terms[:2]:
+            queries.append(f'{short_name} {year} {term} site:hkexnews.hk')
+
+    # Tier 3: ticker-anchored — `"700" site:hkexnews.hk filetype:pdf`
+    if ticker_short:
+        queries.append(
+            f'{ticker_short} {short_name} site:hkexnews.hk filetype:pdf'
+        )
+        queries.append(
+            f'"({ticker_short})" {short_name} site:hkexnews.hk filetype:pdf'
+        )
+
+    # Tier 4: generic broadening
+    queries.append(f'{short_name} site:hkexnews.hk filetype:pdf')
+
+    # Tier 5: last-resort, doc-type-only with year
+    queries.append(
+        f'{short_name} {cutoff_year} site:hkexnews.hk filetype:pdf'
+    )
+
+    # Dedup while preserving order (some templates may produce identical
+    # strings when ticker_short is None or doc_terms overlap).
+    seen: set[str] = set()
+    deduped: list[str] = []
+    for q in queries:
+        if q in seen:
+            continue
+        seen.add(q)
+        deduped.append(q)
+    return deduped
+
+
 def _ddg_discover(
-    *, company: str, from_date: str, to_date: str, max_results: int,
+    *,
+    company: str,
+    stock_id: str | None = None,
+    from_date: str,
+    to_date: str,
+    max_results: int,
+    lookback_years: int = 2,
 ) -> list[dict[str, Any]]:
     """Discover HKEXnews PDFs by querying DuckDuckGo.
 
     DDG is sensitive to query verbosity. The L2.1 probe found that
-    short company names + year hint surface HKEX archive URLs reliably,
-    while full legal names + `filetype:pdf` often return empty. We
-    issue several short, year-anchored queries; the first to return
-    rows wins.
+    short company names + year hint surface HKEX archive URLs reliably
+    for Country Garden but not for Tencent / Ping An. L2.4 broadens the
+    query set with doc-type variants, ticker-anchored queries, and a
+    wider year window — substantially improving coverage on the harder
+    issuers with no extra dependencies.
 
     Filters returned URLs by:
       * URL pattern match (must look like an HKEXnews archive PDF)
       * URL date (YYYY/MMDD components must be on or before to_date and
         on or after from_date)
       * Deduplication by announcement_id
+
+    The function keeps issuing queries until either max_results is hit
+    or the query list is exhausted. This replaces the earlier
+    "first-query-with-rows wins" pattern, which left coverage
+    incomplete on issuers whose first query missed older filings.
     """
     try:
         from ddgs import DDGS
@@ -199,29 +299,23 @@ def _ddg_discover(
     short_name = _short_company_name(company)
     cutoff_year = int(to_date[:4])
 
-    # Queries are ranked by selectivity. The short-name + year + filetype
-    # form is what the L2.1 probe verified surfaces HKEX URLs for
-    # Country Garden. Subsequent queries broaden coverage.
-    queries: list[str] = []
-    for year in (cutoff_year, cutoff_year - 1):
-        queries.append(
-            f'{short_name} {year} annual report site:hkexnews.hk filetype:pdf'
-        )
-        queries.append(
-            f'{short_name} {year} interim report site:hkexnews.hk filetype:pdf'
-        )
-    # Generic broadening — drop year hint, keep filetype + site
-    queries.append(f'{short_name} site:hkexnews.hk filetype:pdf')
-    # Last resort — drop filetype filter (DDG sometimes indexes PDFs
-    # without exposing the .pdf extension hint)
-    queries.append(f'{short_name} {cutoff_year} annual report site:hkexnews.hk')
+    queries = _build_ddg_queries(
+        short_name=short_name,
+        stock_id=stock_id,
+        cutoff_year=cutoff_year,
+        lookback_years=lookback_years,
+    )
 
     seen_ids: set[str] = set()
     rows: list[dict[str, Any]] = []
     cutoff_d = date.fromisoformat(to_date)
     from_d = date.fromisoformat(from_date)
+    queries_run = 0
 
     for q in queries:
+        if len(rows) >= max_results:
+            break
+        queries_run += 1
         try:
             results = list(ddgs.text(q, max_results=8))
         except Exception as exc:  # noqa: BLE001
@@ -230,6 +324,7 @@ def _ddg_discover(
             })
             results = []
 
+        new_in_this_query = 0
         for r in results:
             url = r.get("href") or r.get("url") or ""
             title = r.get("title") or r.get("body") or ""
@@ -248,15 +343,15 @@ def _ddg_discover(
                 continue
             seen_ids.add(ann_id)
             rows.append(row)
+            new_in_this_query += 1
 
         # Polite delay between DDG queries (matches retrieval module)
         time.sleep(2)
-        if len(rows) >= max_results:
-            break
 
     if rows:
         reporting.log_action("HKEX DDG discovery yielded rows", {
             "company_short": short_name,
+            "queries_run": queries_run,
             "rows": len(rows),
         })
     return rows

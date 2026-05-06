@@ -269,3 +269,153 @@ def test_unresolved_filters_out_resolved():
     assert len(out) == 2
     statuses = sorted(r["status"] for r in out)
     assert statuses == ["no_citations", "unresolved"]
+
+
+# ── Token-overlap path: paraphrase recall + false-positive guards ──
+
+
+def test_token_overlap_resolves_paraphrase_with_reordered_words():
+    """Heavy paraphrase: same content tokens, different prose. The pre-L2.4
+    difflib-only matcher missed these (no long contiguous block survives
+    reordering); the upgraded token-overlap path catches them."""
+    sentence = "Honda's BEV losses reached approximately 4 billion in fiscal 2024."
+    evidence_text = (
+        "We disclose that fiscal 2024 BEV losses for Honda totalled "
+        "approximately 4 billion dollars under updated segment reporting."
+    )
+    span = find_span_in_text(sentence, evidence_text)
+    assert span is not None
+    start, end = span
+    assert 0 <= start < end <= len(evidence_text)
+
+
+def test_token_overlap_resolves_paraphrase_with_synonyms_blocked_only_by_function_words():
+    """Realistic analyst paraphrase pattern."""
+    sentence = "Toyota delayed its solid-state battery production timeline beyond 2027."
+    evidence_text = (
+        "Toyota's most recent disclosure pushed the production timeline for "
+        "solid-state batteries beyond 2027, citing manufacturing yield issues."
+    )
+    span = find_span_in_text(sentence, evidence_text)
+    assert span is not None
+
+
+def test_token_overlap_does_not_resolve_unrelated_evidence_with_one_shared_word():
+    """Token coverage must exceed threshold AND reach the hit floor."""
+    sentence = "Honda announced a 5 billion investment in solid-state batteries."
+    # Shares only "investment" — below MIN_HITS=3.
+    evidence_text = "The company's R&D investment cycle is generally well-managed."
+    assert find_span_in_text(sentence, evidence_text) is None
+
+
+def test_token_overlap_does_not_resolve_when_ratio_too_low():
+    """Sentence has many content tokens; evidence shares only 2 — below ratio."""
+    sentence = (
+        "Honda's North American assembly footprint, capital allocation discipline, "
+        "and Ohio joint-venture battery plant timing are all relevant to the BEV strategy."
+    )
+    evidence_text = "Honda's BEV strategy."
+    assert find_span_in_text(sentence, evidence_text) is None
+
+
+def test_token_overlap_handles_year_anchors():
+    """Year tokens (2024, 2027, etc.) are kept as content tokens — they're
+    high-signal anchors for retrospective claims."""
+    sentence = "BYD's NEV deliveries reached approximately 4 million units in 2024."
+    evidence_text = (
+        "Per BYD annual report, the company recorded NEV deliveries of approximately "
+        "4 million units throughout fiscal 2024."
+    )
+    span = find_span_in_text(sentence, evidence_text)
+    assert span is not None
+
+
+def test_token_overlap_skips_too_few_content_tokens():
+    """Sentences with fewer than MIN_TOKENS skip the token path; only the
+    difflib fallback runs (and on a tiny sentence, it also skips)."""
+    sentence = "EV losses today."  # < MIN_TOKENS after stopword filter
+    evidence_text = "EV losses today were extreme across all segments."
+    # Difflib fallback may or may not match — if it does, that's fine.
+    # The point is: no crash, deterministic.
+    out = find_span_in_text(sentence, evidence_text)
+    assert out is None or (isinstance(out, tuple) and len(out) == 2)
+
+
+def test_token_overlap_ignores_stopword_only_overlap():
+    """Two sentences that share only stopwords must NOT resolve."""
+    sentence = "The strategy that the company should have adopted from the start."
+    evidence_text = "The market for the product that should be considered."
+    assert find_span_in_text(sentence, evidence_text) is None
+
+
+def test_validate_resolves_paraphrased_claim_against_evidence():
+    """End-to-end: a real-world analyst paraphrase against verbatim
+    filing text resolves successfully through the validator."""
+    factors = [{
+        "factor_id": "COM001",
+        "claim": (
+            "Honda's BEV losses reached approximately 4 billion in fiscal 2024 "
+            "amid weaker than expected demand."
+        ),
+        "supporting_evidence": ["E1"],
+    }]
+    evidence = [{
+        "evidence_id": "E1",
+        "span_text": (
+            "Item 7 disclosure: fiscal 2024 BEV losses for Honda totalled "
+            "approximately 4 billion dollars amid demand softer than expected."
+        ),
+        "doc_id": "DOC1",
+        "global_char_start": 0,
+    }]
+    results = validate_sentence_citations(factors, evidence)
+    assert len(results) == 1
+    assert results[0]["status"] == "resolved"
+    assert results[0]["matched_evidence_id"] == "E1"
+
+
+def test_resolution_rate_lifts_for_paraphrase_corpus():
+    """Smoke test: a small corpus where every claim is a paraphrase
+    (not verbatim) should now have substantial resolution rate. Pre-L2.4
+    this corpus would resolve at ~0%."""
+    factors = [
+        {
+            "factor_id": "F1",
+            "claim": "Toyota delayed its solid-state battery production timeline beyond 2027.",
+            "supporting_evidence": ["E1"],
+        },
+        {
+            "factor_id": "F2",
+            "claim": "BYD shipped 4 million NEV units in 2024 according to filings.",
+            "supporting_evidence": ["E2"],
+        },
+        {
+            "factor_id": "F3",
+            "claim": "Honda's BEV losses reached approximately 4 billion in fiscal 2024.",
+            "supporting_evidence": ["E3"],
+        },
+    ]
+    evidence = [
+        {
+            "evidence_id": "E1",
+            "span_text": (
+                "Toyota's most recent disclosure pushed the production timeline for "
+                "solid-state batteries beyond 2027."
+            ),
+            "doc_id": "D1",
+        },
+        {
+            "evidence_id": "E2",
+            "span_text": "BYD NEV unit shipments for 2024 reached 4 million across all segments.",
+            "doc_id": "D2",
+        },
+        {
+            "evidence_id": "E3",
+            "span_text": "Fiscal 2024 BEV losses for Honda totalled approximately 4 billion dollars.",
+            "doc_id": "D3",
+        },
+    ]
+    results = validate_sentence_citations(factors, evidence)
+    summary = sentence_citation_summary(results)
+    # Pre-L2.4 expected ~0; post-L2.4 should resolve all three.
+    assert summary["resolution_rate"] >= 0.66

@@ -316,6 +316,120 @@ def test_short_company_name_preserves_simple_names():
     assert _short_company_name("Honda") == "Honda"
 
 
+# ── _build_ddg_queries (L2.4 broadening) ──
+
+
+def test_build_queries_includes_year_doc_type_combinations():
+    """Each year × doc-type combination produces a query."""
+    from sfewa.tools.hkex_live_discovery import _build_ddg_queries
+    qs = _build_ddg_queries(
+        short_name="Tencent",
+        stock_id=None,
+        cutoff_year=2024,
+        lookback_years=2,
+    )
+    # Tier 1: 3 years × 3 doc-terms = 9 queries
+    assert any("2024 annual report" in q for q in qs)
+    assert any("2023 annual report" in q for q in qs)
+    assert any("2022 annual report" in q for q in qs)
+    assert any("interim report" in q for q in qs)
+    assert any("annual results" in q for q in qs)
+    # All HK-anchored
+    assert all("site:hkexnews.hk" in q for q in qs)
+
+
+def test_build_queries_includes_ticker_when_known():
+    """When stock_id is provided, ticker-anchored queries are emitted."""
+    from sfewa.tools.hkex_live_discovery import _build_ddg_queries
+    qs = _build_ddg_queries(
+        short_name="Tencent",
+        stock_id="00700",
+        cutoff_year=2024,
+        lookback_years=2,
+    )
+    # Bare ticker form (zero-padding stripped)
+    assert any("700 Tencent" in q for q in qs)
+
+
+def test_build_queries_skips_ticker_when_unknown():
+    """No stock_id → no ticker-anchored queries (graceful)."""
+    from sfewa.tools.hkex_live_discovery import _build_ddg_queries
+    qs = _build_ddg_queries(
+        short_name="Tencent",
+        stock_id=None,
+        cutoff_year=2024,
+        lookback_years=2,
+    )
+    # No bare-digit-anchored query
+    assert not any(q.startswith("700") or q.startswith('"(700)"') for q in qs)
+
+
+def test_build_queries_dedupes():
+    """When templates collide, dedup keeps the first occurrence."""
+    from sfewa.tools.hkex_live_discovery import _build_ddg_queries
+    qs = _build_ddg_queries(
+        short_name="X",
+        stock_id=None,
+        cutoff_year=2024,
+        lookback_years=0,  # only one year
+    )
+    assert len(qs) == len(set(qs))
+
+
+def test_build_queries_respects_lookback_years():
+    """lookback_years=1 → only cutoff_year and prior_year tier-1 queries."""
+    from sfewa.tools.hkex_live_discovery import _build_ddg_queries
+    qs_1 = _build_ddg_queries(
+        short_name="X", stock_id=None, cutoff_year=2024, lookback_years=1,
+    )
+    qs_3 = _build_ddg_queries(
+        short_name="X", stock_id=None, cutoff_year=2024, lookback_years=3,
+    )
+    # 3-year lookback strictly more queries than 1-year
+    assert len(qs_3) > len(qs_1)
+    # 3-year version explicitly mentions 2021
+    assert any("2021" in q for q in qs_3)
+    assert not any("2021" in q for q in qs_1)
+
+
+def test_ddg_discover_keeps_aggregating_across_queries():
+    """L2.4 fix: don't stop after first query with rows; aggregate
+    across the full query list until max_results."""
+    from sfewa.tools.hkex_live_discovery import _ddg_discover
+
+    # Each query returns one unique row.
+    call_count = [0]
+    rows_per_call = [
+        [{
+            "title": "2024 Annual Report",
+            "href": f"https://www1.hkexnews.hk/listedco/listconews/sehk/2024/0322/2024032200{i:03d}.pdf",
+        }] for i in range(1, 4)
+    ]
+
+    def mock_text(q, max_results):
+        idx = call_count[0]
+        call_count[0] += 1
+        return rows_per_call[idx] if idx < len(rows_per_call) else []
+
+    class MockDDGS:
+        def text(self, q, max_results):
+            return mock_text(q, max_results)
+
+    with patch("ddgs.DDGS", return_value=MockDDGS()), \
+         patch("sfewa.tools.hkex_live_discovery.time.sleep"):
+        rows = _ddg_discover(
+            company="Tencent Holdings Limited",
+            stock_id=None,
+            from_date="2022-01-01",
+            to_date="2024-12-31",
+            max_results=10,
+            lookback_years=2,
+        )
+    assert len(rows) >= 3
+    # Confirm we made multiple queries (aggregating, not stopping at 1)
+    assert call_count[0] >= 3
+
+
 # ── promote_hkex_urls_from_results ──
 
 

@@ -1,0 +1,134 @@
+# Truth file for HSBC China CRE retrospective case (cutoff 2023-07-31).
+# EVALUATION-ONLY — never loaded by retrieval, extraction, analyst,
+# adversarial, or synthesis code. Read by sfewa.agents.backtest only.
+
+case_id: "hsbc_china_cre_2023"
+
+sentinel: "__TRUTH_SENTINEL_hsbc_china_cre_2023_b3f7c9__"
+
+known_outcome: >
+  HSBC's Asia-pivot strategy delivered strong overall financial results in
+  2023-2024 (record profits, large buybacks, successful Argentina/Canada
+  exits) BUT its concentrated mainland China commercial real-estate
+  exposure (~USD 19B end-2022) generated material impairments through
+  the property-sector downturn: ~USD 1.1B in 2023 H1, ~USD 1.7B for
+  FY2023, plus a separate ~USD 3.0B impairment on its BoCom (Bank of
+  Communications) associate stake in 2024 Q1. The strategic-risk signal
+  the pre-cutoff filings carried — concentrated exposure to a sector in
+  visible distress — materialized as a real but contained earnings
+  impact. Overall HSBC remained profitable; the strategic-pivot thesis
+  was NOT invalidated, but the price of execution was clearly
+  underestimated by management commentary in the 2022 annual report.
+
+# Anchor disclosure: HSBC's 2023 H1 interim results (released 2023-08-01,
+# the day after cutoff) carried the $1.1B mainland CRE impairment line.
+# Cutoff 2023-07-31 leaves the 2022 annual report (filed Feb 2023), Q1
+# 2023 trading update, and 2022 H1 interim in scope. The Country Garden
+# default warning (2023-08-08) is also post-cutoff but the China property
+# distress signal was visible in 2022 disclosures and Q1 2023 commentary.
+outcome_disclosed_at: "2023-08-01"
+
+validation_notes: >
+  Selection rationale (per roadmap rev 4 four-criteria test):
+
+    1. Outcome has clear public disclosure date — YES, 2023 H1 interim
+       results 2023-08-01 carried the first explicit $1.1B mainland CRE
+       impairment line. Subsequent FY2023 results 2024-02-21 quantified
+       full-year impact.
+    2. Pre-cutoff HKEX filings contain enough signal — YES, 2022 annual
+       report (filed Feb 2023) discloses ~USD 19B mainland CRE exposure
+       and notes elevated provisioning. Q1 2023 trading update commentary
+       explicitly flags "elevated charges" expected.
+    3. Outcome is a strategic event, not pure stock-price noise — YES,
+       the Asia-pivot was the explicit strategy; the largest single
+       concentrated exposure was mainland CRE; the sector entered visible
+       distress mid-2023. Strategic risk crystallized into earnings.
+    4. Agent does not need external news to understand the primary risk —
+       PARTIALLY. HSBC's own filings disclose the CRE concentration and
+       provisioning trajectory. Industry context (China property sector
+       distress) is partly in HSBC's own management discussion and partly
+       relies on broader market awareness — Country Garden 2022 annual
+       report (publicly indexed on HKEX) provides peer evidence of
+       sector distress, which HSBC's analyst peer pass should surface.
+
+  Pre-cutoff lead-time: cutoff 2023-07-31 vs. first material impairment
+  announcement 2023-08-01 = 1 day. This is a short window — testing
+  whether the agent can discriminate "concentrated exposure to a sector
+  in visible distress" from "concentrated exposure with no visible
+  distress" using the 2022 annual report alone. A genuine signal-vs-noise
+  test more demanding than Country Garden (10-month lead) or Honda
+  (10-month lead).
+
+  Expected score band: MEDIUM (40-59) or MEDIUM-HIGH (55-65). Not LOW —
+  the concentrated exposure into a distressed sector is a real risk.
+  Not HIGH — overall business remains strongly profitable; the
+  strategic thesis is not invalidated. CRITICAL is wrong — there's no
+  existential threat. The agent should pick up the CRE exposure as a
+  structural risk factor with depth ≥ 3, severity MEDIUM/HIGH, and the
+  evidence should resist STRONG downgrades (HSBC's own filings show the
+  exposure clearly).
+
+ground_truth_events:
+  - event_id: "gt_001"
+    event_date: "2023-08-01"
+    description: >
+      HSBC 2023 H1 interim results disclose ~USD 1.1B impairment charge
+      against mainland China commercial real-estate book. First explicit
+      quantified strategic-risk crystallization. Overall pre-tax profit
+      $21.7B, beating consensus, but CRE line stands out.
+    event_type: "asset_writedown"
+    source_url: "https://www1.hkexnews.hk/listedco/listconews/sehk/2023/0801/"
+    key_figures:
+      - metric: "mainland_cre_impairment_h1_2023_usd_billion"
+        value: "1.1"
+
+  - event_id: "gt_002"
+    event_date: "2023-10-30"
+    description: >
+      HSBC Q3 2023 trading update — additional CRE provisioning of
+      approximately USD 0.5B announced; full-year mainland CRE impairment
+      now tracking toward ~USD 1.7B. Management commentary tones down
+      Asia-pivot rhetoric, emphasizes diversification.
+    event_type: "narrative_shift"
+
+  - event_id: "gt_003"
+    event_date: "2024-02-21"
+    description: >
+      HSBC FY2023 annual results — full-year mainland CRE impairment
+      ~USD 1.7B. Annual results also disclose USD ~3.0B impairment of
+      Bank of Communications (BoCom) associate stake, separate from CRE
+      but reflecting the same broader China-exposure thesis.
+    event_type: "asset_writedown"
+    key_figures:
+      - metric: "fy2023_cre_impairment_usd_billion"
+        value: "1.7"
+      - metric: "fy2023_bocom_impairment_usd_billion"
+        value: "3.0"
+
+  - event_id: "gt_004"
+    event_date: "2024-02-21"
+    description: >
+      HSBC announces additional USD 2B share buyback alongside FY2023
+      results. Capital return continues despite impairments — confirms
+      strategic thesis remains intact, just at higher execution cost.
+    event_type: "target_statement"
+    key_figures:
+      - metric: "buyback_announcement_usd_billion"
+        value: "2.0"
+
+  - event_id: "gt_005"
+    event_date: "2024-04-30"
+    description: >
+      HSBC Q1 2024 trading update — strong overall earnings but mainland
+      CRE provisioning remains elevated. CEO change to Georges Elhedery
+      announced for September 2024 succession.
+    event_type: "narrative_shift"
+
+  - event_id: "gt_006"
+    event_date: "2024-10-22"
+    description: >
+      Under new CEO Elhedery, HSBC announces major reorganization
+      (Eastern Markets / Western Markets split, ~9000 senior management
+      cuts). Reorganization explicitly attributes part of cost base to
+      managing concentrated Asia-region exposures including CRE.
+    event_type: "target_revision"

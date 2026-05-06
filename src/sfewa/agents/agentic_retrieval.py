@@ -301,9 +301,19 @@ def agentic_retrieval_node(state: PipelineState) -> dict:
         "cutoff_date": cutoff,
     })
 
-    # Shared state for tools to accumulate results
-    all_docs: list[dict] = []
-    seen_links: set[str] = set()
+    # Shared state for tools to accumulate results.
+    # Peer filings (set by peer_filings_node when opted in) are seeded
+    # here so they enter the manifest, evidence extraction, and analyst
+    # prompts as part of the same corpus the agent builds via search.
+    peer_filings = state.get("peer_filings") or []
+    all_docs: list[dict] = list(peer_filings)
+    seen_links: set[str] = {
+        link for d in peer_filings if (link := d.get("link"))
+    }
+    if peer_filings:
+        reporting.log_action("Seeded peer filings into retrieval corpus", {
+            "chunks": len(peer_filings),
+        })
 
     # Resolve jurisdiction once (for the URL auto-promotion gate inside
     # the search tool). Same logic the filing tool uses.
@@ -391,7 +401,11 @@ def agentic_retrieval_node(state: PipelineState) -> dict:
     result = agent.run(user_msg)
 
     # Count doc sources
-    filing_count = sum(1 for d in all_docs if d.get("source") in ("edinet", "cninfo"))
+    filing_count = sum(
+        1 for d in all_docs
+        if d.get("source") in ("edinet", "cninfo", "hkexnews", "sec_edgar")
+    )
+    peer_count = sum(1 for d in all_docs if d.get("peer_company"))
     web_count = len(all_docs) - filing_count
 
     reporting.log_action("Agent finished", {
@@ -416,6 +430,7 @@ def agentic_retrieval_node(state: PipelineState) -> dict:
     reporting.exit_node("agentic_retrieval", {
         "total_docs": len(all_docs),
         "filings": filing_count,
+        "peer_filings": peer_count,
         "web": web_count,
         "search_queries": result.tool_call_count,
         "manifest_entries": len(source_manifest),

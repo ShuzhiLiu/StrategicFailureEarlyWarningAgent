@@ -24,6 +24,7 @@ from sfewa.agents.evidence_extraction import evidence_extraction_node
 from sfewa.agents.industry_analyst import industry_analyst_node
 from sfewa.agents.init_case import init_case_node
 from sfewa.agents.peer_analyst import peer_analyst_node
+from sfewa.agents.peer_filings import peer_filings_node
 from sfewa.agents.quality_gate import quality_gate_node
 from sfewa.agents.retrieval import retrieval_node
 from sfewa.agents.risk_synthesis import risk_synthesis_node
@@ -130,6 +131,9 @@ def run_pipeline(state: dict) -> dict:
     # -- Init --
     state = merge_state(state, init_case_node(state), accumulate=ACC)
 
+    # -- Peer filings (opt-in, gated by audit_meta.fetch_peer_filings) --
+    state = merge_state(state, peer_filings_node(state), accumulate=ACC)
+
     # -- Evidence gathering loop (quality gate drives) --
     for iteration in range(MAX_ITERATIONS):
         state = merge_state(state, retrieval_node(state), accumulate=ACC)
@@ -198,6 +202,9 @@ def run_pipeline_v2(state: dict) -> dict:
 
     # -- Init --
     state = merge_state(state, init_case_node(state), accumulate=ACC)
+
+    # -- Peer filings (opt-in, gated by audit_meta.fetch_peer_filings) --
+    state = merge_state(state, peer_filings_node(state), accumulate=ACC)
 
     # -- Agentic retrieval (replaces retrieval + quality_gate loop) --
     state = merge_state(state, agentic_retrieval_node(state), accumulate=ACC)

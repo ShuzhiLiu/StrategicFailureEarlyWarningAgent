@@ -1,0 +1,47 @@
+# HSBC Holdings — Asia-pivot via China commercial real-estate exposure
+# Retrospective case (cutoff 2023-07-31, end-of-day Asia/Hong_Kong).
+# 1 day before HSBC's 2023 H1 results (2023-08-01) disclosed $1.1B
+# mainland CRE impairment. Pre-cutoff signals are in the 2022 annual
+# report (filed Feb 2023) and the visible China-property-sector distress
+# (Country Garden interim default same week as cutoff).
+# Truth file: configs/truth/hsbc_china_cre_2023.yaml
+#
+# Why this case: tests a "concentrated-exposure into distressed sector"
+# scenario distinct from outright failure (Country Garden / Boeing) and
+# distinct from successful execution (Toyota / BYD). HSBC continues
+# strong overall — but the strategic Asia-pivot's largest single
+# exposure was about to take material impairments.
+
+case_id: "hsbc_china_cre_2023"
+case_type: "retrospective"
+company: "HSBC Holdings plc"
+jurisdiction: "HK"
+ticker: "0005"
+strategy_theme: "Asia-pivot through concentrated mainland China commercial real-estate exposure"
+cutoff_date: "2023-07-31"
+
+# L1.5: retrospective + allowed_sources_only is the loader default;
+# pinned explicitly so the audit envelope is unambiguous.
+verifier_corpus: "allowed_sources_only"
+allowed_sources:
+  - "hkexnews"
+doc_types:
+  - "annual_report"
+  - "interim_report"
+  - "results_announcement"
+  - "inside_information"
+  - "circular"
+
+regions:
+  - "hong_kong"
+  - "china"
+  - "united_kingdom"
+  - "global"
+
+peers:
+  - "Standard Chartered PLC"
+  - "BOC Hong Kong (Holdings) Limited"
+  - "Hang Seng Bank Limited"
+  - "Bank of China Limited"
+  - "Industrial and Commercial Bank of China Limited"
+  - "Citigroup Inc."

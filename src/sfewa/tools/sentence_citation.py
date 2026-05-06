@@ -14,9 +14,23 @@ record a `(doc_id, char_start, char_end)` span pointing into the cited
 evidence's `span_text`. When the answer is no, we record an
 `unresolved` violation.
 
+Two complementary matchers run in series:
+    1. Token overlap (primary, catches paraphrases). Compares content
+       words (stopword-filtered) between sentence and evidence; when
+       coverage exceeds threshold, finds the tightest evidence window
+       containing the matched tokens.
+    2. difflib longest-block (fallback, catches verbatim quotes and
+       CJK text where token-splitting is too coarse).
+
+Why two paths? Analysts paraphrase synthesized claims rather than
+quote verbatim. Pure-difflib resolution rates were 1-10% across cases
+even when the underlying claim was clearly traceable. Token overlap
+lifts paraphrase recall while difflib remains the safety net for the
+exact-quote and CJK cases.
+
 This is *post-hoc validation*: the analyst LLM doesn't currently emit
 sentence→span mappings, so the validator does fuzzy matching against
-cited evidence text. The threshold is intentionally lenient (the goal
+cited evidence text. The thresholds are deliberately lenient (the goal
 is honest audit signal, not gatekeeping a brittle matcher). Like
 L1.4-C, violations are recorded as data in
 `run_summary.json["audit_violations"]["sentence_citations_unresolved"]`,
@@ -36,11 +50,13 @@ import re
 from difflib import SequenceMatcher
 from typing import Any
 
+# ── difflib path thresholds (verbatim/near-verbatim quotes) ──
+
 # How much of the sentence's normalized text must match the evidence text
 # (longest contiguous block / sentence length) before we declare the
-# sentence "resolved". 0.25 is a deliberately lenient threshold:
-#   - High enough to reject completely unrelated evidence
-#   - Low enough that paraphrases and partial quotes still resolve
+# sentence "resolved" via the difflib path. 0.25 is a deliberately
+# lenient threshold — high enough to reject completely unrelated
+# evidence, low enough that partial verbatim quotes still resolve.
 LONGEST_BLOCK_MIN_RATIO = 0.25
 
 # Absolute floor — even short sentences require some real matching content,
@@ -50,6 +66,23 @@ LONGEST_BLOCK_MIN_CHARS = 12
 # Sentences this short are skipped — they're typically headers or fragments
 # that don't carry an independently citable factual claim.
 MIN_SENTENCE_CHARS = 20
+
+# ── Token-overlap path thresholds (paraphrases, reordered prose) ──
+
+# Sentences with fewer content tokens than this skip the token path
+# entirely — too few signals to distinguish a real match from chance.
+TOKEN_OVERLAP_MIN_TOKENS = 4
+
+# Distinct content tokens that must appear in BOTH sentence and evidence
+# for a token-overlap match to count. Floor of 3 prevents 1-2 word
+# coincidences from resolving.
+TOKEN_OVERLAP_MIN_HITS = 3
+
+# Fraction of the sentence's content tokens that must be present in the
+# evidence. 0.55 catches typical paraphrases (which preserve most
+# content words while reordering connectives) without admitting
+# loosely-related evidence.
+TOKEN_OVERLAP_MIN_RATIO = 0.55
 
 
 # ── Sentence splitting ──
@@ -81,6 +114,68 @@ def split_into_sentences(text: str) -> list[str]:
     return out
 
 
+# ── Content tokenization ──
+
+# Common English stopwords that carry little citation signal. Kept
+# small on purpose — over-aggressive filtering eats meaningful tokens
+# (e.g. "not", "no" can flip a claim's polarity but rarely change
+# whether evidence supports it). Years like "2024" are NOT filtered;
+# they're high-signal anchors.
+_STOPWORDS: frozenset[str] = frozenset({
+    "the", "and", "for", "are", "but", "not", "you", "all", "can", "had",
+    "her", "was", "one", "our", "out", "day", "get", "has", "him", "his",
+    "how", "man", "new", "now", "old", "see", "two", "way", "who", "boy",
+    "did", "its", "let", "put", "say", "she", "too", "use", "with", "this",
+    "that", "from", "they", "have", "been", "were", "said", "what", "your",
+    "when", "make", "than", "them", "then", "into", "more", "some", "such",
+    "very", "just", "also", "only", "over", "those", "these", "their",
+    "would", "could", "should", "after", "before", "during", "while",
+    "within", "without", "among", "between", "through", "across", "above",
+    "below", "under", "upon", "against", "because", "since", "though",
+    "although", "however", "therefore", "thus", "hence", "indeed", "still",
+    "even", "ever", "yet", "any", "many", "much", "each", "every", "either",
+    "neither", "both", "other", "another", "where", "which", "whose",
+})
+
+
+def _content_tokens(text: str) -> list[str]:
+    """Lowercase content tokens carrying citation signal.
+
+    Rules:
+        - words: length >= 3 and not in _STOPWORDS
+        - numbers: length >= 2 (drops "1", "4" but keeps "24", "2024")
+
+    Numbers are preserved deliberately — years and dollar magnitudes
+    are high-signal anchors for retrospective claims.
+    """
+    raw = re.findall(r"[A-Za-z0-9]+", text.lower())
+    out: list[str] = []
+    for t in raw:
+        if t.isdigit():
+            if len(t) >= 2:
+                out.append(t)
+        elif len(t) >= 3 and t not in _STOPWORDS:
+            out.append(t)
+    return out
+
+
+def _find_word_boundary_positions(text_lower: str, token: str) -> list[int]:
+    """All word-boundary positions of `token` in `text_lower`."""
+    out: list[int] = []
+    idx = 0
+    n = len(text_lower)
+    while True:
+        j = text_lower.find(token, idx)
+        if j < 0:
+            return out
+        left_ok = j == 0 or not text_lower[j - 1].isalnum()
+        right_end = j + len(token)
+        right_ok = right_end >= n or not text_lower[right_end].isalnum()
+        if left_ok and right_ok:
+            out.append(j)
+        idx = j + 1
+
+
 # ── Fuzzy span match ──
 
 
@@ -89,27 +184,71 @@ def _normalize(text: str) -> str:
     return re.sub(r"\s+", " ", text).strip().lower()
 
 
-def find_span_in_text(
-    sentence: str,
-    evidence_text: str,
+def _token_overlap_match(
+    sentence: str, evidence_text: str,
 ) -> tuple[int, int] | None:
-    """Locate the most plausible character span of `sentence` inside `evidence_text`.
+    """Locate `sentence` inside `evidence_text` via content-token overlap.
 
-    Returns (start, end) char offsets in `evidence_text` when matched,
-    or None when the longest matching block is too small to count as
-    citation evidence. Offsets are local to `evidence_text`.
+    Returns (start, end) char offsets in `evidence_text` when the
+    sentence's content-token coverage in evidence is above threshold,
+    else None.
 
-    The L2.3 invariant target is `(doc_id, global_char_start, global_char_end)`.
-    Local offsets are sufficient when the evidence is a single quote;
-    callers that have access to global EvidenceChunk offsets can add
-    `chunk.global_char_start` to make the offset global.
+    The span is the tightest window in the evidence containing the
+    matched tokens — gives the reviewer something to highlight, even
+    when the prose was paraphrased rather than quoted.
     """
-    if not sentence or not evidence_text:
+    sent_tokens = _content_tokens(sentence)
+    if len(sent_tokens) < TOKEN_OVERLAP_MIN_TOKENS:
+        return None
+    sent_set = set(sent_tokens)
+    if not sent_set:
         return None
 
-    # Normalize both sides; difflib matches on the normalized strings, then
-    # we map the normalized match back to a position in the original
-    # `evidence_text` by searching for the leading 24 chars (case-insensitive).
+    ev_tokens = _content_tokens(evidence_text)
+    if not ev_tokens:
+        return None
+    ev_set = set(ev_tokens)
+
+    hits = sent_set & ev_set
+    if len(hits) < TOKEN_OVERLAP_MIN_HITS:
+        return None
+    ratio = len(hits) / len(sent_set)
+    if ratio < TOKEN_OVERLAP_MIN_RATIO:
+        return None
+
+    # Locate the tightest window in evidence_text containing the hit tokens.
+    text_lower = evidence_text.lower()
+    positions: list[int] = []
+    for tok in hits:
+        positions.extend(_find_word_boundary_positions(text_lower, tok))
+    if not positions:
+        return None
+    positions.sort()
+
+    # Window heuristic: smallest range covering ~60% of hit positions
+    # (or all of them when only a handful).
+    target = max(2, int(round(len(positions) * 0.6)))
+    target = min(target, len(positions))
+    best_span: tuple[int, int] | None = None
+    best_width = 10**9
+    for i in range(len(positions) - target + 1):
+        start = positions[i]
+        end = positions[i + target - 1]
+        width = end - start
+        if width < best_width:
+            best_width = width
+            best_span = (start, min(end + 30, len(evidence_text)))
+    if best_span is None:
+        first = positions[0]
+        return (first, min(first + 80, len(evidence_text)))
+    return best_span
+
+
+def _longest_block_match(
+    sentence: str, evidence_text: str,
+) -> tuple[int, int] | None:
+    """difflib longest-contiguous-block match. Catches verbatim quotes
+    and CJK prose where token-splitting is too coarse."""
     sent_norm = _normalize(sentence)
     text_norm = _normalize(evidence_text)
     if len(sent_norm) < LONGEST_BLOCK_MIN_CHARS:
@@ -123,17 +262,37 @@ def find_span_in_text(
         return None
 
     matched_norm = text_norm[block.a : block.a + block.size]
-    # Take the first 32 chars of the matched normalized block as the
-    # search needle (long enough to be specific, short enough that
-    # whitespace differences don't break the lookup).
     needle = matched_norm[: min(32, len(matched_norm))]
     pos = evidence_text.lower().find(needle)
     if pos < 0:
-        # Fallback: return the normalized offset directly (not always
-        # accurate vs. the un-normalized text, but no worse than nothing).
         return (block.a, block.a + block.size)
     end = min(pos + block.size + 16, len(evidence_text))
     return (pos, end)
+
+
+def find_span_in_text(
+    sentence: str,
+    evidence_text: str,
+) -> tuple[int, int] | None:
+    """Locate the most plausible character span of `sentence` inside `evidence_text`.
+
+    Returns (start, end) char offsets in `evidence_text` when matched,
+    or None when no path produces a confident match. Offsets are local
+    to `evidence_text`; callers with global EvidenceChunk offsets add
+    `chunk.global_char_start` to globalize.
+
+    Path order:
+        1. Token-overlap (primary) — robust to paraphrase.
+        2. difflib longest-block (fallback) — catches verbatim quotes
+           and CJK prose.
+    """
+    if not sentence or not evidence_text:
+        return None
+
+    span = _token_overlap_match(sentence, evidence_text)
+    if span is not None:
+        return span
+    return _longest_block_match(sentence, evidence_text)
 
 
 # ── Validator ──
@@ -307,4 +466,7 @@ __all__ = [
     "LONGEST_BLOCK_MIN_RATIO",
     "LONGEST_BLOCK_MIN_CHARS",
     "MIN_SENTENCE_CHARS",
+    "TOKEN_OVERLAP_MIN_TOKENS",
+    "TOKEN_OVERLAP_MIN_HITS",
+    "TOKEN_OVERLAP_MIN_RATIO",
 ]

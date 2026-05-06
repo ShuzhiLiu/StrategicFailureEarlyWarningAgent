@@ -161,6 +161,13 @@ def run(
         help="Force strategy-discovery agent even when strategy_theme is set "
              "(useful for seeing what alternative themes a company has).",
     ),
+    enable_peer_filings: bool = typer.Option(
+        False,
+        "--enable-peer-filings",
+        help="Fetch regulatory filings for case peers (capped at 3 peers, "
+             "6 chunks each). Off by default to preserve the iter-43 "
+             "stability gate; opt in per-run for L2.2 acceptance demos.",
+    ),
 ) -> None:
     """Analyze strategic risk for a company.
 
@@ -238,6 +245,12 @@ def run(
         console.print(f"  Backtest: {len(gt_events)} ground truth events loaded")
     else:
         console.print("  Backtest: [dim](no ground truth — skipped)[/dim]")
+
+    # Apply CLI overrides on audit_meta. Peer filings are opt-in.
+    if enable_peer_filings:
+        am = initial_state.setdefault("audit_meta", {})
+        am["fetch_peer_filings"] = True
+        console.print("  Peer filings: [bold cyan]ENABLED[/bold cyan] (--enable-peer-filings)")
 
     clear_log()  # Reset chat log before each run
     t0 = time.time()
