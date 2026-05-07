@@ -475,7 +475,7 @@ CLAUDE.md specifies 3 rounds × 3 companies as the standard gate; iter 44 ran 1 
 
 A 3-round repeat would confirm no LLM-side variance regression, but the structural argument is that none of the three engineering changes touch the default-path scoring code. R2 + R3 are recommended before next iteration but not blocking on iter-44 ship.
 
-### Stability state entering Iteration 45
+### Stability state entering Iteration 45 (initial 1-round, full-precision Qwen3.6-27B)
 
 | Metric | Honda | Toyota | BYD |
 |--------|-------|--------|-----|
@@ -489,6 +489,124 @@ A 3-round repeat would confirm no LLM-side variance regression, but the structur
 | New verifications | HSBC 84 CRITICAL (HK retro, 1 HKEX, 3 STRONG backtest), AIA 16 LOW (HK forward, 12 HKEX live) |  |  |
 | L2.2 demo | Honda+peer 69 HIGH, sec_edgar=3 in manifest, 4/4 STRONG resisted |  |  |
 | Test count | 339 (302 → +37) |  |  |
+
+### Iteration 44 follow-up: full 12-run verification on FP8 backend
+
+After the initial 1-round iter-44 ship (full-precision Qwen3.6-27B), the LLM
+backend was migrated to a new host running **Qwen3.6-27B-FP8** (8-bit
+quantized variant). The FP8 swap is an environmental change, not a
+pipeline change, but it warrants a fresh stability baseline since
+quantization can shift borderline scores. Re-ran the full 12-run
+verification (3 rounds × H/T/B + Honda+peer L2.2 demo + HSBC + AIA) on
+the new backend.
+
+**FP8 stability gate** (9 runs, all audit-clean):
+
+| Round | Honda | Toyota | BYD | H>T>B |
+|-------|------:|-------:|----:|:-----:|
+| R1 | 64 HIGH | 46 MEDIUM | 27 LOW | ✓ |
+| R2 | 69 HIGH | 54 MEDIUM | 25 LOW | ✓ |
+| R3 | 63 HIGH | 41 MEDIUM | **49 MEDIUM** | ✗ (H>B>T inversion) |
+| **Mean** | **65.3** | **47** | **33.7** | preserved on means |
+
+**Strict 2/3** (same ratio as iter-43, different cause). The R3 inversion
+is BYD's reanalyze loop digging deeper on the third sample (89 evidence
+items, 2 adversarial passes) and the LLM rating it MEDIUM rather than
+LOW — same instability mechanism that hits ~10% of BYD runs across
+iterations. **Mean ordering H>T>B is preserved** across the 9-run window.
+
+**vs iter-43 (full-precision) baseline**:
+
+| Company | iter-43 mean | FP8 mean | Drift | Read |
+|---------|------:|------:|------:|------|
+| Honda | 67.3 | 65.3 | -2.0 | within ±10 tolerance ✓ |
+| Toyota | 60.3 | 47.0 | -13.3 | **outside ±10** — FP8 is more conservative on Toyota's borderline-evidence mix |
+| BYD | 34.7 | 33.7 | -1.0 | within ±10 tolerance ✓ |
+
+Toyota's 13-point drift is the load-bearing finding. The FP8 model
+appears to weight contradicting evidence (Toyota's strong hybrid
+profitability + Tier-1 EDINET filings) more heavily than the
+full-precision model did when sizing risk severity. Honda and BYD —
+both at the ends of the spectrum (HIGH primary risks vs LOW primary
+risks) — show no meaningful drift. Toyota sits in the middle band where
+quantization noise has the most leverage.
+
+**L2.2 demo on FP8** (Honda --enable-peer-filings):
+- Score: 67 HIGH (vs Honda 3-round mean 65.3 — +1.7, within noise)
+- Manifest sources: `edinet=5, cninfo=1, sec_edgar=1, agentic=110`
+- L2.2 acceptance criterion **confirmed** on FP8 backend: peer SEC EDGAR
+  filings flow into the manifest.
+
+**HK case re-verifications on FP8**:
+
+| Case | FP8 score | iter-44 (full-precision) | HKEX entries | Audit |
+|------|----------:|------------:|------:|-------|
+| HSBC retrospective | **57 MEDIUM** | 84 CRITICAL | **3** | manifest 0, 2 citation violations |
+| AIA forward | **20 LOW** | 16 LOW | **12** | manifest 0, 3 citation violations |
+
+HSBC's score moved from CRITICAL to MEDIUM — closer to the truth-file
+expectation of MEDIUM/MEDIUM-HIGH. Two factors compound: (1) FP8 is
+more conservative on borderline cases, (2) the broadened HKEX queries
+surfaced 3 HKEX filings vs 1 on the previous backend, providing more
+balancing evidence for the agent to weigh against the concentrated-CRE
+risk thesis. The MEDIUM rating remains defensible (the underlying CRE
+exposure is real); the upgrade in evidence base is the more important
+signal.
+
+AIA's 12 HKEX entries (broadened DDG queries doing real work) confirm
+the iter-44 query-template upgrade is sound. Score stays in LOW band.
+
+**Citation violations on the new HK cases** are factor-level (analysts
+emitted risk factors with empty `supporting_evidence` lists in 2-3
+places per run). These are recorded as audit data, not exceptions —
+pipeline always completes and the audit trail surfaces them. Honest
+signal that prompt-level citation discipline has slack on cases with
+thinner evidence bases.
+
+### Key insights from the FP8 re-run
+
+1. **Quantization affects middle-band scores most.** Honda (HIGH band,
+   +5pts buffer) and BYD (LOW band, -5pts buffer) shift within ±2pts.
+   Toyota (MEDIUM band, no buffer) drifts -13pts. The pattern
+   suggests FP8 isn't randomly shifting scores — it's pulling
+   borderline cases away from the calibration midline. If we want
+   stricter cross-backend reproducibility, the synthesis prompt's
+   ±15-clamp around the programmatic base score may need to widen
+   when a backend swap is detected.
+
+2. **R3 BYD inversion is a known LLM-driven behavior, not a regression.**
+   BYD's reanalyze loop on R3 produced 89 evidence items vs 47-63 on
+   R1/R2; the deeper evidence base raised severity ratings on
+   `competitive_pressure` and `regional_mismatch` dimensions. This
+   is the system working as designed — the LLM-driven routing
+   decided to dig deeper. The cost: 1/3 chance of an ordering
+   inversion when the deeper read pulls BYD into MEDIUM band.
+
+3. **Broadened HKEX queries deliver real coverage gains.** AIA went
+   from 12 HKEX entries → still 12 entries on FP8 (same DDG index
+   coverage). HSBC went from 1 entry → 3 entries on FP8 (broadened
+   queries surfaced more URLs). Per-issuer DDG indexing remains the
+   ceiling, but the broadened query set saturates that ceiling.
+
+4. **Honda+peer L2.2 acceptance still holds on FP8.** sec_edgar
+   appears in the manifest; the peer-side `FilingProvider` Protocol
+   works regardless of the backend's quantization. Score within
+   1.7pts of Honda baseline mean — peer filings remain calibration-neutral.
+
+### Stability state entering Iteration 45 (post FP8 re-run)
+
+| Metric | Honda | Toyota | BYD |
+|--------|-------|--------|-----|
+| FP8 mean (3 runs) | 65.3 | 47.0 | 33.7 |
+| FP8 range | 63-69 (6) | 41-54 (13) | 25-49 (24) |
+| vs iter-43 mean | -2.0 ✓ | **-13.3 outside ±10** | -1.0 ✓ |
+| Manifest violations / 9 | 0 | 0 | 0 |
+| Citation violations / 9 | 0 | 0 | 0 |
+| Strict H>T>B | 2/3 (R3 BYD reanalyze inversion) | | |
+| L2.2 demo | Honda+peer 67 HIGH, sec_edgar=1 in manifest ✓ | | |
+| HK new cases | HSBC 57 MEDIUM (3 HKEX, 2 citation violations), AIA 20 LOW (12 HKEX, 3 citation violations) | | |
+| Backend | Qwen3.6-27B-FP8 (8-bit quantized) | | |
+| Test count | 339 | | |
 
 ---
 
