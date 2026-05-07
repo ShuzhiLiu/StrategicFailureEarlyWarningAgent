@@ -4,7 +4,7 @@
 
 ![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)
 ![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)
-![Tests](https://img.shields.io/badge/tests-302%20passing-brightgreen)
+![Tests](https://img.shields.io/badge/tests-339%20passing-brightgreen)
 ![liteagent](https://img.shields.io/badge/liteagent-~1%2C000%20LOC%2C%201%20dep-brightgreen)
 ![Jurisdictions](https://img.shields.io/badge/jurisdictions-JP%20%C2%B7%20CN%20%C2%B7%20HK%20%C2%B7%20US-blue)
 
@@ -100,16 +100,18 @@ python -m sfewa.main "Honda Motor Co., Ltd." "EV electrification strategy" 2026-
 
 Skip the setup: **[Honda](demo/honda/report.html) · [Toyota](demo/toyota/report.html) · [BYD](demo/byd/report.html)** — pre-cached self-contained HTML reports, work offline.
 
-### Beyond EV — two more retrospectives, two more jurisdictions
+### Beyond EV — four more cases across three jurisdictions
 
-The same harness was pointed at two different strategic-failure cases in different industries and regulatory regimes. Both cases were chosen so the failure signal is in pre-cutoff primary-source filings; the agent fetches its own filings end-to-end (no manual staging).
+The same harness was pointed at multiple strategic-risk cases in different industries, jurisdictions, and time horizons (retrospective + forward). Cases were chosen so the failure signal is in pre-cutoff primary-source filings; the agent fetches its own filings end-to-end (no manual staging).
 
-| Case | Cutoff | Score | Backtest | Tier-1 source |
-|---|---|---:|---|---|
-| **Boeing** (BA) — commercial-aerospace quality + capital strategy | 2023-12-31 (5 days before Alaska Air 1282 door-plug blowout) | **76 HIGH** | 6 STRONG + 1 PARTIAL + 1 MISS / 7 | **8 SEC EDGAR filings** (10-K, 10-Q ×2, 8-K, DEF 14A) — 159 chunks, all `source: sec_edgar` |
-| **Country Garden** (2007 HK) — leveraged property-development at scale | 2023-07-31 (8 days before USD bond coupon default) | **92 CRITICAL** | 4 STRONG + 3 PARTIAL / 7 (zero MISS) | **10 HKEX filings** auto-discovered via DuckDuckGo `site:hkexnews.hk filetype:pdf` + URL auto-promotion — all `source: hkexnews` |
+| Case | Type | Cutoff | Score | Backtest | Tier-1 source |
+|---|---|---|---:|---|---|
+| **Boeing** (BA, US) — commercial-aerospace quality + capital strategy | retro | 2023-12-31 (5 days before Alaska Air 1282 door-plug blowout) | **76 HIGH** | 6 STRONG + 1 PARTIAL + 1 MISS / 7 | **8 SEC EDGAR filings** (10-K, 10-Q ×2, 8-K, DEF 14A) — 159 chunks, all `source: sec_edgar` |
+| **Country Garden** (2007 HK) — leveraged property-development at scale | retro | 2023-07-31 (8 days before USD bond coupon default) | **92 CRITICAL** | 4 STRONG + 3 PARTIAL / 7 (zero MISS) | **10 HKEX filings** auto-discovered via DuckDuckGo `site:hkexnews.hk filetype:pdf` + URL auto-promotion — all `source: hkexnews` |
+| **HSBC Holdings** (0005 HK) — Asia-pivot via concentrated mainland China CRE exposure | retro | 2023-07-31 (1 day before H1 2023 results disclosed $1.1B CRE impairment) | **84 CRITICAL** | 3 STRONG matches on impairment trajectory (gt_001 H1, gt_002 Q3, gt_003 FY) | HKEX live (per-issuer DDG index varies — HSBC produces 1 hit) + web search |
+| **AIA Group** (1299 HK) — Mainland-expansion via bancassurance + Greater Bay Area | **forward** | 2026-04-30 | **16 LOW** (forward caution) | n/a (forward case, no truth file) | **12 HKEX filings** auto-discovered via broadened DDG queries (doc-type variants × ticker-anchored) |
 
-Boeing's pre-cutoff 10-K explicitly disclosed the 737 MAX certification + supply-chain quality risks that materialized in the 2024 Alaska Air incident, the FAA-imposed production cap, the leadership reset, and the $24B equity raise. Country Garden's 2022 annual + 2022 H1 interim already showed the first-ever annual loss + 35% contracted-sales decline + auditor going-concern qualification — pre-cutoff signal six months before the offshore default. The harness flagged both correctly with full Tier-1 audit envelope.
+Boeing's pre-cutoff 10-K explicitly disclosed the 737 MAX certification + supply-chain quality risks that materialized in the 2024 Alaska Air incident, the FAA-imposed production cap, the leadership reset, and the $24B equity raise. Country Garden's 2022 annual + 2022 H1 interim already showed the first-ever annual loss + 35% contracted-sales decline + auditor going-concern qualification — pre-cutoff signal six months before the offshore default. HSBC's 2022 annual report disclosed ~$19B mainland China CRE exposure entering a visibly distressed sector — the harness flagged 84 CRITICAL ex-ante; the impairment trajectory then materialized exactly as predicted across H1 2023, Q3 2023, and FY 2023 results. AIA's forward case is genuine surveillance — outcome unknown at run-time; the report carries a "Forward surveillance — not a retrospective validation" banner above the fold.
 
 ---
 
@@ -140,7 +142,8 @@ Scope is explicit. Production harnesses like [Claude Code](https://www.anthropic
 | **Strategy auto-discovery** | When the case YAML omits `strategy_theme`, a discovery agent reads filings + light web search and proposes 1-3 candidate themes ranked by scrutiny target — top-1 becomes the working theme, full list saved to audit trail | `sfewa/agents/strategy_discovery.py` |
 | **Source manifest** | Per-doc audit log with `cutoff_decision ∈ {kept, rejected_post_cutoff, rejected_doc_type, rejected_language}`; production invariant: zero `kept` entries with `release_time > cutoff` | `sfewa/tools/manifest.py` |
 | **Claim-citation enforcement (per-factor)** | Every top-level claim must reference ≥1 `evidence_id` resolving to evidence with a real source reference; violations recorded as data, not exceptions | `sfewa/tools/citation_check.py` |
-| **Sentence-level citation audit** | Per-sentence walk of each factor's claim text against cited evidence; resolved sentences record `(doc_id, char_start, char_end)` spans, unresolved sentences logged in `audit_violations` | `sfewa/tools/sentence_citation.py` |
+| **Sentence-level citation audit** | Per-sentence walk of each factor's claim text against cited evidence. **Two matchers** run in series: (1) token-overlap (stopword-filtered content tokens, ≥3 hits + ≥0.55 ratio, word-boundary span) — primary, catches paraphrase; (2) `difflib` longest-block — fallback for verbatim quotes and CJK. Resolved sentences record `(doc_id, char_start, char_end)`; unresolved sentences land in `audit_violations` | `sfewa/tools/sentence_citation.py` |
+| **Peer-side filings stage** | Optional pipeline node that resolves each case peer's jurisdiction (built-in ticker map + case-YAML override), invokes the same `FilingProvider` Protocol used for the primary company, and seeds Tier-1 chunks into the corpus. Capped at 3 peers × 6 chunks. Opt-in via `--enable-peer-filings` CLI flag or `audit_meta.fetch_peer_filings` per-case | `sfewa/agents/peer_filings.py` |
 | **Provenance header** | Per-run record of model id + git commit + dirty flag + case/truth sha256 + token totals + manifest counts; reproducibility receipt | `sfewa/tools/provenance.py` |
 | **Case/truth physical split** | Agent-visible `configs/cases/` separated from eval-only `configs/truth/`; static grep + runtime sentinel test enforce no leakage | `schemas/config.py`, `tests/test_integration/test_label_leakage.py` |
 | **Static HTML report** | Single-file `report.html` with three pillars (evidence trace, provenance, controls applied); forward cases carry "Forward surveillance" banner above the fold | `sfewa/tools/html_report.py` |
@@ -287,6 +290,20 @@ PYTHONPATH=src uv run python -m sfewa.main \
 PYTHONPATH=src uv run python -m sfewa.main \
     --case configs/cases/tencent_ai_strategic_transformation.yaml --agentic
 
+# Second HK retrospective — HSBC China CRE concentration thesis (cutoff 2023-07-31)
+PYTHONPATH=src uv run python -m sfewa.main \
+    --case configs/cases/hsbc_china_cre_strategy.yaml --agentic
+
+# Second HK forward — AIA mainland-expansion / Greater Bay Area thesis
+PYTHONPATH=src uv run python -m sfewa.main \
+    --case configs/cases/aia_mainland_expansion_strategy.yaml --agentic
+
+# Peer-side filings demo — fetch peer regulatory filings as Tier-1 evidence
+# (Honda's peers: Toyota EDINET + BYD CNINFO + Tesla/Ford/GM SEC EDGAR via the
+# same FilingProvider Protocol). Opt-in default-off so the stability gate stays untouched.
+PYTHONPATH=src uv run python -m sfewa.main \
+    --case configs/cases/honda_ev_pre_reset.yaml --agentic --enable-peer-filings
+
 # Strategy auto-discovery — when the case YAML omits `strategy_theme`, the agent
 # reads filings + light web search and proposes 1-3 candidate themes. Top-1
 # becomes the working theme, full candidate list saved to discovered_strategies.json.
@@ -297,7 +314,7 @@ PYTHONPATH=src uv run python -m sfewa.main \
 PYTHONPATH=src uv run python -m sfewa.main \
     --case configs/cases/honda_ev_pre_reset.yaml --agentic --discover-strategies
 
-PYTHONPATH=src uv run pytest   # 302 tests, <10s
+PYTHONPATH=src uv run pytest   # 339 tests, <10s
 ```
 
 Each run drops a self-auditable bundle under `outputs/{case_id}_{timestamp}/`:
@@ -344,6 +361,7 @@ src/sfewa/           # Domain application built on the harness.
   graph/pipeline.py  # 8-node pipeline (v2, --agentic)
   agents/            # One file per node
     strategy_discovery.py   # Optional pre-step: infer 1-3 themes when YAML omits one
+    peer_filings.py         # Optional pre-step: fetch peer regulatory filings (opt-in)
     agentic_retrieval.py    # ToolLoopAgent: search + filings, with HKEX URL auto-promote
     _analyst_base.py        # Iceberg Model + self-consistency sampling
     adversarial.py          # 3-phase: CoVe + search + refinement (verifier-corpus-gated)
@@ -363,7 +381,7 @@ src/sfewa/           # Domain application built on the harness.
     {edinet,cninfo,hkex}.py   # Per-system clients (legacy modules wrapped by providers)
     manifest.py               # Source manifest + cutoff invariant
     citation_check.py         # Per-factor claim → resolvable evidence
-    sentence_citation.py      # Per-sentence span resolution (L2.3, soft enforcement)
+    sentence_citation.py      # Per-sentence span resolution (L2.3-4: token-overlap primary + difflib fallback)
     provenance.py             # Per-run reproducibility receipt
     html_report.py            # Single-file three-pillar audit report
     artifacts.py              # Bundle save (audit_violations as data, never exceptions)
@@ -375,15 +393,17 @@ configs/cases/       # Agent-visible case YAMLs (case_id, jurisdiction, ticker,
                      #   boeing_quality_strategy.yaml (US retrospective, 2023-12-31)
                      #   country_garden_property_strategy.yaml (HK retrospective, 2023-07-31)
                      #   tencent_ai_strategic_transformation.yaml (HK forward, 2026-04-19)
+                     #   hsbc_china_cre_strategy.yaml (HK retrospective, 2023-07-31)
+                     #   aia_mainland_expansion_strategy.yaml (HK forward, 2026-04-30)
 configs/truth/       # EVAL-ONLY truth YAMLs (sentinel + ground-truth events).
                      # Read by backtest.py only; runtime sentinel test enforces no leakage.
 demo/                # Pre-cached runs for immediate review (incl. report.html)
 docs/                # architecture.md (12 sections incl. §9 Audit Architecture),
-                     # iteration_log.md (43 iterations), harness_engineering.md, ...
-tests/               # 302 tests (all pass in <10s; +1 skipped for optional Playwright)
+                     # iteration_log.md (44 iterations), harness_engineering.md, ...
+tests/               # 339 tests (all pass in <10s; +1 skipped for optional Playwright)
   test_tools/        #   filing_provider, providers, manifest, citation_check, sec_edgar,
                      #   sentence_citation, hkex_live_discovery, provenance, html_report, ...
-  test_agents/       #   test_strategy_discovery.py (parser + integration via mocked LLM)
+  test_agents/       #   test_strategy_discovery.py + test_peer_filings.py
   test_integration/  #   test_label_leakage.py (static grep + runtime sentinel)
   test_schemas/      #   test_verifier_corpus_default.py
   fixtures/{hkex,sec_edgar}/  # cached HTML/JSON fixtures (live-network-free)
@@ -430,8 +450,8 @@ A: Only if the model can see post-cutoff data. It can't. Temporal integrity is e
 **Q: Isn't ground-truth events in the case config leaking the answer?**
 A: No, and the L1 audit envelope makes this enforceable rather than just stated. Ground-truth events live in `configs/truth/{case_id}.yaml` — a *physically separate* file from the agent-visible `configs/cases/{case_id}.yaml`. The truth file is read by exactly one module (`src/sfewa/agents/backtest.py`, the scorer), never by any reasoning node. Two layers of defense: (a) **static grep** scans `agents/`, `prompts/`, and `tools/` for forbidden tokens (`configs/truth`, `TruthConfig`, `load_truth`) and fails CI if anything but `backtest.py` references them; (b) **runtime sentinel test** — each truth YAML carries a unique string like `__TRUTH_SENTINEL_honda_ev_2025_b91c3d__`; the test calls `build_initial_state_from_case()` and walks every string in the resulting state, asserting the sentinel does not appear anywhere except inside the truth file. Verified to fail loudly when leakage is injected (negative-case test). Code: [tests/test_integration/test_label_leakage.py](tests/test_integration/test_label_leakage.py).
 
-**Q: 43 iterations on Honda — isn't this overfit?**
-A: Iterations 1–32 used Honda as primary signal. Iteration 33 introduced Toyota + BYD as held-out companies. Post-iteration 33, no change targets a specific company — all changes are structural (agentic retrieval, filing discovery, tech-aware search, audit envelope, FilingProvider Protocol, HKEX live, SEC EDGAR, sentence-level citation, strategy auto-discovery) or generic (Toulmin output, self-consistency sampling, evidence-gated downgrades). Iterations 42–43 (the audit envelope + Layer 2) make overfitting *machine-checkable*: every run now emits `source_manifest.json` (cutoff invariant), `audit_violations` in `run_summary.json` (per-factor + per-sentence citation invariants), and `provenance.json` (model + commit + sha). Pre-cutoff leakage records as data; phantom citations record as data; runs that would have looked plausible without these checks now have to *prove* they're legitimate. The Boeing (US) and Country Garden (HK) cases added in iter 43 are independent retrospectives validating that the same harness works on jurisdictions and industries Honda didn't shape. See [docs/iteration_log.md](docs/iteration_log.md) for the before/after on each change.
+**Q: 44 iterations on Honda — isn't this overfit?**
+A: Iterations 1–32 used Honda as primary signal. Iteration 33 introduced Toyota + BYD as held-out companies. Post-iteration 33, no change targets a specific company — all changes are structural (agentic retrieval, filing discovery, tech-aware search, audit envelope, FilingProvider Protocol, HKEX live, SEC EDGAR, sentence-level citation, strategy auto-discovery, peer-side filings) or generic (Toulmin output, self-consistency sampling, evidence-gated downgrades, token-overlap matcher). Iterations 42–44 (the audit envelope + Layer 2 + iter-44 residuals) make overfitting *machine-checkable*: every run now emits `source_manifest.json` (cutoff invariant), `audit_violations` in `run_summary.json` (per-factor + per-sentence citation invariants), and `provenance.json` (model + commit + sha). Pre-cutoff leakage records as data; phantom citations record as data; runs that would have looked plausible without these checks now have to *prove* they're legitimate. The Boeing (US), Country Garden (HK), HSBC (HK), and AIA (HK forward) cases added in iter 43–44 are independent retrospectives + forwards validating that the same harness works on jurisdictions and industries Honda didn't shape. See [docs/iteration_log.md](docs/iteration_log.md) for the before/after on each change.
 
 **Q: How do you know "STRONG" is a true positive, not a generous label?**
 A: STRONG is defined narrowly: the analyst-generated factor's description must causally predict the post-cutoff event. For Honda, `COM001 capital_allocation: $4.48B EV losses vs 10T yen commitment` matches the May 2025 target revision (target cut from 10T → 7T yen). PARTIAL means the factor covers the same risk class but differs on specifics (e.g., scale or timing). The backtest matcher is in `src/sfewa/agents/backtest.py` and is auditable.
@@ -451,7 +471,7 @@ A: This has been benchmarked on Qwen3.5-27B *and* Qwen3.6-27B — the [retrospec
 - **[docs/architecture.md](docs/architecture.md)** — System design, node contracts, Iceberg Model, 3-phase adversarial, state management.
 - **[docs/liteagent_architecture.md](docs/liteagent_architecture.md)** — Framework design, module map, patterns encoded, comparison vs LangChain/LangGraph.
 - **[docs/cross_company_results.md](docs/cross_company_results.md)** — Honda / Toyota / BYD risk profiles, evidence stance distributions, backtest details.
-- **[docs/iteration_log.md](docs/iteration_log.md)** — All 43 iterations: what we tried, what we learned, what we changed. Iter 42 shipped the audit envelope (FilingProvider Protocol, source manifest, per-factor citation, provenance, verifier-corpus gate, HKEX provider, case/truth split). Iter 43 closed Layer 2: HKEX live discovery via DDG site search + URL auto-promotion, SEC EDGAR provider (4th jurisdiction), per-sentence citation audit, optional `strategy_theme` with auto-discovery, plus Boeing (US) and Country Garden (HK) retrospectives.
+- **[docs/iteration_log.md](docs/iteration_log.md)** — All 44 iterations: what we tried, what we learned, what we changed. Iter 42 shipped the audit envelope (FilingProvider Protocol, source manifest, per-factor citation, provenance, verifier-corpus gate, HKEX provider, case/truth split). Iter 43 closed Layer 2: HKEX live discovery via DDG site search + URL auto-promotion, SEC EDGAR provider (4th jurisdiction), per-sentence citation audit, optional `strategy_theme` with auto-discovery, plus Boeing (US) and Country Garden (HK) retrospectives. Iter 44 closed the L2 residuals: peer-side filings stage (closes the L2.2 acceptance gap), token-overlap sentence matcher (paraphrase recall), broadened HKEX DDG queries, plus HSBC (HK retro) and AIA (HK forward) cases.
 - **[docs/claude_code_benchmark.md](docs/claude_code_benchmark.md)** — Independent-agent benchmark methodology and results.
 - **[docs/essays/](docs/essays/)** — Supplementary: `framework_anti_patterns.md` (why not LangChain/LangGraph), `agentic_architecture_research.md` (production-agent survey that informs the harness design).
 

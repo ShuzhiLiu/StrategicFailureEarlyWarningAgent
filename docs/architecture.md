@@ -85,11 +85,20 @@ SFEWA is a Planner-Generator-Evaluator system for strategic-failure early warnin
                          └──────┬───────┘
                                 ▼
                          ┌──────────────────────────────────────┐
+                         │  peer_filings (optional, opt-in)     │
+                         │  Same FilingProvider Protocol on each│
+                         │  peer; capped 3 peers × 6 chunks.    │
+                         │  Default OFF. Enable per run via     │
+                         │  --enable-peer-filings.              │
+                         └──────┬───────────────────────────────┘
+                                ▼
+                         ┌──────────────────────────────────────┐
                          │  agentic_retrieval (ToolLoopAgent)   │
                          │  Tools: search() + load_filings()    │
                          │  Agent decides queries from dims,    │
                          │  assesses coverage, stops when ready │
                          │  → emits source_manifest entries     │
+                         │  (seeds peer_filings into corpus)    │
                          └──────┬───────────────────────────────┘
                                 ▼
                          ┌──────────────┐
@@ -238,7 +247,8 @@ Nodes never mutate the input state directly. They return a dict of updates, whic
 | Node | Role | Mode | Key Inputs | Key Outputs |
 |---|---|---|---|---|
 | `init_case` | Planner | Non-thinking | Case config | regions, peers, case_id, **analysis_dimensions** |
-| `agentic_retrieval` | Planner | Non-thinking (ToolLoopAgent) | Case context, dimensions | retrieved_docs, **source_manifest** |
+| `peer_filings` (optional) | Planner | None (Protocol-only) | peers, audit_meta | **peer_filings** (Tier-1 chunks from each resolved peer; opt-in via `audit_meta.fetch_peer_filings` or `--enable-peer-filings`) |
+| `agentic_retrieval` | Planner | Non-thinking (ToolLoopAgent) | Case context, dimensions, peer_filings | retrieved_docs, **source_manifest** |
 | `evidence_extraction` | Planner | Non-thinking | retrieved_docs | evidence (temporal-filtered, batched) |
 | `industry_analyst` | Generator | Non-thinking (N=3 self-consistency) | evidence, dimensions | risk_factors (LLM-generated external dimensions, Toulmin-structured) |
 | `company_analyst` | Generator | Non-thinking (N=3 self-consistency) | evidence, dimensions | risk_factors (internal dimensions) |
@@ -307,7 +317,7 @@ The `FilingProvider` Protocol abstraction is the value-add — it lets EDINET, C
 |---|---|---|---|
 | EDINET (JP) | ✅ live | Scan filing dates in June/Nov windows, match by Japanese filer name, download via document API | Used live for Honda, Toyota |
 | CNINFO (CN) | ✅ live | orgId from active stock list (Chinese name or pinyin match), search annual + semi-annual by category | Used live for BYD |
-| HKEXnews (HK) | ✅ live | DDG `site:hkexnews.hk filetype:pdf` queries surface the direct PDF URL pattern, which is publicly downloadable. URLs the agent surfaces during normal search are also auto-promoted to Tier-1 evidence. Optional Playwright fallback for cases DDG hasn't indexed. | Used live for Country Garden (10 filings, 92 CRITICAL) |
+| HKEXnews (HK) | ✅ live | DDG `site:hkexnews.hk filetype:pdf` queries surface the direct PDF URL pattern, which is publicly downloadable. URLs the agent surfaces during normal search are also auto-promoted to Tier-1 evidence. **Iter 44 broadened the query set** with doc-type variants (annual report, interim report, annual results, interim results, results announcement) × year × ticker-anchored queries; aggregates across the full query list rather than stopping at first hit. Optional Playwright fallback for cases DDG hasn't indexed. | Used live for Country Garden (10 filings, 92 CRITICAL), AIA (12 filings, forward case via broadened queries), HSBC (1 filing — per-issuer DDG indexing varies). |
 | SEC EDGAR (US) | ✅ live | Ticker → CIK via `company_tickers.json`, walk `submissions/` feed, filter by date + form type (10-K → annual_report, 10-Q → interim_report, 8-K → inside_information, DEF 14A → circulars). Free JSON API, no auth. | Used live for Boeing (8 filings, 76 HIGH) |
 
 ### Page-Anchored EvidenceChunks
@@ -687,7 +697,7 @@ Two layers, in increasing strictness:
 
 **Per-factor (L1)** — `validate_top_level_claims()` walks each `risk_factor.supporting_evidence` list and resolves each id against the evidence index. A factor passes when at least one cited id resolves to evidence carrying a real document reference. Violation modes: `phantom` (cited id not in evidence), `no_doc_ref` (resolves but no source reference), `empty` (no citations at all).
 
-**Per-sentence (L2.3)** — `validate_sentence_citations()` splits each factor's `claim` + `description` into sentences, then for each sentence walks the cited evidence's text looking for the longest contiguous matching block (≥25% of sentence length, ≥12 chars). Matched sentences record a `(doc_id, char_start, char_end)` span; unresolved sentences land in `audit_violations.sentence_citations_unresolved`. This is *soft enforcement* — the matcher is fuzzy (analysts paraphrase synthesized claims rather than quote verbatim) and the data is logged for the audit trail rather than raising. Resolution rates of 1-10% are typical; the value is honest signal about how traceable each conclusion is.
+**Per-sentence (L2.3-4)** — `validate_sentence_citations()` splits each factor's `claim` + `description` into sentences, then runs **two matchers in series**: (1) **token-overlap (primary, iter 44)** — content-token coverage with stopword filtering; requires ≥3 distinct hit tokens AND ≥0.55 ratio against the sentence's content tokens; locates the tightest evidence window via word-boundary scan. (2) **`difflib` longest-block (fallback, iter 43)** — looks for the longest contiguous matching block (≥25% of sentence length, ≥12 chars). Matched sentences record a `(doc_id, char_start, char_end)` span; unresolved sentences land in `audit_violations.sentence_citations_unresolved`. This remains *soft enforcement* — both paths are fuzzy by design (analysts paraphrase rather than quote verbatim) and data is logged for the audit trail rather than raising. **Iter 44 lifts paraphrase recall from ~0% to >66% on English↔English smoke corpora**; JP/CN evidence vs English claims is still bottlenecked by the language gap (next-step CJK character-bigram tokens). Production resolution rates of 1-10% remain typical for cross-language cases (Honda EDINET, Toyota EDINET, BYD CNINFO); the value is honest signal about how traceable each conclusion is.
 
 ### Provenance Header
 
@@ -758,7 +768,7 @@ Forward cases display `"Forward surveillance case. Not a retrospective validatio
 ### Known Limitations
 
 - **DDG-driven HKEX coverage is partial.** When DuckDuckGo's index doesn't surface a company's HKEX PDFs, the optional Playwright fallback kicks in if installed; otherwise HK runs fall back to web-search-only evidence. Coverage varies per issuer — Country Garden ✓, others may not surface depending on DDG's index state.
-- **Sentence-level matcher is fuzzy.** Analysts paraphrase synthesized claims; the longest-block matcher catches verbatim quotes but misses heavy paraphrases. Resolution rates of 1-10% are typical and reported honestly. Tightening would require either embedding similarity or asking the analyst LLM to emit explicit sentence→evidence_id maps.
+- **Sentence-level matcher is fuzzy.** Iter 44 added a token-overlap primary path that lifts paraphrase recall on English↔English claim/evidence pairs (smoke corpora >66%). The `difflib` longest-block fallback still handles verbatim quotes and CJK. Cross-language pairs (English claims vs JP/CN evidence) remain the dominant source of low production resolution rates — bridging requires either CJK character-bigram tokens, embedding similarity, or asking the analyst LLM to emit explicit sentence→evidence_id maps.
 
 ---
 
@@ -810,7 +820,8 @@ Dead-loop counters (`MAX_ADVERSARIAL_PASSES=2`) are safety bounds only — the L
 | **Strategy theme** | **User must author** | **Optional — `strategy_discovery` agent reads filings + light web search and proposes 1-3 candidate themes ranked by scrutiny target** |
 | Analysis dimensions | Hardcoded ontology | LLM generates dimensions from case context |
 | Filing sources | Hardcoded per company | Jurisdiction routing through `FilingProvider` Protocol (JP/CN/HK/US) |
-| **HK filing discovery** | **Manual PDF staging** | **DDG `site:hkexnews.hk` site search + URL auto-promotion: any HKEX URL the agent surfaces during normal search becomes Tier-1 evidence transparently** |
+| **Peer filings** | **Web search only** | **Optional `peer_filings_node` resolves each case peer through the same Protocol; opt-in via `--enable-peer-filings`. Honda+peer demo: 18 peer chunks from Toyota EDINET + BYD CNINFO + Tesla/Ford/GM SEC EDGAR seeded as Tier-1.** |
+| **HK filing discovery** | **Manual PDF staging** | **DDG `site:hkexnews.hk` site search + URL auto-promotion + iter-44 broadened query templates (doc-type variants × ticker-anchored × wider year window): any HKEX URL the agent surfaces during normal search becomes Tier-1 evidence transparently** |
 | Search queries | Config-defined topics | Agent derives queries from dimensions + case context |
 | Technology coverage | No tech-specific search | Agent reads dimension names, searches for company tech + industry benchmarks |
 | Evidence sufficiency | Fixed threshold | Agent self-assesses against 9 criteria, stops when satisfied |
@@ -844,6 +855,7 @@ src/sfewa/
   agents/
     init_case.py             Case expansion (LLM generates regions, peers, dimensions)
     strategy_discovery.py    Optional pre-step: infer 1-3 candidate themes when YAML omits one
+    peer_filings.py          Optional pre-step: peer-side FilingProvider Protocol (opt-in default-off)
     retrieval.py             3-pass agentic retrieval (DDGS + filings) [v1]
     agentic_retrieval.py     Tool-loop agent retrieval (ToolLoopAgent, HKEX URL auto-promote) [v2]
     evidence_extraction.py   LLM extraction + temporal filter (batched)
