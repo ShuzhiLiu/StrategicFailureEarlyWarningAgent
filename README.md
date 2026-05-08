@@ -25,9 +25,9 @@ The headline result: using only pre-May-2025 evidence, the harness flagged **Hon
 
 **The core claim is not *"an LLM can predict Honda."* The core claim is that with a deliberately designed ~1,000-line harness and disciplined evidence hygiene, a commodity open-weight model can produce a differentiated, auditable, reproducible risk assessment — and the differentiation lives in the harness, not the model.**
 
-![SFEWA Architecture — Planner-Generator-Evaluator pipeline with Iceberg Model depth routing, 3-phase adversarial review, and four cross-cutting concerns (temporal integrity, dead-loop protection, pipeline context injection, file-based audit trail).](docs/architecture_fig1.png)
+![SFEWA architecture — five-stage pipeline (Planner → Generator → Evaluator → Synthesizer+Validator → Audit Envelope) with four cross-cutting concerns (temporal integrity, pipeline context injection, dead-loop protection, file-based trail). Two ToolLoopAgents in the core pipeline (`agentic_retrieval` + adversarial Phase 2). One LLM-driven routing edge (`proceed | reanalyze`). The audit envelope wraps every run with six self-verifiable primitives.](docs/architecture.png)
 
-The shape of the system at a glance: four pipeline stages (Planner → Generator → Evaluator → Synthesis & Validation), two analytical scaffolds (Iceberg Model 4-layer deepening on the Generator, Independent Evaluator on the Evaluator), and four harness-level concerns that cut across every node. The result tables below are what this pipeline produced; [the Architecture section](#architecture) walks through the nodes and the LLM-driven routing edge.
+The shape of the system at a glance: five pipeline stages (Planner → Generator → Evaluator → Synthesizer & Validator → Audit Envelope), two analytical scaffolds (Iceberg Model 4-layer deepening on the Generator, Independent Evaluator on the Evaluator), four harness-level concerns that cut across every node, and a self-auditable bundle emitted on every run (six primitives detailed below). The result tables below are what this pipeline produced; [the Architecture section](#architecture) walks through the nodes and the LLM-driven routing edge.
 
 ---
 
@@ -178,6 +178,8 @@ Same LLM, same prompts, three companies, three different conclusions. The differ
 
 **5. Audit envelope — make the run prove itself.** Every run emits a self-auditable bundle so a reviewer doesn't need to trust the score. Six primitives: (a) `source_manifest.json` records each retrieved document with `cutoff_decision ∈ {kept, rejected_post_cutoff, rejected_doc_type, rejected_language}` — production invariant: zero `kept` rows past cutoff; (b) every top-level claim in `risk_factors.json` must reference ≥1 `evidence_id` that resolves to evidence with a real source URL or doc id (phantom citations recorded as data in `audit_violations`); (c) **per-sentence citation** — each sentence in a factor's claim is fuzzy-matched against the cited evidence's text; resolved sentences record `(doc_id, char_start, char_end)` spans, unresolved sentences logged so reviewers can see which conclusions trace cleanly to source spans and which are synthesis (resolution rates 1-10% — analysts paraphrase; the data is honest signal not failure); (d) `provenance.json` carries the model id, git commit, dirty flag, case + truth file sha256, token totals, and wall-clock — two runs with identical provenance hashes produce identical artifacts modulo sampling; (e) ground-truth events live in `configs/truth/` and are *physically* separate from agent-visible `configs/cases/` — defended by both static grep and a runtime sentinel test that walks the entire pipeline state for a unique per-case sentinel string; (f) `report.html` is a single-file static surface where a reviewer can verify all of the above without running anything. Violations record as data (in `run_summary.json["audit_violations"]`), not as exceptions — long runs always finish; the audit trail is always saved. Audit architecture detail: [docs/architecture.md §9](docs/architecture.md).
 
+![SFEWA audit envelope — four temporal-integrity layers (retrieval / extraction / prompts / verifier-corpus gate) plus six machine-checkable primitives (`source_manifest.json`, claim citation L1, sentence citation L2.3, `provenance.json`, verifier-corpus gate, case/truth split). The static `report.html` exposes all of this above the fold; forward cases carry a "Forward surveillance — not a retrospective validation" banner.](docs/audit_trail.png)
+
 Full technical reference: [docs/harness_engineering.md](docs/harness_engineering.md) maps these layers back to the production-agent literature.
 
 ---
@@ -205,7 +207,7 @@ Full methodology: [docs/claude_code_benchmark.md](docs/claude_code_benchmark.md)
 
 ## Architecture
 
-The [pipeline diagram at the top of this README](#strategic-failure-early-warning-agent) is the at-a-glance view of the same architecture; the Mermaid flow below shows the explicit node-to-node transitions and the LLM-driven `proceed / reanalyze` routing edge.
+The [pipeline diagram at the top of this README](#strategic-failure-early-warning-agent) is the at-a-glance view — five columns (Planner → Generator → Evaluator → Synthesizer+Validator → Audit Envelope) with the audit envelope wrapping the run. The Mermaid flow below shows the explicit node-to-node transitions and the LLM-driven `proceed / reanalyze` routing edge that the column view renders only at thumbnail scale.
 
 ```mermaid
 flowchart TD
@@ -250,6 +252,8 @@ The single-file `report.html` lays the same data out for a reviewer with three a
 - **Controls applied** — temporal-gate kept/rejected counts, verifier-corpus pill (`open_web` or `allowed_sources_only`), adversarial STRONG/MODERATE counts, adversarial pass count.
 
 Forward cases (e.g., the Tencent surveillance case) carry a "Forward surveillance case. Not a retrospective validation." banner above the verdict so the report cannot be mistaken for a backtest.
+
+![SFEWA evidence trace — from a single risk factor to a single source span: `[COM001] capital_allocation` (Toulmin: claim · warrant · strongest_counter) → top-level claim with cited evidence chips (L1) → evidence items with stance → source document with dual page-local + global offsets → source-manifest row → run-level `provenance.json`. Per-sentence resolution (L2.3) shown inline.](docs/evidence_trace.png)
 
 ---
 
